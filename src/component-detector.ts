@@ -41,17 +41,17 @@ const MARAFET_COMPONENTS = {
     props: ['padding', 'rounded', 'backgroundColor'],
   },
   LevelBadge: {
-    patterns: ['level', 'badge', 'tag', 'профи', 'мастер'],
+    patterns: ['level', 'badge', 'tag', 'pro', 'master'],
     importPath: '@app/components/LevelBadge',
     props: ['level', 'size'],
   },
   VisitCard: {
-    patterns: ['visit card', 'визит', 'appointment card'],
+    patterns: ['visit card', 'visit', 'appointment card'],
     importPath: '@app/components/VisitCard/VisitCard',
     props: ['visit', 'onPress', 'onEdit', 'onCancel'],
   },
   MasterCard: {
-    patterns: ['master card', 'мастер', 'specialist card'],
+    patterns: ['master card', 'master', 'specialist card'],
     importPath: '@app/components/MasterCard/MasterCard',
     props: ['master', 'onPress', 'showTimeSlots'],
   },

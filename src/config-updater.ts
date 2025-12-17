@@ -1,5 +1,4 @@
 /**
- * Персистентность автоматически сгенерированных маппингов в .figmarc.json
  * Persistence of auto-generated mappings to .figmarc.json
  */
 
@@ -8,11 +7,10 @@ import { cosmiconfig } from 'cosmiconfig';
 import { ProjectConfig } from './config-schema.js';
 
 /**
- * Обновляет .figmarc.json с новыми маппингами
  * Updates .figmarc.json with new mappings
  *
- * @param newMappings - Новые маппинги цветов и шрифтов
- * @returns Путь к обновленному файлу конфигурации или null если не удалось
+ * @param newMappings - New color and font mappings
+ * @returns Path to updated configuration file or null if failed
  */
 export async function updateConfigMappings(
   newMappings: {
@@ -21,8 +19,7 @@ export async function updateConfigMappings(
   }
 ): Promise<string | null> {
 
-  // 1. Используем cosmiconfig для поиска конфигурации
-  // Use cosmiconfig to find configuration
+  // 1. Use cosmiconfig to find configuration
   const explorer = cosmiconfig('figma', {
     searchPlaces: [
       '.figmarc.json',
@@ -39,8 +36,7 @@ export async function updateConfigMappings(
     return null;
   }
 
-  // 2. Только .json файлы можем обновлять (не .js)
-  // Only .json files can be updated (not .js)
+  // 2. Only .json files can be updated (not .js)
   if (!result.filepath.endsWith('.json')) {
     console.error('⚠️  Config file is not JSON, cannot auto-update:', result.filepath);
     console.error('💡 Manually add mappings to your config file:');
@@ -48,17 +44,14 @@ export async function updateConfigMappings(
     return null;
   }
 
-  // 3. Загружаем текущую конфигурацию
-  // Load current configuration
+  // 3. Load current configuration
   const config: ProjectConfig = result.config;
 
-  // 4. Подсчитываем количество новых маппингов
-  // Count number of new mappings
+  // 4. Count number of new mappings
   let newColorsCount = 0;
   let newFontsCount = 0;
 
-  // 5. Объединяем маппинги (не перезаписываем существующие)
-  // Merge mappings (don't overwrite existing)
+  // 5. Merge mappings (don't overwrite existing)
   if (!config.mappings) config.mappings = {};
 
   if (newMappings.colors) {
@@ -83,15 +76,13 @@ export async function updateConfigMappings(
     }
   }
 
-  // 6. Если нет новых маппингов, пропускаем запись
-  // Skip writing if no new mappings
+  // 6. Skip writing if no new mappings
   if (newColorsCount === 0 && newFontsCount === 0) {
     console.error('ℹ️  No new mappings to add (all already exist)');
     return result.filepath;
   }
 
-  // 7. Сохраняем обратно в файл
-  // Save back to file
+  // 7. Save back to file
   await writeFile(result.filepath, JSON.stringify(config, null, 2), 'utf-8');
 
   console.error(`✅ Updated mappings in ${result.filepath}`);
@@ -106,10 +97,9 @@ export async function updateConfigMappings(
 }
 
 /**
- * Проверяет существует ли конфигурация с маппингами
  * Checks if configuration with mappings exists
  *
- * @returns true если есть конфигурация с маппингами цветов
+ * @returns true if configuration with color mappings exists
  */
 export async function hasMappings(): Promise<boolean> {
   const explorer = cosmiconfig('figma', {
@@ -130,10 +120,9 @@ export async function hasMappings(): Promise<boolean> {
 }
 
 /**
- * Получает текущие маппинги из конфигурации
  * Gets current mappings from configuration
  *
- * @returns Объект с маппингами или undefined если не найдены
+ * @returns Object with mappings or undefined if not found
  */
 export async function getCurrentMappings(): Promise<{
   colors?: Record<string, string>;

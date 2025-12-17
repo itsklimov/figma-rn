@@ -1,7 +1,7 @@
 /**
- * Клиент Figma Variables REST API
- * Предоставляет доступ к дизайн-токенам (цвета, числа, строки) с поддержкой режимов
- * Примечание: Variables API требует Enterprise план - корректная обработка в противном случае
+ * Figma Variables REST API client
+ * Provides access to design tokens (colors, numbers, strings) with mode support
+ * Note: Variables API requires Enterprise plan - proper handling otherwise
  */
 
 import https from 'https';
@@ -70,8 +70,8 @@ export interface VariablesResult {
 }
 
 /**
- * Получение переменных из Figma API
- * Возвращает null если не Enterprise или API недоступен
+ * Fetch variables from Figma API
+ * Returns null if not Enterprise or API unavailable
  */
 export async function fetchVariables(
   token: string,
@@ -99,7 +99,7 @@ export async function fetchVariables(
         try {
           const json = JSON.parse(data);
 
-          // Проверка ошибки только для Enterprise
+          // Check error for Enterprise only
           if (json.status === 403 || json.err) {
             console.error('[VARIABLES] Not available (requires Enterprise plan)');
             resolve(null);
@@ -120,7 +120,7 @@ export async function fetchVariables(
 }
 
 /**
- * Обработка ответа API переменных
+ * Process variables API response
  */
 export function processVariables(response: VariablesResponse): VariablesResult {
   const result: VariablesResult = {
@@ -132,7 +132,7 @@ export function processVariables(response: VariablesResponse): VariablesResult {
 
   const { variables, variableCollections } = response.meta;
 
-  // Обработка коллекций
+  // Process collections
   for (const collection of Object.values(variableCollections)) {
     result.collections.push({
       name: collection.name,
@@ -143,7 +143,7 @@ export function processVariables(response: VariablesResponse): VariablesResult {
     });
   }
 
-  // Обработка цветовых переменных
+  // Process color variables
   for (const variable of Object.values(variables)) {
     if (variable.resolvedType !== 'COLOR') continue;
 
@@ -158,7 +158,7 @@ export function processVariables(response: VariablesResponse): VariablesResult {
       modes: {},
     };
 
-    // Обработка каждого режима
+    // Process each mode
     for (const mode of collection.modes) {
       const value = variable.valuesByMode[mode.modeId];
       if (value && typeof value === 'object' && 'r' in value) {
@@ -167,7 +167,7 @@ export function processVariables(response: VariablesResponse): VariablesResult {
 
         colorVar.modes[mode.name] = { hex, rgba };
 
-        // Использование режима по умолчанию для основных значений
+        // Use default mode for primary values
         if (mode.modeId === collection.defaultModeId) {
           colorVar.hex = hex;
           colorVar.rgba = rgba;
@@ -184,7 +184,7 @@ export function processVariables(response: VariablesResponse): VariablesResult {
 }
 
 /**
- * Попытка сопоставления цвета узла с переменной
+ * Attempt to match node color to variable
  */
 export function matchColorToVariable(
   colorHex: string,
@@ -193,12 +193,12 @@ export function matchColorToVariable(
   const normalizedHex = colorHex.toUpperCase();
 
   for (const colorVar of variables.colors) {
-    // Проверка режима по умолчанию
+    // Check default mode
     if (colorVar.hex === normalizedHex) {
       return colorVar;
     }
 
-    // Проверка всех режимов
+    // Check all modes
     for (const mode of Object.values(colorVar.modes)) {
       if (mode.hex === normalizedHex) {
         return colorVar;
@@ -210,7 +210,7 @@ export function matchColorToVariable(
 }
 
 /**
- * Форматирование переменных для LLM
+ * Format variables for LLM
  */
 export function formatVariablesForLLM(result: VariablesResult): string {
   let output = `# Figma Variables (Design Tokens)\n\n`;
@@ -231,7 +231,7 @@ export function formatVariablesForLLM(result: VariablesResult): string {
 
   output += `✅ **Enterprise Variables API connected**\n\n`;
 
-  // Сводка по коллекциям
+  // Collections summary
   output += `## Collections\n\n`;
   for (const collection of result.collections) {
     output += `- **${collection.name}**: ${collection.variableCount} variables`;
@@ -242,7 +242,7 @@ export function formatVariablesForLLM(result: VariablesResult): string {
   }
   output += '\n';
 
-  // Цветовые токены
+  // Color tokens
   if (result.colors.length > 0) {
     output += `## Color Tokens (${result.colors.length})\n\n`;
     output += `| Token Path | Default | Modes |\n`;
@@ -264,7 +264,7 @@ export function formatVariablesForLLM(result: VariablesResult): string {
 }
 
 /**
- * Главная функция: получение переменных с корректной обработкой fallback
+ * Main function: fetch variables with proper fallback handling
  */
 export async function getVariablesWithFallback(
   token: string,

@@ -1,32 +1,32 @@
 /**
- * Тестовые Figma URLs для e2e тестов
+ * Test Figma URLs for e2e tests
  *
- * ВАЖНО: Для работы тестов требуется переменная окружения FIGMA_TOKEN
- * Получить токен: https://www.figma.com/developers/api#access-tokens
+ * IMPORTANT: Tests require FIGMA_TOKEN environment variable
+ * Get token: https://www.figma.com/developers/api#access-tokens
  */
 
-// Базовый URL тестового файла
+// Base URL for test file
 export const TEST_FILE_KEY = 'yfQEfmNzTQnQxTIBWG4SxO';
 export const TEST_FILE_NAME = 'MARAFET--Copy-';
 export const BASE_URL = `https://www.figma.com/design/${TEST_FILE_KEY}/${TEST_FILE_NAME}`;
 
 /**
- * Создаёт полный Figma URL с node-id
+ * Creates full Figma URL with node-id
  */
 export function createFigmaUrl(nodeId: string): string {
   return `${BASE_URL}?node-id=${nodeId}&m=dev`;
 }
 
 /**
- * Тестовые URL для различных типов элементов
- * Нужно обновить node-id после исследования Figma файла
+ * Test URLs for different element types
+ * Need to update node-id after exploring Figma file
  */
 export const TEST_URLS = {
-  // Основной тестовый экран (от пользователя)
+  // Main test screen (from user)
   mainScreen: createFigmaUrl('4212-63544'),
 
-  // Альтернативные узлы для тестов разных паттернов
-  // TODO: Добавить после исследования структуры Figma файла
+  // Alternative nodes for testing different patterns
+  // TODO: Add after exploring Figma file structure
   // listScreen: createFigmaUrl('xxx-xxx'),
   // formScreen: createFigmaUrl('xxx-xxx'),
   // modal: createFigmaUrl('xxx-xxx'),
@@ -35,24 +35,24 @@ export const TEST_URLS = {
 };
 
 /**
- * Невалидные URL для тестов ошибок
+ * Invalid URLs for error tests
  */
 export const INVALID_URLS = {
-  // Отсутствует node-id
+  // Missing node-id
   missingNodeId: `https://www.figma.com/design/${TEST_FILE_KEY}`,
 
-  // Неправильный формат
+  // Malformed URL
   malformed: 'not-a-valid-url',
 
-  // Несуществующий fileKey
+  // Non-existent fileKey
   nonExistentFile: 'https://www.figma.com/design/XXXXXXXXXXXXXXX?node-id=1-1',
 
-  // Несуществующий nodeId
+  // Non-existent nodeId
   nonExistentNode: createFigmaUrl('99999-99999'),
 };
 
 /**
- * Извлекает nodeId из Figma URL
+ * Extracts nodeId from Figma URL
  */
 export function extractNodeId(figmaUrl: string): string | null {
   const match = figmaUrl.match(/node-id=([^&]+)/);
@@ -61,7 +61,7 @@ export function extractNodeId(figmaUrl: string): string | null {
 }
 
 /**
- * Извлекает fileKey из Figma URL
+ * Extracts fileKey from Figma URL
  */
 export function extractFileKey(figmaUrl: string): string | null {
   const match = figmaUrl.match(/figma\.com\/(?:file|design)\/([a-zA-Z0-9]+)/);
@@ -69,7 +69,7 @@ export function extractFileKey(figmaUrl: string): string | null {
 }
 
 /**
- * Проверяет, что FIGMA_TOKEN установлен
+ * Checks that FIGMA_TOKEN is set
  */
 export function requireFigmaToken(): string {
   const token = process.env.FIGMA_TOKEN;
@@ -84,14 +84,14 @@ export function requireFigmaToken(): string {
 }
 
 /**
- * Проверяет валидность Figma URL
+ * Validates Figma URL
  */
 export function isValidFigmaUrl(url: string): boolean {
-  // Проверяем формат URL
+  // Check URL format
   const urlPattern = /^https:\/\/(www\.)?figma\.com\/(file|design)\/[a-zA-Z0-9]+/;
   if (!urlPattern.test(url)) return false;
 
-  // Проверяем наличие node-id
+  // Check for node-id
   if (!url.includes('node-id=')) return false;
 
   return true;

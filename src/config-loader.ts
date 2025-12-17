@@ -1,6 +1,6 @@
 /**
- * Загрузчик конфигурации проекта
- * Использует cosmiconfig для поиска конфигурации в различных форматах
+ * Project configuration loader
+ * Uses cosmiconfig to search for configuration in various formats
  */
 
 import { cosmiconfig } from 'cosmiconfig';
@@ -12,12 +12,12 @@ import {
 } from './config-schema.js';
 
 /**
- * Имя модуля для cosmiconfig
+ * Module name for cosmiconfig
  */
 const MODULE_NAME = 'figma';
 
 /**
- * Места поиска конфигурации (в порядке приоритета)
+ * Configuration search locations (in priority order)
  */
 const SEARCH_PLACES = [
   '.figmarc.json',
@@ -28,13 +28,13 @@ const SEARCH_PLACES = [
 ];
 
 /**
- * AJV валидатор для схемы конфигурации
+ * AJV validator for configuration schema
  */
 const ajv = new Ajv({ allErrors: true, verbose: true });
 const validateConfig = ajv.compile(projectConfigSchema);
 
 /**
- * Ошибка валидации конфигурации
+ * Configuration validation error
  */
 export class ConfigValidationError extends Error {
   constructor(
@@ -47,49 +47,49 @@ export class ConfigValidationError extends Error {
 }
 
 /**
- * Загружает конфигурацию проекта из файловой системы
+ * Loads project configuration from filesystem
  *
- * @param searchFrom - Директория, с которой начинать поиск (по умолчанию - текущая)
- * @returns Найденная конфигурация или null, если не найдена
- * @throws {ConfigValidationError} Если конфигурация невалидна
+ * @param searchFrom - Directory to start search from (defaults to current)
+ * @returns Found configuration or null if not found
+ * @throws {ConfigValidationError} If configuration is invalid
  */
 export async function loadProjectConfig(
   searchFrom?: string
 ): Promise<ProjectConfig | null> {
   try {
-    // Создаем explorer для поиска конфигурации
+    // Create explorer to search for configuration
     const explorer = cosmiconfig(MODULE_NAME, {
       searchPlaces: SEARCH_PLACES,
-      stopDir: undefined, // Ищем до корня файловой системы
+      stopDir: undefined, // Search up to filesystem root
     });
 
-    // Ищем конфигурацию
+    // Search for configuration
     const result = await explorer.search(searchFrom);
 
-    // Если не найдена - возвращаем null
+    // If not found - return null
     if (!result || !result.config) {
       return null;
     }
 
-    // Валидируем и возвращаем конфигурацию
+    // Validate and return configuration
     return validateAndNormalizeConfig(result.config, result.filepath);
   } catch (error) {
-    // Если это уже наша ошибка валидации - пробрасываем
+    // If this is already our validation error - rethrow
     if (error instanceof ConfigValidationError) {
       throw error;
     }
 
-    // Иначе - оборачиваем в общую ошибку
-    console.error('Ошибка загрузки конфигурации:', error);
+    // Otherwise - wrap in general error
+    console.error('Configuration loading error:', error);
     return null;
   }
 }
 
 /**
- * Загружает конфигурацию или возвращает дефолтную
+ * Loads configuration or returns default
  *
- * @param searchFrom - Директория для поиска
- * @returns Найденная конфигурация или DEFAULT_CONFIG
+ * @param searchFrom - Directory to search in
+ * @returns Found configuration or DEFAULT_CONFIG
  */
 export async function loadProjectConfigOrDefault(
   searchFrom?: string
@@ -99,44 +99,44 @@ export async function loadProjectConfigOrDefault(
 }
 
 /**
- * Валидирует конфигурацию с помощью AJV и нормализует её
+ * Validates configuration using AJV and normalizes it
  *
- * @param config - Сырая конфигурация из файла
- * @param filepath - Путь к файлу конфигурации (для ошибок)
- * @returns Валидированная и нормализованная конфигурация
- * @throws {ConfigValidationError} Если конфигурация невалидна
+ * @param config - Raw configuration from file
+ * @param filepath - Path to configuration file (for errors)
+ * @returns Validated and normalized configuration
+ * @throws {ConfigValidationError} If configuration is invalid
  */
 function validateAndNormalizeConfig(
   config: any,
   filepath: string
 ): ProjectConfig {
-  // Если конфигурация из package.json - берем только поле 'figma'
+  // If configuration from package.json - take only 'figma' field
   if (filepath.endsWith('package.json') && config.figma) {
     config = config.figma;
   }
 
-  // Валидируем с помощью AJV
+  // Validate using AJV
   const isValid = validateConfig(config);
 
   if (!isValid) {
-    // Собираем ошибки валидации
+    // Collect validation errors
     const errors = (validateConfig.errors || []).map(err => ({
       path: err.instancePath || '(root)',
-      message: err.message || 'Неизвестная ошибка'
+      message: err.message || 'Unknown error'
     }));
 
     throw new ConfigValidationError(
-      `Невалидная конфигурация в ${filepath}`,
+      `Invalid configuration in ${filepath}`,
       errors
     );
   }
 
-  // Возвращаем типизированную конфигурацию
+  // Return typed configuration
   return config as ProjectConfig;
 }
 
 /**
- * Очищает кеш cosmiconfig (полезно для тестов)
+ * Clears cosmiconfig cache (useful for tests)
  */
 export function clearConfigCache(): void {
   const explorer = cosmiconfig(MODULE_NAME, {
@@ -146,15 +146,15 @@ export function clearConfigCache(): void {
 }
 
 /**
- * Форматирует ошибки валидации для вывода пользователю
+ * Formats validation errors for user output
  *
- * @param error - Ошибка валидации
- * @returns Читаемое сообщение об ошибке
+ * @param error - Validation error
+ * @returns Readable error message
  */
 export function formatValidationErrors(error: ConfigValidationError): string {
   const errorList = error.errors
     .map(err => `  - ${err.path}: ${err.message}`)
     .join('\n');
 
-  return `${error.message}\n\nОшибки:\n${errorList}`;
+  return `${error.message}\n\nErrors:\n${errorList}`;
 }

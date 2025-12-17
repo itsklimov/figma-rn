@@ -1,19 +1,19 @@
 /**
- * TypeScript Compiler для проверки сгенерированного кода
- * Использует ts-morph для анализа и валидации TypeScript
+ * TypeScript Compiler for validating generated code
+ * Uses ts-morph for TypeScript analysis and validation
  */
 
 import { Project, ts, SourceFile, DiagnosticCategory } from 'ts-morph';
 import { join } from 'path';
 
 export interface CompilationResult {
-  /** Компиляция прошла успешно */
+  /** Compilation succeeded */
   success: boolean;
-  /** Список ошибок */
+  /** List of errors */
   errors: CompilationError[];
-  /** Список предупреждений */
+  /** List of warnings */
   warnings: CompilationError[];
-  /** Информация о файле */
+  /** File information */
   fileInfo?: {
     exports: string[];
     imports: string[];
@@ -23,18 +23,18 @@ export interface CompilationResult {
 }
 
 export interface CompilationError {
-  /** Сообщение об ошибке */
+  /** Error message */
   message: string;
-  /** Номер строки */
+  /** Line number */
   line?: number;
-  /** Номер колонки */
+  /** Column number */
   column?: number;
-  /** Код ошибки */
+  /** Error code */
   code?: number;
 }
 
 /**
- * Компилирует TypeScript код и возвращает результат
+ * Compiles TypeScript code and returns result
  */
 export function compileTypeScript(code: string, filename = 'test.tsx'): CompilationResult {
   const project = new Project({
@@ -47,10 +47,10 @@ export function compileTypeScript(code: string, filename = 'test.tsx'): Compilat
       noEmit: true,
       strict: false,
       moduleResolution: ts.ModuleResolutionKind.Bundler,
-      // Разрешаем любые импорты (для тестов не важны внешние зависимости)
+      // Allow any imports (external dependencies don't matter for tests)
       noImplicitAny: false,
       allowSyntheticDefaultImports: true,
-      // Отключаем автоматическое разрешение типов
+      // Disable automatic type resolution
       types: [],
       typeRoots: [],
     },
@@ -59,7 +59,7 @@ export function compileTypeScript(code: string, filename = 'test.tsx'): Compilat
     skipFileDependencyResolution: true,
   });
 
-  // Добавляем минимальные типы для React Native
+  // Add minimal React Native types
   project.createSourceFile(
     'node_modules/@types/react/index.d.ts',
     `
@@ -102,7 +102,7 @@ declare module 'react-native' {
 `
   );
 
-  // Добавляем типы для часто используемых библиотек
+  // Add types for commonly used libraries
   project.createSourceFile(
     'node_modules/@types/gorhom-bottom-sheet/index.d.ts',
     `
@@ -141,10 +141,10 @@ declare module 'zod' {
 `
   );
 
-  // Добавляем файл с кодом
+  // Add code file
   const sourceFile = project.createSourceFile(filename, code);
 
-  // Получаем диагностику
+  // Get diagnostics
   const diagnostics = project.getPreEmitDiagnostics();
 
   const errors: CompilationError[] = [];
@@ -173,7 +173,7 @@ declare module 'zod' {
     }
   }
 
-  // Извлекаем информацию о файле
+  // Extract file information
   const fileInfo = extractFileInfo(sourceFile);
 
   return {
@@ -185,7 +185,7 @@ declare module 'zod' {
 }
 
 /**
- * Извлекает информацию о файле
+ * Extracts file information
  */
 function extractFileInfo(sourceFile: SourceFile): CompilationResult['fileInfo'] {
   const exports: string[] = [];
@@ -193,12 +193,12 @@ function extractFileInfo(sourceFile: SourceFile): CompilationResult['fileInfo'] 
   let hasDefaultExport = false;
   let componentName: string | undefined;
 
-  // Извлекаем импорты
+  // Extract imports
   for (const importDecl of sourceFile.getImportDeclarations()) {
     imports.push(importDecl.getModuleSpecifierValue());
   }
 
-  // Извлекаем экспорты
+  // Extract exports
   for (const exportDecl of sourceFile.getExportDeclarations()) {
     const namedExports = exportDecl.getNamedExports();
     for (const namedExport of namedExports) {
@@ -206,13 +206,13 @@ function extractFileInfo(sourceFile: SourceFile): CompilationResult['fileInfo'] 
     }
   }
 
-  // Проверяем экспортированные функции/переменные
+  // Check exported functions/variables
   for (const func of sourceFile.getFunctions()) {
     if (func.isExported()) {
       const name = func.getName();
       if (name) {
         exports.push(name);
-        // Предполагаем, что функция с PascalCase именем - это компонент
+        // Assume function with PascalCase name is a component
         if (/^[A-Z]/.test(name)) {
           componentName = name;
         }
@@ -228,14 +228,14 @@ function extractFileInfo(sourceFile: SourceFile): CompilationResult['fileInfo'] 
     if (varStatement?.isExported()) {
       const name = varDecl.getName();
       exports.push(name);
-      // Предполагаем, что переменная с PascalCase именем - это компонент
+      // Assume variable with PascalCase name is a component
       if (/^[A-Z]/.test(name)) {
         componentName = name;
       }
     }
   }
 
-  // Проверяем экспортированные интерфейсы/типы
+  // Check exported interfaces/types
   for (const iface of sourceFile.getInterfaces()) {
     if (iface.isExported()) {
       exports.push(iface.getName());
@@ -257,7 +257,7 @@ function extractFileInfo(sourceFile: SourceFile): CompilationResult['fileInfo'] 
 }
 
 /**
- * Проверяет, что код содержит ожидаемые элементы React Native компонента
+ * Validates that code contains expected React Native component elements
  */
 export function validateReactNativeComponent(code: string): {
   valid: boolean;
@@ -265,27 +265,27 @@ export function validateReactNativeComponent(code: string): {
 } {
   const issues: string[] = [];
 
-  // Проверяем импорты React
+  // Check React imports
   if (!code.includes("from 'react'") && !code.includes('from "react"')) {
     issues.push('Missing React import');
   }
 
-  // Проверяем импорты React Native
+  // Check React Native imports
   if (!code.includes("from 'react-native'") && !code.includes('from "react-native"')) {
     issues.push('Missing React Native import');
   }
 
-  // Проверяем наличие JSX
+  // Check for JSX
   if (!code.includes('<View') && !code.includes('<Text') && !code.includes('<ScrollView')) {
     issues.push('No JSX elements found (View, Text, ScrollView)');
   }
 
-  // Проверяем экспорт компонента
+  // Check component export
   if (!code.match(/export\s+(const|function)\s+[A-Z]/)) {
     issues.push('No exported component found (should start with capital letter)');
   }
 
-  // Проверяем наличие стилей
+  // Check for styles
   if (!code.includes('styles') && !code.includes('createStyles')) {
     issues.push('No styles definition found');
   }
@@ -297,7 +297,7 @@ export function validateReactNativeComponent(code: string): {
 }
 
 /**
- * Компилирует файл и проверяет его как React Native компонент
+ * Compiles file and validates it as React Native component
  */
 export function compileAndValidate(code: string, filename = 'test.tsx'): {
   compilation: CompilationResult;

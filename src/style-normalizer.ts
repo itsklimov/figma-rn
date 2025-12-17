@@ -1,10 +1,10 @@
 /**
- * Style Name Normalizer - нормализация имен стилей
- * Конвертирует любые имена (включая кириллицу) в английский camelCase
+ * Style Name Normalizer - style name normalization
+ * Converts any names (including Cyrillic) to English camelCase
  */
 
 /**
- * Таблица транслитерации кириллицы
+ * Cyrillic transliteration table
  * Cyrillic transliteration table
  */
 const CYRILLIC_TO_LATIN: Record<string, string> = {
@@ -22,7 +22,7 @@ const CYRILLIC_TO_LATIN: Record<string, string> = {
 };
 
 /**
- * Транслитерирует строку из кириллицы в латиницу
+ * Transliterates string from Cyrillic to Latin
  * Transliterates string from Cyrillic to Latin
  */
 export function transliterate(text: string): string {
@@ -30,7 +30,7 @@ export function transliterate(text: string): string {
 }
 
 /**
- * Конвертирует строку в camelCase
+ * Converts string to camelCase
  * Converts string to camelCase
  */
 export function toCamelCase(text: string): string {
@@ -52,11 +52,11 @@ export function toCamelCase(text: string): string {
 }
 
 /**
- * Нормализует имя стиля: транслитерация + camelCase
+ * Normalizes style name: transliteration + camelCase
  * Normalizes style name: transliteration + camelCase
  *
  * @example
- * normalizeStyleName("Ожидается платеж") // => "ozhidaetsyaPlatezh"
+ * normalizeStyleName("Payment Pending") // => "paymentPending"
  * normalizeStyleName("Button Main") // => "buttonMain"
  * normalizeStyleName("_StatusBar-time") // => "statusBarTime"
  * normalizeStyleName("2") // => "style2" (prefixed to avoid invalid JS)
@@ -68,7 +68,6 @@ export function normalizeStyleName(name: string): string {
   // 2. Convert to camelCase
   let result = toCamelCase(transliterated);
 
-  // 3. Если начинается с цифры, добавляем префикс "style"
   // 3. If starts with digit, add "style" prefix (JS property names can't start with numbers)
   if (/^\d/.test(result)) {
     result = 'style' + result;
@@ -78,7 +77,7 @@ export function normalizeStyleName(name: string): string {
 }
 
 /**
- * Нормализует объект стилей, заменяя все ключи
+ * Normalizes style object, replacing all keys
  * Normalizes style object, replacing all keys
  */
 export function normalizeStyleObject(styles: Record<string, any>): Record<string, any> {

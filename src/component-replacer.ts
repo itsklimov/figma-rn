@@ -1,25 +1,21 @@
 /**
- * Механизм замены компонентов
  * Component replacement engine
- * Определяет какие View заменить на существующие компоненты
  * Determines which Views to replace with existing components
  */
 
 /**
- * Описание замены компонента
  * Component replacement description
  */
 export interface ComponentReplacement {
-  /** Имя узла в Figma */
+  /** Node name in Figma */
   nodeName: string;
-  /** Имя существующего компонента для замены */
+  /** Existing component name for replacement */
   componentName: string;
-  /** Уверенность в замене (0-1) */
+  /** Replacement confidence (0-1) */
   confidence: number;
 }
 
 /**
- * Результат распознавания компонента
  * Component match result
  */
 export interface ComponentMatch {
@@ -36,14 +32,12 @@ export interface ComponentMatch {
 }
 
 /**
- * Определяет какие узлы заменить компонентами
- * Для Phase 2.5 - простая версия, только планирование замен
  * Determines which nodes to replace with components
  * For Phase 2.5 - simple version, only replacement planning
  *
- * @param metadata - Метаданные Figma файла
- * @param matches - Результаты распознавания компонентов
- * @returns Список планируемых замен
+ * @param metadata - Figma file metadata
+ * @param matches - Component recognition results
+ * @returns List of planned replacements
  */
 export function planComponentReplacements(
   metadata: any,
@@ -51,7 +45,6 @@ export function planComponentReplacements(
 ): ComponentReplacement[] {
   const replacements: ComponentReplacement[] = [];
 
-  // Находим совпадения с высокой уверенностью (>85%)
   // Find high-confidence matches (>85%)
   const goodMatches = matches.filter(
     (m) =>
@@ -74,12 +67,11 @@ export function planComponentReplacements(
 }
 
 /**
- * Генерирует импорты для компонентов
  * Generates imports for components
  *
- * @param replacements - Список замен компонентов
- * @param importPrefix - Префикс пути импорта (по умолчанию '@app')
- * @returns Строка с импортами
+ * @param replacements - Component replacement list
+ * @param importPrefix - Import path prefix (default '@app')
+ * @returns String with imports
  */
 export function generateComponentImports(
   replacements: ComponentReplacement[],
@@ -96,12 +88,11 @@ export function generateComponentImports(
 }
 
 /**
- * Фильтрует замены по минимальному порогу уверенности
  * Filters replacements by minimum confidence threshold
  *
- * @param replacements - Список замен
- * @param minConfidence - Минимальная уверенность (0-1)
- * @returns Отфильтрованный список замен
+ * @param replacements - Replacement list
+ * @param minConfidence - Minimum confidence (0-1)
+ * @returns Filtered replacement list
  */
 export function filterByConfidence(
   replacements: ComponentReplacement[],
@@ -111,13 +102,11 @@ export function filterByConfidence(
 }
 
 /**
- * Группирует замены по именам компонентов
- * Полезно для подсчета использования каждого компонента
  * Groups replacements by component names
  * Useful for counting component usage
  *
- * @param replacements - Список замен
- * @returns Map с группировкой по имени компонента
+ * @param replacements - Replacement list
+ * @returns Map with grouping by component name
  */
 export function groupByComponent(
   replacements: ComponentReplacement[]
@@ -134,23 +123,22 @@ export function groupByComponent(
 }
 
 /**
- * Генерирует отчет о заменах компонентов
  * Generates component replacement report
  *
- * @param replacements - Список замен
- * @returns Читаемый отчет
+ * @param replacements - Replacement list
+ * @returns Readable report
  */
 export function generateReplacementReport(
   replacements: ComponentReplacement[]
 ): string {
   if (replacements.length === 0) {
-    return 'Нет компонентов для замены';
+    return 'No components to replace';
   }
 
   const grouped = groupByComponent(replacements);
   const lines: string[] = [];
 
-  lines.push(`Найдено ${replacements.length} замен в ${grouped.size} компонентах:`);
+  lines.push(`Found ${replacements.length} replacements in ${grouped.size} components:`);
   lines.push('');
 
   for (const [componentName, items] of grouped.entries()) {

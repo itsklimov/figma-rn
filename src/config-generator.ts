@@ -1,6 +1,6 @@
 /**
- * Генератор конфигурации проекта
- * Анализирует проект и создает конфигурационный файл
+ * Project configuration generator
+ * Analyzes the project and creates a configuration file
  */
 
 import { writeFile, readFile, access } from 'fs/promises';
@@ -10,16 +10,15 @@ import { ProjectConfig, ProjectConfigInput, DEFAULT_CONFIG } from './config-sche
 import { findThemeFiles } from './theme-parser.js';
 
 /**
- * Результат генерации конфигурации
  */
 export interface GeneratedConfig {
-  /** Сгенерированная конфигурация */
+  /** Generated configuration */
   config: ProjectConfig;
 
-  /** Путь к созданному файлу */
+  /** Created file path */
   filePath: string;
 
-  /** Обнаруженные паттерны */
+  /** Detected patterns */
   detectedPatterns: {
     stylePattern?: string;
     scaleFunction?: string;
@@ -29,51 +28,43 @@ export interface GeneratedConfig {
 }
 
 /**
- * Генерирует конфигурацию проекта на основе анализа кодовой базы
  *
- * @param input - Входные данные для генерации
- * @returns Сгенерированная конфигурация и путь к файлу
+ * @param input - Generation input
+ * @returns Generated configuration and file path
  */
 export async function generateProjectConfig(
   input: ProjectConfigInput
 ): Promise<GeneratedConfig> {
   const detectedPatterns: GeneratedConfig['detectedPatterns'] = {};
 
-  // Определяем фреймворк
   const framework = (input.framework as ProjectConfig['framework']) ||
     await detectFramework(input.projectRoot);
 
-  // Создаем базовую конфигурацию
   const config: ProjectConfig = {
     framework,
     codeStyle: {
-      stylePattern: 'StyleSheet' // По умолчанию
+      stylePattern: 'StyleSheet',
     }
   };
 
-  // Определяем паттерн стилизации
   const stylePattern = (input.styleApproach as ProjectConfig['codeStyle']['stylePattern']) ||
     await detectStylePattern(input.projectRoot);
   config.codeStyle.stylePattern = stylePattern;
   detectedPatterns.stylePattern = stylePattern;
 
-  // Определяем функцию масштабирования
   const scaleFunction = await detectScaleFunction(input.projectRoot);
   if (scaleFunction) {
     config.codeStyle.scaleFunction = scaleFunction;
     detectedPatterns.scaleFunction = scaleFunction;
   }
 
-  // Определяем префикс импортов
   const importPrefix = await detectImportPrefix(input.projectRoot);
   if (importPrefix) {
     config.codeStyle.importPrefix = importPrefix;
     detectedPatterns.importPrefix = importPrefix;
   }
 
-  // Добавляем конфигурацию темы
   if (input.themePath) {
-    // Пользователь указал путь - используем его
     const themeType = await detectThemeType(join(input.projectRoot, input.themePath));
     config.theme = {
       location: input.themePath,
@@ -81,10 +72,8 @@ export async function generateProjectConfig(
     };
     detectedPatterns.themeType = themeType;
   } else {
-    // Автоопределение файлов темы
     const foundThemes = await findThemeFiles(input.projectRoot);
     if (foundThemes.length > 0) {
-      // Используем первый найденный файл темы
       const absolutePath = foundThemes[0];
       const relativePath = relative(input.projectRoot, absolutePath);
       const themeType = await detectThemeType(absolutePath);
@@ -97,7 +86,6 @@ export async function generateProjectConfig(
     }
   }
 
-  // Добавляем конфигурацию компонентов, если указан путь
   if (input.componentsPath) {
     config.components = {
       location: input.componentsPath,
@@ -105,7 +93,6 @@ export async function generateProjectConfig(
     };
   }
 
-  // Записываем конфигурацию в файл
   const filePath = join(input.projectRoot, '.figmarc.json');
   await writeFile(filePath, JSON.stringify(config, null, 2), 'utf-8');
 
@@ -113,10 +100,9 @@ export async function generateProjectConfig(
 }
 
 /**
- * Определяет тип фреймворка на основе package.json
  *
- * @param projectRoot - Корневая директория проекта
- * @returns Обнаруженный фреймворк
+ * @param projectRoot - Project root directory
+ * @returns Detected framework
  */
 async function detectFramework(
   projectRoot: string
@@ -132,7 +118,6 @@ async function detectFramework(
       ...packageJson.devDependencies
     };
 
-    // Проверяем наличие специфичных для фреймворка пакетов
     if (deps['ignite-cli'] || deps['@thecodingmachine/ignite-cli']) {
       return 'ignite';
     }
@@ -142,22 +127,19 @@ async function detectFramework(
 
     return 'react-native';
   } catch {
-    // По умолчанию - react-native
     return 'react-native';
   }
 }
 
 /**
- * Определяет паттерн стилизации на основе анализа кода
  *
- * @param projectRoot - Корневая директория проекта
- * @returns Обнаруженный паттерн стилизации
+ * @param projectRoot - Project root directory
+ * @returns Detected style pattern
  */
 async function detectStylePattern(
   projectRoot: string
 ): Promise<ProjectConfig['codeStyle']['stylePattern']> {
   try {
-    // Ищем TypeScript/JavaScript файлы
     const files = await glob('**/*.{ts,tsx,js,jsx}', {
       cwd: projectRoot,
       ignore: ['node_modules/**', 'dist/**', 'build/**'],
@@ -165,7 +147,6 @@ async function detectStylePattern(
       nodir: true
     });
 
-    // Считаем упоминания различных паттернов
     const patterns = {
       useTheme: 0,
       StyleSheet: 0,
@@ -173,7 +154,6 @@ async function detectStylePattern(
       nativewind: 0
     };
 
-    // Проверяем первые 50 файлов (для производительности)
     const filesToCheck = files.slice(0, 50);
 
     for (const file of filesToCheck) {
@@ -189,28 +169,24 @@ async function detectStylePattern(
           patterns.nativewind++;
         }
       } catch {
-        // Игнорируем ошибки чтения отдельных файлов
         continue;
       }
     }
 
-    // Возвращаем самый частый паттерн
     const maxPattern = Object.entries(patterns).reduce((max, [key, val]) =>
       val > max[1] ? [key, val] : max
     , ['StyleSheet', 0])[0] as ProjectConfig['codeStyle']['stylePattern'];
 
     return maxPattern;
   } catch {
-    // По умолчанию - StyleSheet
     return 'StyleSheet';
   }
 }
 
 /**
- * Определяет функцию масштабирования на основе анализа импортов
  *
- * @param projectRoot - Корневая директория проекта
- * @returns Обнаруженная функция масштабирования или undefined
+ * @param projectRoot - Project root directory
+ * @returns Detected scale function or undefined
  */
 async function detectScaleFunction(
   projectRoot: string
@@ -223,7 +199,6 @@ async function detectScaleFunction(
       nodir: true
     });
 
-    // Ищем импорты функций масштабирования
     const scaleFunctions = ['scale', 'RFValue', 'moderateScale', 'verticalScale', 'horizontalScale'];
 
     for (const file of files.slice(0, 30)) {
@@ -231,7 +206,6 @@ async function detectScaleFunction(
         const content = await readFile(file, 'utf-8');
 
         for (const func of scaleFunctions) {
-          // Проверяем импорт или определение функции
           if (
             content.includes(`import { ${func}`) ||
             content.includes(`import ${func}`) ||
@@ -253,16 +227,14 @@ async function detectScaleFunction(
 }
 
 /**
- * Определяет префикс импортов из tsconfig.json или babel.config
  *
- * @param projectRoot - Корневая директория проекта
- * @returns Обнаруженный префикс импортов или undefined
+ * @param projectRoot - Project root directory
+ * @returns Detected import prefix or undefined
  */
 async function detectImportPrefix(
   projectRoot: string
 ): Promise<string | undefined> {
   try {
-    // Проверяем tsconfig.json
     const tsconfigPath = join(projectRoot, 'tsconfig.json');
     try {
       await access(tsconfigPath);
@@ -272,7 +244,6 @@ async function detectImportPrefix(
 
       const paths = tsconfig?.compilerOptions?.paths;
       if (paths) {
-        // Ищем общие префиксы
         const commonPrefixes = ['@app/*', '@components/*', '@/*', '~/*'];
         for (const prefix of commonPrefixes) {
           if (paths[prefix]) {
@@ -280,23 +251,19 @@ async function detectImportPrefix(
           }
         }
 
-        // Берем первый найденный префикс
         const firstPath = Object.keys(paths)[0];
         if (firstPath && firstPath.includes('*')) {
           return firstPath.replace('/*', '');
         }
       }
     } catch {
-      // tsconfig.json не найден или невалиден
     }
 
-    // Проверяем babel.config.js
     const babelConfigPath = join(projectRoot, 'babel.config.js');
     try {
       await access(babelConfigPath);
       const babelConfig = await readFile(babelConfigPath, 'utf-8');
 
-      // Ищем module-resolver plugin
       if (babelConfig.includes('module-resolver')) {
         const aliasMatch = babelConfig.match(/['"]@app['"]/);
         if (aliasMatch) return '@app';
@@ -311,7 +278,6 @@ async function detectImportPrefix(
         if (tildeMatch) return '~';
       }
     } catch {
-      // babel.config.js не найден
     }
 
     return undefined;
@@ -321,10 +287,9 @@ async function detectImportPrefix(
 }
 
 /**
- * Определяет тип системы темизации на основе содержимого файла темы
  *
- * @param themePath - Абсолютный путь к файлу темы
- * @returns Обнаруженный тип темы
+ * @param themePath - Absolute path to theme file
+ * @returns Detected theme type
  */
 async function detectThemeType(
   themePath: string
@@ -332,7 +297,6 @@ async function detectThemeType(
   try {
     const content = await readFile(themePath, 'utf-8');
 
-    // Проверяем на styled-components
     if (
       content.includes('styled-components') ||
       content.includes('ThemeProvider')
@@ -340,7 +304,6 @@ async function detectThemeType(
       return 'styled-components';
     }
 
-    // Проверяем на NativeWind
     if (
       content.includes('nativewind') ||
       content.includes('tailwind')
@@ -348,7 +311,6 @@ async function detectThemeType(
       return 'nativewind';
     }
 
-    // Проверяем на Tamagui
     if (
       content.includes('tamagui') ||
       content.includes('createTamagui')
@@ -356,19 +318,15 @@ async function detectThemeType(
       return 'tamagui';
     }
 
-    // По умолчанию - object-export
     return 'object-export';
   } catch {
-    // По умолчанию - object-export
     return 'object-export';
   }
 }
 
 /**
- * Проверяет существование конфигурационного файла
  *
- * @param projectRoot - Корневая директория проекта
- * @returns true, если файл существует
+ * @param projectRoot - Project root directory
  */
 export async function configExists(projectRoot: string): Promise<boolean> {
   const possiblePaths = [

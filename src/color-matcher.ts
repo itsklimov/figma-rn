@@ -2,26 +2,26 @@ import chroma from 'chroma-js';
 import { ColorToken } from './theme-parser.js';
 
 /**
- * Результат сопоставления цвета
+ * Color matching result
  * Color matching result
  */
 export interface ColorMatch {
-  token: ColorToken;      // Найденный токен темы
-  confidence: number;     // Уверенность совпадения (0-1)
-  deltaE: number;         // Delta E расстояние (чем меньше, тем лучше)
+  token: ColorToken;      // Found theme token
+  confidence: number;     // Match confidence (0-1)
+  deltaE: number;         // Delta E distance (lower is better)
 }
 
 /**
- * Находит ближайший цвет темы к заданному Figma цвету
+ * Finds the closest theme color to a given Figma color
  * Finds the closest theme color to a given Figma color
  *
- * Использует Delta E (CIE2000) в LAB цветовом пространстве для
- * перцептивного сопоставления цветов
+ * Uses Delta E (CIE2000) in LAB color space for
+ * perceptual color matching
  *
- * @param figmaHex - Hex цвет из Figma (например, '#FF5733')
- * @param themeColors - Map цветов темы (hex -> ColorToken)
- * @param minConfidence - Минимальная уверенность для совпадения (0-1)
- * @returns Лучшее совпадение или null
+ * @param figmaHex - Hex color from Figma (e.g., '#FF5733')
+ * @param themeColors - Theme colors map (hex -> ColorToken)
+ * @param minConfidence - Minimum confidence for match (0-1)
+ * @returns Best match or null
  */
 export function findClosestThemeColor(
   figmaHex: string,
@@ -29,34 +29,34 @@ export function findClosestThemeColor(
   minConfidence: number = 0.8
 ): ColorMatch | null {
   try {
-    // 1. Конвертируем Figma цвет в LAB пространство
+    // 1. Convert Figma color to LAB space
     const figmaLab = chroma(figmaHex).lab();
 
     let bestMatch: ColorMatch | null = null;
 
-    // 2. Вычисляем Delta E для каждого цвета темы
+    // 2. Calculate Delta E for each theme color
     for (const [hex, token] of themeColors) {
       try {
         const themeLab = chroma(hex).lab();
 
-        // Вычисляем Delta E (Евклидово расстояние в LAB пространстве)
-        // Более точный Delta E 2000 требует сложных вычислений,
-        // но простое расстояние в LAB уже дает хорошее перцептивное совпадение
+        // Calculate Delta E (Euclidean distance in LAB space)
+        // More accurate Delta E 2000 requires complex calculations,
+        // but simple LAB distance already provides good perceptual matching
         const deltaE = calculateDeltaE(figmaLab, themeLab);
 
-        // Конвертируем Delta E в уверенность (0-1)
-        // Delta E < 2.3 - незаметная разница
-        // Delta E < 5 - небольшая разница
-        // Delta E < 10 - заметная разница
-        // Delta E > 50 - совершенно разные цвета
+        // Convert Delta E to confidence (0-1)
+        // Delta E < 2.3 - imperceptible difference
+        // Delta E < 5 - small difference
+        // Delta E < 10 - noticeable difference
+        // Delta E > 50 - completely different colors
         const confidence = deltaEToConfidence(deltaE);
 
-        // Обновляем лучшее совпадение
+        // Update best match
         if (confidence >= minConfidence && (!bestMatch || confidence > bestMatch.confidence)) {
           bestMatch = { token, confidence, deltaE };
         }
       } catch (error) {
-        // Пропускаем некорректные цвета
+        // Skip invalid colors
         console.warn(`Invalid color in theme: ${hex}`, error);
         continue;
       }
@@ -70,18 +70,18 @@ export function findClosestThemeColor(
 }
 
 /**
- * Вычисляет Delta E между двумя цветами в LAB пространстве
+ * Calculates Delta E between two colors in LAB space
  * Calculates Delta E between two colors in LAB space
  *
- * Использует упрощенную формулу (Евклидово расстояние),
- * которая дает хорошее приближение для большинства случаев
+ * Uses simplified formula (Euclidean distance)
+ * which provides good approximation for most cases
  *
- * @param lab1 - Первый цвет в LAB [L, a, b]
- * @param lab2 - Второй цвет в LAB [L, a, b]
- * @returns Delta E значение
+ * @param lab1 - First color in LAB [L, a, b]
+ * @param lab2 - Second color in LAB [L, a, b]
+ * @returns Delta E value
  */
 function calculateDeltaE(lab1: number[], lab2: number[]): number {
-  // Простая формула Delta E (CIE76)
+  // Simple Delta E formula (CIE76)
   const deltaL = lab1[0] - lab2[0];
   const deltaA = lab1[1] - lab2[1];
   const deltaB = lab1[2] - lab2[2];
@@ -90,32 +90,32 @@ function calculateDeltaE(lab1: number[], lab2: number[]): number {
 }
 
 /**
- * Конвертирует Delta E в уверенность (0-1)
+ * Converts Delta E to confidence (0-1)
  * Converts Delta E to confidence (0-1)
  *
- * @param deltaE - Delta E значение
- * @returns Уверенность от 0 до 1
+ * @param deltaE - Delta E value
+ * @returns Confidence from 0 to 1
  */
 function deltaEToConfidence(deltaE: number): number {
-  // Используем экспоненциальную функцию для плавного падения уверенности
-  // deltaE = 0 → confidence = 1.0 (идеальное совпадение)
-  // deltaE = 2.3 → confidence ≈ 0.9 (незаметная разница)
-  // deltaE = 5 → confidence ≈ 0.8 (небольшая разница)
-  // deltaE = 10 → confidence ≈ 0.6 (заметная разница)
-  // deltaE = 50 → confidence ≈ 0.1 (очень разные цвета)
-  // deltaE = 100 → confidence ≈ 0.0 (совершенно разные)
+  // Use exponential function for smooth confidence falloff
+  // deltaE = 0 → confidence = 1.0 (perfect match)
+  // deltaE = 2.3 → confidence ≈ 0.9 (imperceptible difference)
+  // deltaE = 5 → confidence ≈ 0.8 (small difference)
+  // deltaE = 10 → confidence ≈ 0.6 (noticeable difference)
+  // deltaE = 50 → confidence ≈ 0.1 (very different colors)
+  // deltaE = 100 → confidence ≈ 0.0 (completely different)
 
   const confidence = Math.exp(-deltaE / 20);
   return Math.max(0, Math.min(1, confidence));
 }
 
 /**
- * Сопоставляет все Figma цвета с цветами темы
+ * Matches all Figma colors with theme colors
  * Matches all Figma colors with theme colors
  *
- * @param figmaColors - Массив hex цветов из Figma
- * @param themeColors - Map цветов темы
- * @param minConfidence - Минимальная уверенность (по умолчанию 0.7)
+ * @param figmaColors - Array of hex colors from Figma
+ * @param themeColors - Theme colors map
+ * @param minConfidence - Minimum confidence (default 0.7)
  * @returns Map: figmaHex -> ColorMatch
  */
 export function matchAllColors(
@@ -125,7 +125,7 @@ export function matchAllColors(
 ): Map<string, ColorMatch> {
   const matches = new Map<string, ColorMatch>();
 
-  // Уникальные цвета (убираем дубликаты)
+  // Unique colors (remove duplicates)
   const uniqueColors = Array.from(new Set(figmaColors));
 
   for (const figmaHex of uniqueColors) {
@@ -139,14 +139,14 @@ export function matchAllColors(
 }
 
 /**
- * Группирует цвета по схожести
+ * Groups colors by similarity
  * Groups colors by similarity
  *
- * Полезно для обнаружения цветовых палитр в дизайне
+ * Useful for discovering color palettes in design
  *
- * @param colors - Массив hex цветов
- * @param threshold - Порог Delta E для группировки (по умолчанию 5)
- * @returns Массив групп схожих цветов
+ * @param colors - Array of hex colors
+ * @param threshold - Delta E threshold for grouping (default 5)
+ * @returns Array of similar color groups
  */
 export function groupSimilarColors(
   colors: string[],
@@ -164,7 +164,7 @@ export function groupSimilarColors(
     try {
       const colorLab = chroma(color).lab();
 
-      // Ищем похожие цвета
+      // Find similar colors
       for (const otherColor of colors) {
         if (processed.has(otherColor)) continue;
 
@@ -177,14 +177,14 @@ export function groupSimilarColors(
             processed.add(otherColor);
           }
         } catch (error) {
-          // Пропускаем некорректные цвета
+          // Skip invalid colors
           continue;
         }
       }
 
       groups.push(group);
     } catch (error) {
-      // Пропускаем некорректные цвета
+      // Skip invalid colors
       continue;
     }
   }
@@ -193,15 +193,15 @@ export function groupSimilarColors(
 }
 
 /**
- * Анализирует цветовую палитру и возвращает статистику
+ * Analyzes color palette and returns statistics
  * Analyzes color palette and returns statistics
  */
 export interface ColorPaletteStats {
-  totalColors: number;           // Всего уникальных цветов
-  matchedColors: number;          // Сопоставленных с темой
-  unmatchedColors: number;        // Не сопоставленных
-  averageConfidence: number;      // Средняя уверенность
-  colorGroups: number;            // Количество цветовых групп
+  totalColors: number;           // Total unique colors
+  matchedColors: number;          // Matched with theme
+  unmatchedColors: number;        // Unmatched
+  averageConfidence: number;      // Average confidence
+  colorGroups: number;            // Number of color groups
 }
 
 export function analyzeColorPalette(
@@ -228,7 +228,7 @@ export function analyzeColorPalette(
 }
 
 /**
- * Форматирует ColorMatch для отображения
+ * Formats ColorMatch for display
  * Formats ColorMatch for display
  */
 export function formatColorMatch(match: ColorMatch): string {
@@ -238,16 +238,16 @@ export function formatColorMatch(match: ColorMatch): string {
 }
 
 /**
- * Рекомендует использовать ли токен темы или хардкод цвета
+ * Recommends whether to use theme token or hardcoded color
  * Recommends whether to use theme token or hardcoded color
  *
- * @param match - Результат сопоставления
- * @returns true если рекомендуется использовать токен темы
+ * @param match - Color match result
+ * @returns true if theme token is recommended
  */
 export function shouldUseThemeToken(match: ColorMatch | null): boolean {
   if (!match) return false;
 
-  // Если уверенность > 85% и Delta E < 5 - используем токен
-  // Это означает что цвета практически идентичны
+  // If confidence > 85% and Delta E < 5 - use token
+  // This means colors are practically identical
   return match.confidence >= 0.85 && match.deltaE < 5;
 }

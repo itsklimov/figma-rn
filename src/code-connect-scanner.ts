@@ -1,6 +1,6 @@
 /**
- * Сканирование проекта на наличие файлов Figma Code Connect (*.figma.tsx)
- * Возвращает маппинги URL Figma на компоненты кода
+ * Scan project for Figma Code Connect files (*.figma.tsx)
+ * Returns mappings from Figma URLs to code components
  */
 
 import { glob } from 'glob';
@@ -23,12 +23,12 @@ interface ScanResult {
 }
 
 /**
- * Парсинг файла Code Connect для извлечения маппингов Figma URL
+ * Parse Code Connect file to extract Figma URL mappings
  */
 function parseCodeConnectFile(content: string, filePath: string): CodeConnectMapping[] {
   const mappings: CodeConnectMapping[] = [];
 
-  // Поиск вызовов figma.connect
+  // Find figma.connect calls
   const connectRegex = /figma\.connect\s*\(\s*(\w+)\s*,\s*['"`]([^'"`]+)['"`]/g;
   let match;
 
@@ -36,11 +36,11 @@ function parseCodeConnectFile(content: string, filePath: string): CodeConnectMap
     const componentName = match[1];
     const figmaUrl = match[2];
 
-    // Извлечение node ID из URL
+    // Extract node ID from URL
     const nodeIdMatch = figmaUrl.match(/node-id=([^&]+)/);
     const nodeId = nodeIdMatch ? nodeIdMatch[1].replace(/-/g, ':') : undefined;
 
-    // Поиск пути импорта компонента
+    // Find component import path
     const importRegex = new RegExp(
       `import\\s*{[^}]*\\b${componentName}\\b[^}]*}\\s*from\\s*['"\`]([^'"\`]+)['"\`]`
     );
@@ -52,13 +52,13 @@ function parseCodeConnectFile(content: string, filePath: string): CodeConnectMap
       if (importPath.startsWith('.')) {
         const resolvedPath = join(dirname(filePath), importPath);
 
-        // Валидация: путь должен оставаться внутри проекта
-        // (filePath уже внутри projectRoot из glob результатов)
+        // Validation: path should stay inside project
+        // (filePath already inside projectRoot from glob results)
         const fileDir = dirname(filePath);
-        const commonBase = fileDir.split('/').slice(0, -3).join('/'); // Разумный корень проекта
+        const commonBase = fileDir.split('/').slice(0, -3).join('/'); // Reasonable project root
 
         if (!resolvedPath.startsWith(commonBase) && !resolvedPath.startsWith('/')) {
-          // Пропустить подозрительные пути
+          // Skip suspicious paths
           componentPath = filePath.replace('.figma.tsx', '.tsx');
         } else {
           componentPath = resolvedPath;
@@ -71,7 +71,7 @@ function parseCodeConnectFile(content: string, filePath: string): CodeConnectMap
       }
     }
 
-    // Извлечение маппинга пропсов
+    // Extract props mapping
     const propsMatch = content.match(
       new RegExp(`figma\\.connect\\s*\\(\\s*${componentName}[^{]*{[^}]*props:\\s*{([^}]+)}`)
     );
@@ -100,7 +100,7 @@ function parseCodeConnectFile(content: string, filePath: string): CodeConnectMap
 }
 
 /**
- * Сканирование директории проекта на наличие файлов Code Connect
+ * Scan project directory for Code Connect files
  */
 export async function scanForCodeConnect(projectRoot: string): Promise<ScanResult> {
   const result: ScanResult = {
@@ -111,7 +111,7 @@ export async function scanForCodeConnect(projectRoot: string): Promise<ScanResul
   };
 
   try {
-    // Поиск всех файлов *.figma.tsx
+    // Find all *.figma.tsx files
     const pattern = join(projectRoot, '**/*.figma.tsx');
     const files = await glob(pattern, {
       ignore: ['**/node_modules/**', '**/dist/**', '**/build/**'],
@@ -136,7 +136,7 @@ export async function scanForCodeConnect(projectRoot: string): Promise<ScanResul
 }
 
 /**
- * Форматирование результатов сканирования для LLM
+ * Format scan results for LLM
  */
 export function formatCodeConnectResults(result: ScanResult): string {
   let output = `# Code Connect Discovery\n\n`;
@@ -189,7 +189,7 @@ export function formatCodeConnectResults(result: ScanResult): string {
 }
 
 /**
- * Поиск маппинга для конкретного Figma URL
+ * Find mapping for specific Figma URL
  */
 export function findMappingForUrl(
   mappings: CodeConnectMapping[],

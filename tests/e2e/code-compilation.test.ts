@@ -1,10 +1,10 @@
 /**
- * E2E тесты для валидации компиляции TypeScript кода
+ * E2E tests for TypeScript code compilation validation
  *
- * Эти тесты проверяют, что сгенерированный код:
- * 1. Компилируется TypeScript компилятором без ошибок
- * 2. Содержит валидные React Native компоненты
- * 3. Имеет правильную структуру экспортов
+ * These tests verify that generated code:
+ * 1. Compiles with TypeScript compiler without errors
+ * 2. Contains valid React Native components
+ * 3. Has correct export structure
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
@@ -40,7 +40,7 @@ describe('Code Compilation', () => {
   });
 
   /**
-   * Вспомогательная функция для получения сгенерированного кода
+   * Helper function to get generated code
    */
   async function generateAndGetCode(screenName: string): Promise<string> {
     await client.generateScreen({
@@ -63,13 +63,13 @@ describe('Code Compilation', () => {
     return workspace.readFile(indexPath);
   }
 
-  describe('TypeScript компиляция', () => {
-    it('код должен компилироваться без синтаксических ошибок', async () => {
+  describe('TypeScript compilation', () => {
+    it('code should compile without syntax errors', async () => {
       const code = await generateAndGetCode('SyntaxTest');
 
       const result = compileTypeScript(code, 'SyntaxTest.tsx');
 
-      // Фильтруем только критические синтаксические ошибки
+      // Filter only critical syntax errors
       const syntaxErrors = result.errors.filter(e =>
         e.code && (e.code >= 1000 && e.code < 2000)
       );
@@ -77,7 +77,7 @@ describe('Code Compilation', () => {
       expect(syntaxErrors).toHaveLength(0);
     });
 
-    it('код должен компилироваться без типовых ошибок', async () => {
+    it('code should compile without type errors', async () => {
       const code = await generateAndGetCode('TypesErrorTest');
 
       const result = compileTypeScript(code, 'TypesErrorTest.tsx');
@@ -90,16 +90,16 @@ describe('Code Compilation', () => {
         });
       }
 
-      // Основная проверка
+      // Main check
       expect(result.success).toBe(true);
     });
 
-    it('код не должен иметь критических warnings', async () => {
+    it('code should not have critical warnings', async () => {
       const code = await generateAndGetCode('WarningsTest');
 
       const result = compileTypeScript(code, 'WarningsTest.tsx');
 
-      // Критические warnings (не просто информационные)
+      // Critical warnings (not just informational)
       const criticalWarnings = result.warnings.filter(w =>
         w.message.toLowerCase().includes('deprecated') ||
         w.message.toLowerCase().includes('unsafe')
@@ -109,37 +109,37 @@ describe('Code Compilation', () => {
     });
   });
 
-  describe('Структура React Native компонента', () => {
-    it('должен импортировать React', async () => {
+  describe('React Native component structure', () => {
+    it('should import React', async () => {
       const code = await generateAndGetCode('ReactImportTest');
 
       expect(code).toMatch(/from ['"]react['"]/);
     });
 
-    it('должен импортировать react-native компоненты', async () => {
+    it('should import react-native components', async () => {
       const code = await generateAndGetCode('RNImportTest');
 
       expect(code).toMatch(/from ['"]react-native['"]/);
     });
 
-    it('должен экспортировать компонент с PascalCase именем', async () => {
+    it('should export component with PascalCase name', async () => {
       const code = await generateAndGetCode('ExportTest');
 
-      // Проверяем export const или export function с PascalCase
+      // Check export const or export function with PascalCase
       expect(code).toMatch(/export\s+(const|function)\s+[A-Z][a-zA-Z0-9]*/);
     });
 
-    it('должен содержать JSX элементы', async () => {
+    it('should contain JSX elements', async () => {
       const code = await generateAndGetCode('JsxTest');
 
-      // Проверяем наличие хотя бы одного JSX элемента
+      // Check for at least one JSX element
       expect(code).toMatch(/<[A-Z][a-zA-Z0-9]*/);
     });
 
-    it('должен определять стили', async () => {
+    it('should define styles', async () => {
       const code = await generateAndGetCode('StylesTest');
 
-      // Проверяем наличие createStyles или StyleSheet.create
+      // Check for createStyles or StyleSheet.create
       expect(
         code.includes('createStyles') ||
         code.includes('StyleSheet.create')
@@ -147,13 +147,13 @@ describe('Code Compilation', () => {
     });
   });
 
-  describe('Экспорты и типы', () => {
-    it('должен экспортировать Props interface', async () => {
+  describe('Exports and types', () => {
+    it('should export Props interface', async () => {
       const code = await generateAndGetCode('PropsTest');
 
       const result = compileTypeScript(code, 'PropsTest.tsx');
 
-      // Проверяем, что есть экспорт с "Props" в имени
+      // Check that there's export with "Props" in name
       const hasPropsExport = result.fileInfo?.exports.some(e =>
         e.includes('Props')
       );
@@ -161,7 +161,7 @@ describe('Code Compilation', () => {
       expect(hasPropsExport).toBe(true);
     });
 
-    it('fileInfo должен содержать корректную информацию', async () => {
+    it('fileInfo should contain correct information', async () => {
       const code = await generateAndGetCode('FileInfoTest');
 
       const result = compileTypeScript(code, 'FileInfoTest.tsx');
@@ -170,25 +170,25 @@ describe('Code Compilation', () => {
       expect(result.fileInfo?.exports.length).toBeGreaterThan(0);
       expect(result.fileInfo?.imports.length).toBeGreaterThan(0);
 
-      // Должен быть компонент
+      // Should have component
       expect(result.fileInfo?.componentName).toBeDefined();
     });
   });
 
-  describe('Полная валидация', () => {
-    it('compileAndValidate должен проходить для валидного кода', async () => {
+  describe('Full validation', () => {
+    it('compileAndValidate should pass for valid code', async () => {
       const code = await generateAndGetCode('FullValidationTest');
 
       const { compilation, validation } = compileAndValidate(code, 'FullValidationTest.tsx');
 
-      // Компиляция
+      // Compilation
       if (!compilation.success) {
         console.log('Compilation errors:');
         compilation.errors.forEach(e => console.log(`  ${e.message}`));
       }
       expect(compilation.success).toBe(true);
 
-      // Валидация React Native
+      // React Native validation
       if (!validation.valid) {
         console.log('Validation issues:');
         validation.issues.forEach(i => console.log(`  ${i}`));
@@ -197,16 +197,16 @@ describe('Code Compilation', () => {
     });
   });
 
-  describe('Обработка сложных случаев', () => {
-    it('должен обрабатывать код с условным рендерингом', async () => {
+  describe('Complex cases handling', () => {
+    it('should handle code with conditional rendering', async () => {
       const code = await generateAndGetCode('ConditionalTest');
 
-      // Проверяем что код компилируется даже если содержит условия
+      // Check that code compiles even with conditions
       const result = compileTypeScript(code, 'ConditionalTest.tsx');
       expect(result.success).toBe(true);
     });
 
-    it('должен обрабатывать код с map/filter в JSX', async () => {
+    it('should handle code with map/filter in JSX', async () => {
       const code = await generateAndGetCode('MapFilterTest');
 
       // Проверяем компиляцию
@@ -214,7 +214,7 @@ describe('Code Compilation', () => {
       expect(result.success).toBe(true);
     });
 
-    it('должен обрабатывать код со стилями spread', async () => {
+    it('should handle code with spread styles', async () => {
       const code = await generateAndGetCode('SpreadStylesTest');
 
       // Проверяем компиляцию
@@ -224,12 +224,12 @@ describe('Code Compilation', () => {
   });
 
   describe('Specific React Native patterns', () => {
-    it('должен корректно типизировать FlatList если присутствует', async () => {
+    it('should correctly type FlatList if present', async () => {
       const code = await generateAndGetCode('FlatListTest');
 
       const result = compileTypeScript(code, 'FlatListTest.tsx');
 
-      // Если есть FlatList, он должен быть правильно импортирован
+      // If FlatList is present, it should be correctly imported
       if (code.includes('FlatList')) {
         expect(code).toMatch(/FlatList.*from\s+['"]react-native['"]/s);
       }
@@ -237,12 +237,12 @@ describe('Code Compilation', () => {
       expect(result.success).toBe(true);
     });
 
-    it('должен корректно обрабатывать useTheme хук если присутствует', async () => {
+    it('should correctly handle useTheme hook if present', async () => {
       const code = await generateAndGetCode('UseThemeTest');
 
       const result = compileTypeScript(code, 'UseThemeTest.tsx');
 
-      // Если есть useTheme, проверяем использование
+      // If useTheme is present, check usage
       if (code.includes('useTheme')) {
         expect(code).toMatch(/const\s+\{.*\}\s*=\s*useTheme/);
       }
@@ -250,12 +250,12 @@ describe('Code Compilation', () => {
       expect(result.success).toBe(true);
     });
 
-    it('должен корректно обрабатывать scale функцию если присутствует', async () => {
+    it('should correctly handle scale function if present', async () => {
       const code = await generateAndGetCode('ScaleTest');
 
       const result = compileTypeScript(code, 'ScaleTest.tsx');
 
-      // Если есть scale, проверяем вызов
+      // If scale is present, check call
       if (code.includes('scale(')) {
         expect(code).toMatch(/scale\(\d+\)/);
       }
@@ -265,27 +265,27 @@ describe('Code Compilation', () => {
   });
 
   describe('Edge cases', () => {
-    it('должен обрабатывать пустые children', async () => {
+    it('should handle empty children', async () => {
       const code = await generateAndGetCode('EmptyChildrenTest');
 
       const result = compileTypeScript(code, 'EmptyChildrenTest.tsx');
       expect(result.success).toBe(true);
     });
 
-    it('должен обрабатывать nested styles', async () => {
+    it('should handle nested styles', async () => {
       const code = await generateAndGetCode('NestedStylesTest');
 
       const result = compileTypeScript(code, 'NestedStylesTest.tsx');
       expect(result.success).toBe(true);
 
-      // Проверяем что есть вложенные стили
+      // Check that there are nested styles
       expect(code).toMatch(/styles\.\w+/);
     });
 
-    it('должен обрабатывать комментарии в коде', async () => {
+    it('should handle comments in code', async () => {
       const code = await generateAndGetCode('CommentsTest');
 
-      // Комментарии не должны ломать компиляцию
+      // Comments should not break compilation
       const result = compileTypeScript(code, 'CommentsTest.tsx');
       expect(result.success).toBe(true);
     });
@@ -294,7 +294,7 @@ describe('Code Compilation', () => {
 
 describe('TypeScript Compiler Helper', () => {
   describe('compileTypeScript', () => {
-    it('должен компилировать валидный TypeScript код', () => {
+    it('should compile valid TypeScript code', () => {
       const code = `
         import React from 'react';
         import { View, Text } from 'react-native';
@@ -314,7 +314,7 @@ describe('TypeScript Compiler Helper', () => {
 
       const result = compileTypeScript(code);
 
-      // Выводим ошибки для отладки если есть
+      // Output errors for debugging if present
       if (!result.success) {
         console.log('Compilation errors:', result.errors);
       }
@@ -323,7 +323,7 @@ describe('TypeScript Compiler Helper', () => {
       expect(result.errors).toHaveLength(0);
     });
 
-    it('должен обнаруживать синтаксические ошибки', () => {
+    it('should detect syntax errors', () => {
       const code = `
         import React from 'react';
 
@@ -341,7 +341,7 @@ describe('TypeScript Compiler Helper', () => {
       expect(result.errors.length).toBeGreaterThan(0);
     });
 
-    it('должен извлекать информацию о файле', () => {
+    it('should extract file information', () => {
       const code = `
         import React from 'react';
         import { View } from 'react-native';
@@ -367,7 +367,7 @@ describe('TypeScript Compiler Helper', () => {
   });
 
   describe('validateReactNativeComponent', () => {
-    it('должен проходить валидацию для корректного компонента', () => {
+    it('should pass validation for correct component', () => {
       const code = `
         import React from 'react';
         import { View, Text, StyleSheet } from 'react-native';
@@ -390,7 +390,7 @@ describe('TypeScript Compiler Helper', () => {
       expect(result.issues).toHaveLength(0);
     });
 
-    it('должен обнаруживать отсутствие React импорта', () => {
+    it('should detect missing React import', () => {
       const code = `
         import { View, Text } from 'react-native';
 
@@ -402,7 +402,7 @@ describe('TypeScript Compiler Helper', () => {
       expect(result.issues).toContain('Missing React import');
     });
 
-    it('должен обнаруживать отсутствие react-native импорта', () => {
+    it('should detect missing react-native import', () => {
       const code = `
         import React from 'react';
 

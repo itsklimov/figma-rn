@@ -1,5 +1,5 @@
 /**
- * Автоматический маппинг цветов Figma на тему проекта
+ * Automatic Figma colors to project theme mapping
  * Automatic Figma colors to project theme mapping
  */
 
@@ -8,12 +8,12 @@ import { findClosestThemeColor } from './color-matcher.js';
 import { ProjectConfig } from './config-schema.js';
 
 /**
- * Автоматически создает маппинг Figma цветов → тема проекта
+ * Automatically creates Figma colors → project theme mapping
  * Automatically creates Figma colors → project theme mapping
  *
- * @param figmaColors - Массив hex цветов из Figma
- * @param config - Конфигурация проекта
- * @returns Маппинг hex → путь к токену темы
+ * @param figmaColors - Array of hex colors from Figma
+ * @param config - Project configuration
+ * @returns Mapping hex → path to theme token
  */
 export async function autoGenerateColorMappings(
   figmaColors: string[],
@@ -22,7 +22,7 @@ export async function autoGenerateColorMappings(
   if (!config.theme?.location) return {};
 
   try {
-    // Путь уже должен быть абсолютным (передается из index.ts)
+    // Path should already be absolute (passed from index.ts)
     // Path should already be absolute (passed from index.ts)
     const themePath = config.theme.location;
 
@@ -38,7 +38,7 @@ export async function autoGenerateColorMappings(
     for (const figmaHex of figmaColors) {
       const match = findClosestThemeColor(figmaHex, tokens.colors, 0.85);
       if (match && match.confidence > 0.85) {
-        // Высокая уверенность - используем токен темы
+        // High confidence - use theme token
         // High confidence - use theme token
         mappings[figmaHex] = match.token.path;
         console.error(`[DEBUG] ✅ Matched ${figmaHex} → ${match.token.path} (${(match.confidence * 100).toFixed(1)}%)`);
@@ -47,7 +47,7 @@ export async function autoGenerateColorMappings(
       } else {
         console.error(`[DEBUG] ❌ No match for ${figmaHex}`);
       }
-      // Низкая уверенность - оставляем как hex
+      // Low confidence - keep as hex
       // Low confidence - keep as hex
     }
 
@@ -61,17 +61,17 @@ export async function autoGenerateColorMappings(
 }
 
 /**
- * Извлекает все уникальные цвета из Figma метаданных
+ * Extracts all unique colors from Figma metadata
  * Extracts all unique colors from Figma metadata
  *
- * @param metadata - Метаданные Figma узла
- * @returns Массив уникальных hex цветов
+ * @param metadata - Figma node metadata
+ * @returns Array of unique hex colors
  */
 export function extractFigmaColors(metadata: any): string[] {
   const colors = new Set<string>();
 
   function traverse(node: any) {
-    // Извлекаем из fills
+    // Extract from fills
     // Extract from fills
     if (node.fills && Array.isArray(node.fills)) {
       node.fills.forEach((fill: any) => {
@@ -82,14 +82,14 @@ export function extractFigmaColors(metadata: any): string[] {
       });
     }
 
-    // Извлекаем из backgroundColor
+    // Extract from backgroundColor
     // Extract from backgroundColor
     if (node.backgroundColor) {
       const hex = rgbToHex(node.backgroundColor);
       colors.add(hex);
     }
 
-    // Рекурсивно обрабатываем детей
+    // Recursively process children
     // Recursively process children
     if (node.children && Array.isArray(node.children)) {
       node.children.forEach(traverse);
@@ -101,11 +101,11 @@ export function extractFigmaColors(metadata: any): string[] {
 }
 
 /**
- * Преобразует Figma RGB в hex
+ * Converts Figma RGB to hex
  * Converts Figma RGB to hex
  *
- * @param rgb - Объект цвета Figma (r, g, b в диапазоне 0-1)
- * @returns Hex строка (например, '#7A54FF')
+ * @param rgb - Figma color object (r, g, b in range 0-1)
+ * @returns Hex string (e.g., '#7A54FF')
  */
 function rgbToHex(rgb: { r: number; g: number; b: number }): string {
   const r = Math.round(rgb.r * 255);
@@ -115,7 +115,7 @@ function rgbToHex(rgb: { r: number; g: number; b: number }): string {
 }
 
 /**
- * Интерфейс для токена типографики из темы
+ * Interface for typography token from theme
  * Interface for typography token from theme
  */
 interface ThemeTypographyToken {
@@ -127,12 +127,12 @@ interface ThemeTypographyToken {
 }
 
 /**
- * Автоматически создает маппинг Figma типографики → тема проекта
+ * Automatically creates Figma typography → project theme mapping
  * Automatically creates Figma typography → project theme mapping
  *
- * @param figmaTypography - Массив стилей типографики из Figma
- * @param themePath - Путь к файлу типографики
- * @returns Маппинг figmaKey → путь к токену темы
+ * @param figmaTypography - Array of typography styles from Figma
+ * @param themePath - Path to typography file
+ * @returns Mapping figmaKey → path to theme token
  */
 export async function autoGenerateTypographyMappings(
   figmaTypography: Array<{ key: string; fontSize: number; fontWeight: number; lineHeight?: number }>,
@@ -143,12 +143,12 @@ export async function autoGenerateTypographyMappings(
     const mappings: Record<string, string> = {};
 
     console.error(`[DEBUG] Parsing typography from: ${themePath}`);
-    // Используем typography токены (полные стили) вместо fonts
+    // Use typography tokens (complete styles) instead of fonts
     // Use typography tokens (complete styles) instead of fonts
     console.error(`[DEBUG] Found ${tokens.typography?.size || 0} typography tokens`);
 
     for (const figmaStyle of figmaTypography) {
-      // Ищем ближайший токен типографики по размеру и весу
+      // Find closest typography token by size and weight
       // Find closest typography token by size and weight
       const match = findClosestTypographyToken(
         figmaStyle.fontSize,
@@ -174,7 +174,7 @@ export async function autoGenerateTypographyMappings(
 }
 
 /**
- * Ищет ближайший токен типографики по размеру и весу
+ * Finds closest typography token by size and weight
  * Finds closest typography token by size and weight
  */
 function findClosestTypographyToken(
@@ -185,19 +185,19 @@ function findClosestTypographyToken(
   let bestMatch: { token: ThemeTypographyToken; confidence: number } | null = null;
 
   for (const [path, value] of tokens) {
-    // Извлекаем размер и вес из значения токена
+    // Extract size and weight from token value
     // Extract size and weight from token value
     const tokenSize = typeof value === 'object' ? (value.fontSize || value.size) : null;
     const tokenWeight = typeof value === 'object' ? (value.fontWeight || value.weight || 400) : 400;
 
     if (tokenSize === null) continue;
 
-    // Вычисляем сходство по размеру и весу
+    // Calculate similarity by size and weight
     // Calculate similarity by size and weight
     const sizeDiff = Math.abs(tokenSize - fontSize);
     const weightDiff = Math.abs(tokenWeight - fontWeight);
 
-    // Размер в пределах 2px и вес в пределах 100 = хорошее совпадение
+    // Size within 2px and weight within 100 = good match
     // Size within 2px and weight within 100 = good match
     if (sizeDiff <= 2 && weightDiff <= 100) {
       const confidence = 1 - (sizeDiff / 10) - (weightDiff / 1000);
@@ -214,7 +214,7 @@ function findClosestTypographyToken(
 }
 
 /**
- * Интерфейс для токена spacing из темы
+ * Interface for spacing token from theme
  * Interface for spacing token from theme
  */
 interface ThemeSpacingToken {
@@ -223,12 +223,12 @@ interface ThemeSpacingToken {
 }
 
 /**
- * Автоматически создает маппинг Figma spacing → тема проекта
+ * Automatically creates Figma spacing → project theme mapping
  * Automatically creates Figma spacing → project theme mapping
  *
- * @param figmaSpacing - Массив значений spacing из Figma
- * @param themePath - Путь к файлу темы
- * @returns Маппинг значение → путь к токену темы
+ * @param figmaSpacing - Array of spacing values from Figma
+ * @param themePath - Path to theme file
+ * @returns Mapping value → path to theme token
  */
 export async function autoGenerateSpacingMappings(
   figmaSpacing: number[],
@@ -241,13 +241,13 @@ export async function autoGenerateSpacingMappings(
     console.error(`[DEBUG] Parsing spacing from: ${themePath}`);
     console.error(`[DEBUG] Found ${tokens.spacing?.values?.length || 0} spacing values`);
 
-    // Извлекаем spacing токены из темы
+    // Extract spacing tokens from theme
     // Extract spacing tokens from theme
     const spacingTokens = extractSpacingTokens(tokens);
     console.error(`[DEBUG] Extracted ${spacingTokens.length} spacing tokens`);
 
     for (const figmaValue of figmaSpacing) {
-      // Ищем ближайший токен spacing по значению
+      // Find closest spacing token by value
       // Find closest spacing token by value
       const match = findClosestSpacingToken(figmaValue, spacingTokens);
 
@@ -271,16 +271,16 @@ export async function autoGenerateSpacingMappings(
 }
 
 /**
- * Извлекает spacing токены из темы
+ * Extracts spacing tokens from theme
  * Extracts spacing tokens from theme
  */
 function extractSpacingTokens(tokens: any): ThemeSpacingToken[] {
   const spacingTokens: ThemeSpacingToken[] = [];
 
-  // Используем извлеченные значения spacing из parseThemeFile
+  // Use extracted spacing values from parseThemeFile
   // Use extracted spacing values from parseThemeFile
   if (tokens.spacing?.values) {
-    // Эти значения уже извлечены из темы
+    // These values are already extracted from theme
     // These values are already extracted from theme
     return tokens.spacing.values.map((value: number, index: number) => ({
       path: `theme.spacing[${index}]`,
@@ -292,7 +292,7 @@ function extractSpacingTokens(tokens: any): ThemeSpacingToken[] {
 }
 
 /**
- * Ищет ближайший токен spacing по значению
+ * Finds closest spacing token by value
  * Finds closest spacing token by value
  */
 function findClosestSpacingToken(
@@ -304,13 +304,13 @@ function findClosestSpacingToken(
   for (const token of tokens) {
     const diff = Math.abs(token.value - value);
 
-    // Точное совпадение = 100% уверенность
+    // Exact match = 100% confidence
     // Exact match = 100% confidence
     if (diff === 0) {
       return { token, confidence: 1.0 };
     }
 
-    // В пределах 2px = хорошее совпадение
+    // Within 2px = good match
     // Within 2px = good match
     if (diff <= 2) {
       const confidence = 1 - (diff / 10);
@@ -324,7 +324,7 @@ function findClosestSpacingToken(
 }
 
 /**
- * Интерфейс для токена radii из темы
+ * Interface for radii token from theme
  * Interface for radii token from theme
  */
 interface ThemeRadiiToken {
@@ -333,12 +333,12 @@ interface ThemeRadiiToken {
 }
 
 /**
- * Автоматически создает маппинг Figma radii → тема проекта
+ * Automatically creates Figma radii → project theme mapping
  * Automatically creates Figma radii → project theme mapping
  *
- * @param figmaRadii - Массив значений corner radius из Figma
- * @param themePath - Путь к файлу темы
- * @returns Маппинг значение → путь к токену темы
+ * @param figmaRadii - Array of corner radius values from Figma
+ * @param themePath - Path to theme file
+ * @returns Mapping value → path to theme token
  */
 export async function autoGenerateRadiiMappings(
   figmaRadii: number[],
@@ -350,13 +350,13 @@ export async function autoGenerateRadiiMappings(
 
     console.error(`[DEBUG] Parsing radii from: ${themePath}`);
 
-    // Извлекаем radii токены из темы
+    // Extract radii tokens from theme
     // Extract radii tokens from theme
     const radiiTokens = extractRadiiTokens(tokens);
     console.error(`[DEBUG] Extracted ${radiiTokens.length} radii tokens`);
 
     for (const figmaValue of figmaRadii) {
-      // Ищем ближайший токен radii по значению
+      // Find closest radii token by value
       // Find closest radii token by value
       const match = findClosestRadiiToken(figmaValue, radiiTokens);
 
@@ -380,13 +380,13 @@ export async function autoGenerateRadiiMappings(
 }
 
 /**
- * Извлекает radii токены из темы (ищет border.radius, borderRadius, radii)
+ * Extracts radii tokens from theme (looks for border.radius, borderRadius, radii)
  * Extracts radii tokens from theme (looks for border.radius, borderRadius, radii)
  */
 function extractRadiiTokens(tokens: any): ThemeRadiiToken[] {
   const radiiTokens: ThemeRadiiToken[] = [];
 
-  // Используем извлеченные radii из parseThemeFile
+  // Use extracted radii from parseThemeFile
   // Use extracted radii from parseThemeFile
   if (tokens.radii && tokens.radii instanceof Map) {
     for (const [path, value] of tokens.radii) {
@@ -400,7 +400,7 @@ function extractRadiiTokens(tokens: any): ThemeRadiiToken[] {
 }
 
 /**
- * Ищет ближайший токен radii по значению
+ * Finds closest radii token by value
  * Finds closest radii token by value
  */
 function findClosestRadiiToken(
@@ -412,13 +412,13 @@ function findClosestRadiiToken(
   for (const token of tokens) {
     const diff = Math.abs(token.value - value);
 
-    // Точное совпадение = 100% уверенность
+    // Exact match = 100% confidence
     // Exact match = 100% confidence
     if (diff === 0) {
       return { token, confidence: 1.0 };
     }
 
-    // В пределах 2px = хорошее совпадение
+    // Within 2px = good match
     // Within 2px = good match
     if (diff <= 2) {
       const confidence = 1 - (diff / 10);
@@ -432,7 +432,7 @@ function findClosestRadiiToken(
 }
 
 /**
- * Интерфейс для токена shadow из темы
+ * Interface for shadow token from theme
  * Interface for shadow token from theme
  */
 interface ThemeShadowToken {
@@ -445,7 +445,7 @@ interface ThemeShadowToken {
 }
 
 /**
- * Интерфейс для Figma shadow
+ * Interface for Figma shadow
  * Interface for Figma shadow
  */
 interface FigmaShadow {
@@ -457,12 +457,12 @@ interface FigmaShadow {
 }
 
 /**
- * Автоматически создает маппинг Figma shadows → тема проекта
+ * Automatically creates Figma shadows → project theme mapping
  * Automatically creates Figma shadows → project theme mapping
  *
- * @param figmaShadows - Массив теней из Figma
- * @param themePath - Путь к файлу темы
- * @returns Маппинг ключ тени → путь к токену темы
+ * @param figmaShadows - Array of shadows from Figma
+ * @param themePath - Path to theme file
+ * @returns Mapping shadow key → path to theme token
  */
 export async function autoGenerateShadowMappings(
   figmaShadows: FigmaShadow[],
@@ -474,13 +474,13 @@ export async function autoGenerateShadowMappings(
 
     console.error(`[DEBUG] Parsing shadows from: ${themePath}`);
 
-    // Извлекаем shadow токены из темы
+    // Extract shadow tokens from theme
     // Extract shadow tokens from theme
     const shadowTokens = extractShadowTokens(tokens);
     console.error(`[DEBUG] Extracted ${shadowTokens.length} shadow tokens`);
 
     for (const figmaShadow of figmaShadows) {
-      // Ищем ближайший токен shadow по параметрам
+      // Find closest shadow token by parameters
       // Find closest shadow token by parameters
       const match = findClosestShadowToken(figmaShadow, shadowTokens);
 
@@ -504,13 +504,13 @@ export async function autoGenerateShadowMappings(
 }
 
 /**
- * Извлекает shadow токены из темы
+ * Extracts shadow tokens from theme
  * Extracts shadow tokens from theme
  */
 function extractShadowTokens(tokens: any): ThemeShadowToken[] {
   const shadowTokens: ThemeShadowToken[] = [];
 
-  // Используем извлеченные shadows из parseThemeFile
+  // Use extracted shadows from parseThemeFile
   // Use extracted shadows from parseThemeFile
   if (tokens.shadows && tokens.shadows instanceof Map) {
     for (const [path, value] of tokens.shadows) {
@@ -536,7 +536,7 @@ function extractShadowTokens(tokens: any): ThemeShadowToken[] {
 }
 
 /**
- * Ищет ближайший токен shadow по параметрам
+ * Finds closest shadow token by parameters
  * Finds closest shadow token by parameters
  */
 function findClosestShadowToken(
@@ -546,23 +546,23 @@ function findClosestShadowToken(
   let bestMatch: { token: ThemeShadowToken; confidence: number } | null = null;
 
   for (const token of tokens) {
-    // Вычисляем сходство по каждому параметру
+    // Calculate similarity for each parameter
     // Calculate similarity for each parameter
     const offsetXDiff = Math.abs(token.offsetX - shadow.offset.x);
     const offsetYDiff = Math.abs(token.offsetY - shadow.offset.y);
     const blurDiff = Math.abs(token.blur - shadow.radius);
     const opacityDiff = Math.abs(token.opacity - shadow.opacity);
 
-    // Все параметры в разумных пределах = хорошее совпадение
+    // All parameters within reasonable limits = good match
     // All parameters within reasonable limits = good match
     if (offsetXDiff <= 2 && offsetYDiff <= 2 && blurDiff <= 2 && opacityDiff <= 0.1) {
-      // Нормализуем разницы для вычисления confidence
+      // Normalize differences for confidence calculation
       // Normalize differences for confidence calculation
       const offsetScore = 1 - (offsetXDiff + offsetYDiff) / 20;
       const blurScore = 1 - blurDiff / 10;
       const opacityScore = 1 - opacityDiff;
 
-      // Средняя уверенность по всем параметрам
+      // Average confidence across all parameters
       // Average confidence across all parameters
       const confidence = (offsetScore + blurScore + opacityScore) / 3;
 
@@ -576,29 +576,29 @@ function findClosestShadowToken(
 }
 
 /**
- * Извлекает все уникальные значения spacing из Figma метаданных
+ * Extracts all unique spacing values from Figma metadata
  * Extracts all unique spacing values from Figma metadata
  *
- * @param metadata - Метаданные Figma узла
- * @returns Массив уникальных числовых значений spacing
+ * @param metadata - Figma node metadata
+ * @returns Array of unique numeric spacing values
  */
 export function extractFigmaSpacing(metadata: any): number[] {
   const spacingValues = new Set<number>();
 
   function traverse(node: any) {
-    // Извлекаем padding
+    // Extract padding
     // Extract padding
     if (node.paddingLeft !== undefined && node.paddingLeft > 0) spacingValues.add(node.paddingLeft);
     if (node.paddingRight !== undefined && node.paddingRight > 0) spacingValues.add(node.paddingRight);
     if (node.paddingTop !== undefined && node.paddingTop > 0) spacingValues.add(node.paddingTop);
     if (node.paddingBottom !== undefined && node.paddingBottom > 0) spacingValues.add(node.paddingBottom);
 
-    // Извлекаем gap
+    // Extract gap
     // Extract gap
     if (node.itemSpacing !== undefined && node.itemSpacing > 0) spacingValues.add(node.itemSpacing);
     if (node.counterAxisSpacing !== undefined && node.counterAxisSpacing > 0) spacingValues.add(node.counterAxisSpacing);
 
-    // Рекурсивно обрабатываем детей
+    // Recursively process children
     // Recursively process children
     if (node.children && Array.isArray(node.children)) {
       node.children.forEach(traverse);
@@ -610,23 +610,23 @@ export function extractFigmaSpacing(metadata: any): number[] {
 }
 
 /**
- * Извлекает все уникальные значения radii из Figma метаданных
+ * Extracts all unique radii values from Figma metadata
  * Extracts all unique radii values from Figma metadata
  *
- * @param metadata - Метаданные Figma узла
- * @returns Массив уникальных числовых значений radii
+ * @param metadata - Figma node metadata
+ * @returns Array of unique numeric radii values
  */
 export function extractFigmaRadii(metadata: any): number[] {
   const radiiValues = new Set<number>();
 
   function traverse(node: any) {
-    // Извлекаем cornerRadius
+    // Extract cornerRadius
     // Extract cornerRadius
     if (node.cornerRadius !== undefined && node.cornerRadius > 0) {
       radiiValues.add(node.cornerRadius);
     }
 
-    // Извлекаем индивидуальные radii
+    // Extract individual radii
     // Extract individual radii
     if (node.rectangleCornerRadii && Array.isArray(node.rectangleCornerRadii)) {
       node.rectangleCornerRadii.forEach((radius: number) => {
@@ -634,7 +634,7 @@ export function extractFigmaRadii(metadata: any): number[] {
       });
     }
 
-    // Рекурсивно обрабатываем детей
+    // Recursively process children
     // Recursively process children
     if (node.children && Array.isArray(node.children)) {
       node.children.forEach(traverse);
@@ -646,11 +646,11 @@ export function extractFigmaRadii(metadata: any): number[] {
 }
 
 /**
- * Извлекает все уникальные shadows из Figma метаданных
+ * Extracts all unique shadows from Figma metadata
  * Extracts all unique shadows from Figma metadata
  *
- * @param metadata - Метаданные Figma узла
- * @returns Массив объектов FigmaShadow
+ * @param metadata - Figma node metadata
+ * @returns Array of FigmaShadow objects
  */
 export function extractFigmaShadows(metadata: any): FigmaShadow[] {
   const shadowsMap = new Map<string, FigmaShadow>();
@@ -674,7 +674,7 @@ export function extractFigmaShadows(metadata: any): FigmaShadow[] {
 
         const offset = shadow.offset || { x: 0, y: 0 };
 
-        // Создаем сигнатуру для маппинга
+        // Create signature for mapping
         // Create signature for mapping
         const key = `shadowColor-${shadowColor}-shadowOpacity-${shadowOpacity}-shadowRadius-scale(${shadowRadius})-elevation-${elevation}`;
 
@@ -690,7 +690,7 @@ export function extractFigmaShadows(metadata: any): FigmaShadow[] {
       }
     }
 
-    // Рекурсивно обрабатываем детей
+    // Recursively process children
     // Recursively process children
     if (node.children && Array.isArray(node.children)) {
       node.children.forEach(traverse);
@@ -702,11 +702,11 @@ export function extractFigmaShadows(metadata: any): FigmaShadow[] {
 }
 
 /**
- * Извлекает все уникальные градиенты из Figma метаданных
+ * Extracts all unique gradients from Figma metadata
  * Extracts all unique gradients from Figma metadata
  *
- * @param metadata - Метаданные Figma узла
- * @returns Массив сигнатур градиентов (строки hex цветов через запятую)
+ * @param metadata - Figma node metadata
+ * @returns Array of gradient signatures (comma-separated hex color strings)
  */
 export function extractFigmaGradients(metadata: any): string[] {
   const gradientSignatures = new Set<string>();
@@ -726,14 +726,14 @@ export function extractFigmaGradients(metadata: any): string[] {
           return `#${toHex(rVal)}${toHex(gVal)}${toHex(bVal)}`.toUpperCase();
         });
 
-        // Сигнатура: "#7A54FF,#AB5CE9"
+        // Signature: "#7A54FF,#AB5CE9"
         // Signature: "#7A54FF,#AB5CE9"
         const signature = colors.join(',');
         gradientSignatures.add(signature);
       }
     }
 
-    // Рекурсивно обрабатываем детей
+    // Recursively process children
     // Recursively process children
     if (node.children && Array.isArray(node.children)) {
       node.children.forEach(traverse);
@@ -745,17 +745,17 @@ export function extractFigmaGradients(metadata: any): string[] {
 }
 
 /**
- * Извлекает все уникальные стили типографики из Figma метаданных
+ * Extracts all unique typography styles from Figma metadata
  * Extracts all unique typography styles from Figma metadata
  *
- * @param metadata - Метаданные Figma узла
- * @returns Массив объектов с fontSize, fontWeight, lineHeight и key
+ * @param metadata - Figma node metadata
+ * @returns Array of objects with fontSize, fontWeight, lineHeight and key
  */
 export function extractFigmaTypography(metadata: any): Array<{ key: string; fontSize: number; fontWeight: number; lineHeight?: number }> {
   const typographyMap = new Map<string, { key: string; fontSize: number; fontWeight: number; lineHeight?: number }>();
 
   function traverse(node: any) {
-    // Извлекаем типографику из TEXT узлов
+    // Extract typography from TEXT nodes
     // Extract typography from TEXT nodes
     if (node.type === 'TEXT' && node.style) {
       const fontSize = node.style.fontSize;
@@ -764,7 +764,7 @@ export function extractFigmaTypography(metadata: any): Array<{ key: string; font
       const fontFamily = node.style.fontFamily || 'SF Pro';
 
       if (fontSize) {
-        // Ключ формата "FontFamily/weight/size" для маппинга
+        // Key format "FontFamily/weight/size" for mapping
         // Key format "FontFamily/weight/size" for mapping
         const key = `${fontFamily}/${fontWeight}/${fontSize}`;
 
@@ -779,7 +779,7 @@ export function extractFigmaTypography(metadata: any): Array<{ key: string; font
       }
     }
 
-    // Рекурсивно обрабатываем детей
+    // Recursively process children
     // Recursively process children
     if (node.children && Array.isArray(node.children)) {
       node.children.forEach(traverse);

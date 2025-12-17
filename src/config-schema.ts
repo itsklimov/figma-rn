@@ -1,132 +1,132 @@
 /**
- * Схемы конфигурации проекта для Figma MCP
- * Определяет интерфейсы TypeScript и JSON Schema для валидации
+ * Project configuration schemas for Figma MCP
+ * Defines TypeScript interfaces and JSON Schema for validation
  */
 
 /**
- * Основная конфигурация проекта
+ * Main project configuration
  */
 export interface ProjectConfig {
-  /** Тип фреймворка проекта */
+  /** Project framework type */
   framework: 'react-native' | 'expo' | 'ignite';
 
-  /** Название проекта (опционально) */
+  /** Project name (optional) */
   projectName?: string;
 
-  /** Корневая директория проекта / Project root directory */
+  /** Project root directory */
   projectRoot?: string;
 
-  /** Конфигурация темы */
+  /** Theme configuration */
   theme?: {
-    /** Путь к файлу цветов / Path to colors file */
+    /** Path to colors file */
     location: string;
 
-    /** Тип системы темизации */
+    /** Theming system type */
     type: 'object-export' | 'styled-components' | 'nativewind' | 'tamagui';
 
-    /** Путь к основному файлу темы (для spacing, radii, shadows) / Path to main theme file */
+    /** Path to main theme file (for spacing, radii, shadows) */
     mainThemeLocation?: string;
 
-    /** Путь к цветам внутри темы (например, 'colors' или 'palette.colors') */
+    /** Path to colors within theme (e.g., 'colors' or 'palette.colors') */
     colorPath?: string;
 
-    /** Путь к шрифтам внутри темы (например, 'fonts' или 'typography.fonts') */
+    /** Path to fonts within theme (e.g., 'fonts' or 'typography.fonts') */
     fontPath?: string;
 
-    /** Путь к файлу типографики / Path to typography file */
+    /** Path to typography file */
     typographyFile?: string;
   };
 
-  /** Конфигурация компонентов */
+  /** Components configuration */
   components?: {
-    /** Директория с компонентами */
+    /** Components directory */
     location: string;
 
-    /** Glob-паттерн для поиска компонентов */
+    /** Glob pattern for finding components */
     pattern?: string;
   };
 
-  /** Стиль генерируемого кода */
+  /** Generated code style */
   codeStyle: {
-    /** Паттерн стилизации */
+    /** Styling pattern */
     stylePattern: 'useTheme' | 'StyleSheet' | 'styled-components' | 'nativewind';
 
-    /** Функция масштабирования (например, 'scale', 'RFValue', 'moderateScale') */
+    /** Scaling function (e.g., 'scale', 'RFValue', 'moderateScale') */
     scaleFunction?: string;
 
-    /** Префикс для импортов (например, '@app', '@components', '~') */
+    /** Import prefix (e.g., '@app', '@components', '~') */
     importPrefix?: string;
   };
 
-  /** Пользовательские маппинги Figma → код */
+  /** Custom Figma → code mappings */
   mappings?: {
-    /** Маппинг цветов: Figma название → путь в теме */
+    /** Color mapping: Figma name → theme path */
     colors?: Record<string, string>;
 
-    /** Маппинг шрифтов: Figma название → путь в теме */
+    /** Font mapping: Figma name → theme path */
     fonts?: Record<string, string>;
 
-    /** Маппинг spacing: Figma значение → путь в теме */
+    /** Spacing mapping: Figma value → theme path */
     spacing?: Record<number, string>;
 
-    /** Маппинг radii: Figma значение → путь в теме */
+    /** Radii mapping: Figma value → theme path */
     radii?: Record<number, string>;
 
-    /** Маппинг shadows: Figma сигнатура → путь в теме */
+    /** Shadow mapping: Figma signature → theme path */
     shadows?: Record<string, string>;
 
-    /** Маппинг градиентов: Figma сигнатура → путь в теме */
+    /** Gradient mapping: Figma signature → theme path */
     gradients?: Record<string, string>;
 
-    /** Маппинг типографики: Figma ключ → путь в теме */
+    /** Typography mapping: Figma key → theme path */
     typography?: Record<string, string>;
   };
 
-  /** Конфигурация ассетов (изображения, иконки) */
+  /** Assets configuration (images, icons) */
   assets?: {
-    /** Директория для изображений (относительно корня проекта) */
+    /** Images directory (relative to project root) */
     imagesDir: string;
 
-    /** Директория для иконок (относительно корня проекта) */
+    /** Icons directory (relative to project root) */
     iconsDir: string;
 
-    /** Формат по умолчанию для изображений */
+    /** Default format for images */
     defaultImageFormat: 'png' | 'jpg' | 'webp';
 
-    /** Формат по умолчанию для иконок */
+    /** Default format for icons */
     defaultIconFormat: 'svg' | 'png';
 
-    /** Масштаб для экспорта изображений (1, 2, 3) */
+    /** Image export scale (1, 2, 3) */
     imageScale: number;
 
-    /** Префикс импорта для ассетов (например, '@assets' или '../assets') */
+    /** Import prefix for assets (e.g., '@assets' or '../assets') */
     importPrefix: string;
   };
 }
 
 /**
- * Входные данные для генерации конфигурации
+ * Input data for configuration generation
  */
 export interface ProjectConfigInput {
-  /** Корневая директория проекта */
+  /** Project root directory */
   projectRoot: string;
 
-  /** Путь к файлу темы */
+  /** Theme file path */
   themePath?: string;
 
-  /** Путь к директории компонентов */
+  /** Components directory path */
   componentsPath?: string;
 
-  /** Тип фреймворка */
+  /** Framework type */
   framework?: string;
 
-  /** Подход к стилизации */
+  /** Styling approach */
   styleApproach?: string;
 }
 
 /**
- * JSON Schema для валидации конфигурации с помощью AJV
- * Используем plain object вместо JSONSchemaType для совместимости с tsconfig без strictNullChecks
+ * JSON Schema for configuration validation using AJV
+ * Using plain object instead of JSONSchemaType for compatibility with tsconfig without strictNullChecks
  */
 export const projectConfigSchema = {
   type: 'object',
@@ -278,7 +278,7 @@ export const projectConfigSchema = {
 };
 
 /**
- * Конфигурация по умолчанию
+ * Default configuration
  */
 export const DEFAULT_CONFIG: ProjectConfig = {
   framework: 'react-native',

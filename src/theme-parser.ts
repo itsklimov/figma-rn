@@ -3,84 +3,82 @@ import { existsSync } from 'fs';
 import { resolve, join } from 'path';
 
 /**
- * Токен цвета из темы
+ * Color token from theme
  * Color token from theme
  */
 export interface ColorToken {
-  value: string;      // Hex значение цвета (например, '#FF0000')
-  path: string;       // Полный путь к токену (например, 'theme.colors.primary')
-  name: string;       // Короткое имя (например, 'primary')
+  value: string;      // Hex color value (e.g., '#FF0000')
+  path: string;       // Full path to token (e.g., 'theme.colors.primary')
+  name: string;       // Short name (e.g., 'primary')
 }
 
 /**
- * Токен шрифта из темы
+ * Font token from theme
  * Font token from theme
  */
 export interface FontToken {
-  family: string;     // Название семейства шрифта
-  weight?: number;    // Вес шрифта (100-900)
-  path: string;       // Полный путь к токену
-  name: string;       // Короткое имя
+  family: string;     // Font family name
+  weight?: number;    // Font weight (100-900)
+  path: string;       // Full path to token
+  name: string;       // Short name
 }
 
 /**
- * Токен стиля типографики (полный)
+ * Typography style token (complete)
  * Typography style token (complete)
  */
 export interface TypographyStyleToken {
-  path: string;       // Полный путь, например "typography.body.regular"
-  fontSize: number;   // Размер шрифта
-  lineHeight?: number; // Высота строки
-  fontWeight: number; // Вес шрифта
-  fontFamily?: string; // Семейство шрифта
-  letterSpacing?: number; // Межбуквенное расстояние
+  path: string;       // Full path, e.g. "typography.body.regular"
+  fontSize: number;   // Font size
+  lineHeight?: number; // Line height
+  fontWeight: number; // Font weight
+  fontFamily?: string; // Font family
+  letterSpacing?: number; // Letter spacing
 }
 
 /**
- * Информация о spacing системе
+ * Spacing system information
  * Spacing system information
  */
 export interface SpacingInfo {
-  function?: string;  // Название функции масштабирования (например, 'scale')
-  values?: number[];  // Обнаруженные значения spacing
+  function?: string;  // Scaling function name (e.g., 'scale')
+  values?: number[];  // Discovered spacing values
 }
 
 /**
- * Все извлеченные токены темы
+ * All extracted theme tokens
  * All extracted theme tokens
  */
 export interface ThemeTokens {
   colors: Map<string, ColorToken>;
   fonts: Map<string, FontToken>;
-  typography?: Map<string, TypographyStyleToken>;  // Полные стили типографики
+  typography?: Map<string, TypographyStyleToken>;  // Complete typography styles
   spacing?: SpacingInfo;
   radii?: Map<string, number>;
   shadows?: Map<string, any>;
 }
 
 /**
- * Парсит файл темы и извлекает токены дизайна
+ * Parses theme file and extracts design tokens
  * Parses theme file and extracts design tokens
  *
- * @param filePath - Абсолютный путь к файлу темы
- * @param basePath - Базовый путь для токенов (по умолчанию 'theme')
- * @returns Извлеченные токены темы
+ * @param filePath - Absolute path to theme file
+ * @param basePath - Base path for tokens (default 'theme')
+ * @returns Extracted theme tokens
  */
 export async function parseThemeFile(
   filePath: string,
   basePath: string = 'theme'
 ): Promise<ThemeTokens> {
   try {
-    // Резолвим абсолютный путь к файлу
     // Resolve absolute file path
     const absolutePath = resolve(filePath);
 
-    // Проверяем существование файла
+    // Check file existence
     if (!existsSync(absolutePath)) {
       throw new Error(`File not found: ${absolutePath}`);
     }
 
-    // Создаем проект ts-morph (без in-memory FS для чтения файлов)
     // Create ts-morph project (without in-memory FS to read files)
     const project = new Project({
       compilerOptions: {
@@ -91,14 +89,14 @@ export async function parseThemeFile(
 
     const sourceFile = project.addSourceFileAtPath(absolutePath);
 
-    // Ищем узел с темой
+    // Find theme node
     const themeNode = findThemeNode(sourceFile);
 
     if (!themeNode) {
       throw new Error(`Could not find theme object in file: ${filePath}`);
     }
 
-    // Извлекаем токены рекурсивно
+    // Extract tokens recursively
     const tokens = extractTokensRecursive(themeNode, basePath);
 
     return tokens;
@@ -109,16 +107,16 @@ export async function parseThemeFile(
 }
 
 /**
- * Ищет узел с объектом темы в файле
+ * Finds theme object node in the file
  * Finds theme object node in the file
  *
- * Стратегии поиска:
+ * Search strategies:
  * 1. Default export
  * 2. Named export 'theme', 'colors', 'palette'
- * 3. Variable declaration с именем похожим на тему
+ * 3. Variable declaration with theme-like name
  */
 function findThemeNode(sourceFile: SourceFile): ObjectLiteralExpression | null {
-  // Стратегия 1: Ищем default export
+  // Strategy 1: Find default export
   const defaultExport = sourceFile.getDefaultExportSymbol();
   if (defaultExport) {
     const declarations = defaultExport.getDeclarations();
@@ -128,7 +126,7 @@ function findThemeNode(sourceFile: SourceFile): ObjectLiteralExpression | null {
     }
   }
 
-  // Стратегия 2: Ищем named exports с известными именами
+  // Strategy 2: Find named exports with known names
   const themeNames = ['theme', 'colors', 'palette', 'tokens', 'designTokens', 'typography'];
   for (const name of themeNames) {
     const exportedDecl = sourceFile.getExportedDeclarations().get(name);
@@ -138,7 +136,7 @@ function findThemeNode(sourceFile: SourceFile): ObjectLiteralExpression | null {
     }
   }
 
-  // Стратегия 3: Ищем переменные с подходящими именами
+  // Strategy 3: Find variables with matching names
   const variableStatements = sourceFile.getVariableStatements();
   for (const varStatement of variableStatements) {
     const declarations = varStatement.getDeclarations();
@@ -151,10 +149,10 @@ function findThemeNode(sourceFile: SourceFile): ObjectLiteralExpression | null {
     }
   }
 
-  // Стратегия 4: Если ничего не нашли, берем первый большой объект
+  // Strategy 4: If nothing found, take the first large object
   const allObjectLiterals = sourceFile.getDescendantsOfKind(SyntaxKind.ObjectLiteralExpression);
   if (allObjectLiterals.length > 0) {
-    // Сортируем по размеру (количество свойств) и берем самый большой
+    // Sort by size (number of properties) and take the largest
     const sorted = allObjectLiterals.sort((a, b) =>
       b.getProperties().length - a.getProperties().length
     );
@@ -165,16 +163,16 @@ function findThemeNode(sourceFile: SourceFile): ObjectLiteralExpression | null {
 }
 
 /**
- * Ищет ObjectLiteralExpression в узле или его потомках
+ * Finds ObjectLiteralExpression in node or its descendants
  * Finds ObjectLiteralExpression in node or its descendants
  */
 function findObjectLiteralInNode(node: Node): ObjectLiteralExpression | null {
-  // Проверяем сам узел
+  // Check the node itself
   if (Node.isObjectLiteralExpression(node)) {
     return node;
   }
 
-  // Проверяем инициализатор (для переменных)
+  // Check initializer (for variables)
   if (Node.isVariableDeclaration(node)) {
     const initializer = node.getInitializer();
     if (initializer && Node.isObjectLiteralExpression(initializer)) {
@@ -182,19 +180,19 @@ function findObjectLiteralInNode(node: Node): ObjectLiteralExpression | null {
     }
   }
 
-  // Ищем в потомках
+  // Search in descendants
   const objLiteral = node.getFirstDescendantByKind(SyntaxKind.ObjectLiteralExpression);
   return objLiteral || null;
 }
 
 /**
- * Рекурсивно извлекает токены из узла объекта
+ * Recursively extracts tokens from object node
  * Recursively extracts tokens from object node
  *
- * @param node - Узел для анализа
- * @param currentPath - Текущий путь (например, 'theme.colors')
- * @param tokens - Аккумулятор токенов
- * @returns Токены темы
+ * @param node - Node to analyze
+ * @param currentPath - Current path (e.g., 'theme.colors')
+ * @param tokens - Token accumulator
+ * @returns Theme tokens
  */
 function extractTokensRecursive(
   node: ObjectLiteralExpression,
@@ -212,44 +210,42 @@ function extractTokensRecursive(
 
     if (!initializer) continue;
 
-    // Если это вложенный объект - проверяем, это typography style или обычный объект
     // If nested object - check if it's a typography style or regular object
     if (Node.isObjectLiteralExpression(initializer)) {
-      // Проверяем, является ли это typography style (содержит fontSize)
       // Check if this is a typography style (contains fontSize)
       const typoStyle = extractTypographyStyle(initializer, propPath);
       if (typoStyle) {
         if (!tokens.typography) tokens.typography = new Map();
         tokens.typography.set(propPath, typoStyle);
       } else {
-        // Иначе рекурсия / Otherwise recurse
+        // Otherwise recurse
         extractTokensRecursive(initializer, propPath, tokens);
       }
       continue;
     }
 
-    // Получаем текстовое значение
+    // Get text value
     const valueText = initializer.getText().replace(/['"]/g, '');
 
-    // Проверяем на цвет (hex, rgb, rgba)
+    // Check for color (hex, rgb, rgba)
     if (isColorValue(valueText)) {
       const colorToken: ColorToken = {
         value: normalizeColorValue(valueText),
         path: propPath,
         name: propName,
       };
-      // Используем нормализованное значение как ключ
+      // Use normalized value as key
       tokens.colors.set(colorToken.value, colorToken);
     }
 
-    // Проверяем на шрифт
+    // Check for font
     const fontToken = extractFontToken(propName, valueText, propPath);
     if (fontToken) {
       const key = `${fontToken.family}-${fontToken.weight || 400}`;
       tokens.fonts.set(key, fontToken);
     }
 
-    // Проверяем на spacing значения
+    // Check for spacing values
     if (isSpacingValue(propName)) {
       if (!tokens.spacing) {
         tokens.spacing = { values: [] };
@@ -260,10 +256,8 @@ function extractTokensRecursive(
       }
     }
 
-    // Проверяем на radii значения - проверяем и имя свойства, и путь
     // Check for radii values - check both property name and path
     if (isRadiiValue(propName) || isRadiiValue(currentPath)) {
-      // Извлекаем число из valueText (может быть "12", "scale(12)", etc.)
       // Extract number from valueText (could be "12", "scale(12)", etc.)
       const numValue = extractNumberFromValue(valueText);
       if (numValue !== null) {
@@ -274,7 +268,6 @@ function extractTokensRecursive(
       }
     }
 
-    // Проверяем на shadow объекты
     // Check for shadow objects
     if (Node.isObjectLiteralExpression(initializer) && isShadowValue(propName)) {
       const shadowObj = extractShadowObject(initializer);
@@ -291,11 +284,11 @@ function extractTokensRecursive(
 }
 
 /**
- * Проверяет, является ли значение цветом
+ * Checks if value is a color
  * Checks if value is a color
  */
 function isColorValue(value: string): boolean {
-  // Hex цвет
+  // Hex color
   if (/^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$/.test(value)) return true;
 
   // RGB/RGBA
@@ -308,23 +301,23 @@ function isColorValue(value: string): boolean {
 }
 
 /**
- * Нормализует цвет к hex формату
+ * Normalizes color to hex format
  * Normalizes color to hex format
  */
 function normalizeColorValue(value: string): string {
-  // Если уже hex - возвращаем как есть (в верхнем регистре)
+  // If already hex - return as is (in uppercase)
   if (value.startsWith('#')) {
     return value.toUpperCase();
   }
 
-  // Для rgb/rgba/hsl/hsla можем вернуть как есть
-  // или конвертировать в hex (требует дополнительной библиотеки)
-  // Пока просто возвращаем как есть
+  // For rgb/rgba/hsl/hsla can return as is
+  // or convert to hex (requires additional library)
+  // For now just return as is
   return value;
 }
 
 /**
- * Извлекает токен шрифта из свойства
+ * Extracts font token from property
  * Extracts font token from property
  */
 function extractFontToken(
@@ -334,7 +327,7 @@ function extractFontToken(
 ): FontToken | null {
   const nameLower = propName.toLowerCase();
 
-  // Проверяем на fontFamily
+  // Check for fontFamily
   if (nameLower.includes('font') && nameLower.includes('family')) {
     return {
       family: value,
@@ -343,12 +336,12 @@ function extractFontToken(
     };
   }
 
-  // Проверяем на fontWeight
+  // Check for fontWeight
   if (nameLower.includes('font') && nameLower.includes('weight')) {
     const weight = parseInt(value);
     if (!isNaN(weight)) {
       return {
-        family: 'unknown', // Вес без семейства
+        family: 'unknown', // Weight without family
         weight,
         path: propPath,
         name: propName,
@@ -356,9 +349,9 @@ function extractFontToken(
     }
   }
 
-  // Проверяем на комбинированное свойство font
+  // Check for combined font property
   if (nameLower === 'font' && typeof value === 'string') {
-    // Простая эвристика для парсинга font shorthand
+    // Simple heuristic for parsing font shorthand
     const parts = value.split(' ');
     let family = parts[parts.length - 1];
     let weight: number | undefined;
@@ -384,7 +377,7 @@ function extractFontToken(
 }
 
 /**
- * Извлекает стиль типографики из объекта (если содержит fontSize)
+ * Extracts typography style from object (if contains fontSize)
  * Extracts typography style from object (if contains fontSize)
  */
 function extractTypographyStyle(
@@ -416,7 +409,7 @@ function extractTypographyStyle(
     } else if (propName === 'fontweight' || propName === 'weight') {
       fontWeight = numValue ?? 400;
     } else if (propName === 'fontfamily' || propName === 'family') {
-      // Извлекаем вес из имени семейства / Extract weight from family name
+      // Extract weight from family name
       fontFamily = valueText;
       const nameLower = valueText.toLowerCase();
       if (nameLower.includes('bold')) {
@@ -431,7 +424,6 @@ function extractTypographyStyle(
     }
   }
 
-  // Если нашли fontSize - это typography style
   // If found fontSize - it's a typography style
   if (fontSize !== null) {
     return {
@@ -448,19 +440,17 @@ function extractTypographyStyle(
 }
 
 /**
- * Извлекает число из значения (может быть "12", "scale(12)", "moderateScale(12)", etc.)
+ * Extracts number from value (could be "12", "scale(12)", "moderateScale(12)", etc.)
  * Extracts number from value (could be "12", "scale(12)", "moderateScale(12)", etc.)
  */
 function extractNumberFromValue(valueText: string): number | null {
-  // Прямое число
   // Direct number
   const directNum = parseFloat(valueText);
   if (!isNaN(directNum)) {
     return directNum;
   }
 
-  // Функция с числовым аргументом: scale(12), moderateScale(16), RFValue(20)
-  // Function with numeric argument
+  // Function with numeric argument: scale(12), moderateScale(16), RFValue(20)
   const funcMatch = valueText.match(/\w+\s*\(\s*(\d+(?:\.\d+)?)\s*(?:,|\))/);
   if (funcMatch) {
     return parseFloat(funcMatch[1]);
@@ -470,7 +460,7 @@ function extractNumberFromValue(valueText: string): number | null {
 }
 
 /**
- * Проверяет, является ли свойство spacing значением
+ * Checks if property is a spacing value
  * Checks if property is a spacing value
  */
 function isSpacingValue(propName: string): boolean {
@@ -488,7 +478,7 @@ function isSpacingValue(propName: string): boolean {
 }
 
 /**
- * Проверяет, является ли свойство radii значением
+ * Checks if property is a radii value
  * Checks if property is a radii value
  */
 function isRadiiValue(propName: string): boolean {
@@ -504,7 +494,7 @@ function isRadiiValue(propName: string): boolean {
 }
 
 /**
- * Проверяет, является ли свойство shadow объектом
+ * Checks if property is a shadow object
  * Checks if property is a shadow object
  */
 function isShadowValue(propName: string): boolean {
@@ -519,7 +509,7 @@ function isShadowValue(propName: string): boolean {
 }
 
 /**
- * Извлекает объект тени из ObjectLiteralExpression
+ * Extracts shadow object from ObjectLiteralExpression
  * Extracts shadow object from ObjectLiteralExpression
  */
 function extractShadowObject(node: ObjectLiteralExpression): any {
@@ -535,10 +525,9 @@ function extractShadowObject(node: ObjectLiteralExpression): any {
 
     const nameLower = propName.toLowerCase();
 
-    // Извлекаем различные форматы shadow свойств
     // Extract various shadow property formats
     if (nameLower.includes('offset')) {
-      // Может быть объект { x: 0, y: 4 } или { width: 0, height: 4 }
+      // Could be object { x: 0, y: 4 } or { width: 0, height: 4 }
       if (Node.isObjectLiteralExpression(initializer)) {
         const offsetProps = initializer.getProperties();
         const offsetObj: any = {};
@@ -571,7 +560,6 @@ function extractShadowObject(node: ObjectLiteralExpression): any {
     }
   }
 
-  // Проверяем, что получили хотя бы базовые свойства тени
   // Check if we got at least basic shadow properties
   if (shadowObj.offset || shadowObj.opacity !== undefined || shadowObj.radius !== undefined) {
     return shadowObj;
@@ -581,7 +569,7 @@ function extractShadowObject(node: ObjectLiteralExpression): any {
 }
 
 /**
- * Поиск всех файлов темы в директории проекта
+ * Search for all theme files in project directory
  * Search for all theme files in project directory
  */
 export async function findThemeFiles(projectRoot: string): Promise<string[]> {

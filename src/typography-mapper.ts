@@ -1,6 +1,6 @@
 /**
  * Typography extraction with React Native font mappings and Marafet theme lookups
- * Преобразование типографики Figma в React Native и Marafet theme
+ * Convert Figma typography to React Native and Marafet theme
  */
 
 export interface TypographySpec {
@@ -28,7 +28,7 @@ export interface TypographySpec {
 }
 
 /**
- * Карта весов SF Pro для React Native
+ * SF Pro weight mapping for React Native
  * SF Pro Font Weight to React Native font family mapping
  */
 const SF_PRO_WEIGHT_MAP: Record<number, string> = {
@@ -37,7 +37,7 @@ const SF_PRO_WEIGHT_MAP: Record<number, string> = {
   300: 'SFProDisplay-Light',
   400: 'SFProDisplay-Regular',
   500: 'SFProDisplay-Medium',
-  590: 'SFProDisplay-Semibold', // специальный вес / special weight
+  590: 'SFProDisplay-Semibold', // special weight
   600: 'SFProDisplay-Semibold',
   700: 'SFProDisplay-Bold',
   800: 'SFProDisplay-Heavy',
@@ -45,7 +45,7 @@ const SF_PRO_WEIGHT_MAP: Record<number, string> = {
 };
 
 /**
- * Карта Marafet theme fonts
+ * Marafet theme font mapping
  * Marafet theme font mapping for SF Pro
  */
 const MARAFET_FONT_MAP: Record<string, string> = {
@@ -56,11 +56,10 @@ const MARAFET_FONT_MAP: Record<string, string> = {
 };
 
 /**
- * Маппинг веса шрифта из числового значения в React Native font family
+ * Map font weight from numeric value to React Native font family
  * Map numeric font weight to React Native font family name
  */
 export function mapFontWeight(weight: number): string {
-  // Найти ближайший доступный вес
   // Find closest available weight
   const weights = Object.keys(SF_PRO_WEIGHT_MAP)
     .map(Number)
@@ -81,7 +80,7 @@ export function mapFontWeight(weight: number): string {
 }
 
 /**
- * Маппинг выравнивания текста из Figma в React Native
+ * Map text alignment from Figma to React Native
  * Map text alignment from Figma to React Native
  */
 export function mapTextAlign(align: string): 'left' | 'center' | 'right' {
@@ -94,33 +93,30 @@ export function mapTextAlign(align: string): 'left' | 'center' | 'right' {
     return 'right';
   }
 
-  // По умолчанию left / Default to left
+  // Default to left
   return 'left';
 }
 
 /**
- * Поиск соответствующего Marafet theme font
+ * Find matching Marafet theme font
  * Find matching Marafet theme font reference
  */
 export function findMarafetFont(family: string, weight: number): string | null {
-  // Для SF Pro используем стандартный маппинг
   // For SF Pro, use standard mapping
   if (family.includes('SF Pro')) {
     const rnFontFamily = mapFontWeight(weight);
     return MARAFET_FONT_MAP[rnFontFamily] || null;
   }
 
-  // Для других шрифтов можно добавить дополнительную логику
   // For other fonts, additional logic can be added here
   return null;
 }
 
 /**
- * Извлечение полной спецификации типографики из Figma node
+ * Extract complete typography specification from Figma node
  * Extract complete typography specification from Figma node
  */
 export function extractCompleteTypography(node: any): TypographySpec | null {
-  // Проверка: node должен быть текстовым и иметь стиль
   // Check: node must be TEXT type and have style property
   if (node.type !== 'TEXT' || !node.style) {
     return null;
@@ -128,7 +124,6 @@ export function extractCompleteTypography(node: any): TypographySpec | null {
 
   const style = node.style;
 
-  // Извлечение Figma свойств
   // Extract Figma properties
   const figmaSpec = {
     fontFamily: style.fontFamily || 'SF Pro',
@@ -139,7 +134,6 @@ export function extractCompleteTypography(node: any): TypographySpec | null {
     textAlign: style.textAlignHorizontal || 'LEFT',
   };
 
-  // Преобразование в React Native
   // Convert to React Native
   const rnFontFamily = mapFontWeight(figmaSpec.fontWeight);
   const rnTextAlign = mapTextAlign(figmaSpec.textAlign);
@@ -153,7 +147,6 @@ export function extractCompleteTypography(node: any): TypographySpec | null {
     textAlign: rnTextAlign,
   };
 
-  // Поиск Marafet theme mapping (опционально)
   // Lookup Marafet theme mapping (optional)
   const marafetFont = findMarafetFont(figmaSpec.fontFamily, figmaSpec.fontWeight);
 
@@ -174,7 +167,7 @@ export function extractCompleteTypography(node: any): TypographySpec | null {
 }
 
 /**
- * Форматирование TypographySpec в читаемую строку
+ * Format TypographySpec into readable string
  * Format TypographySpec into readable string
  */
 export function formatTypographySpec(spec: TypographySpec): string {
@@ -185,7 +178,6 @@ export function formatTypographySpec(spec: TypographySpec): string {
     '{',
   ];
 
-  // React Native стили
   // React Native styles
   if (spec.marafetTheme) {
     lines.push(`  fontFamily: ${spec.marafetTheme.fontFamily},`);
@@ -211,7 +203,7 @@ export function formatTypographySpec(spec: TypographySpec): string {
 }
 
 /**
- * Пакетная обработка typography для всех текстовых узлов
+ * Batch process typography for all text nodes
  * Batch process typography for all text nodes in tree
  */
 export function extractAllTypography(node: any): Map<string, TypographySpec> {

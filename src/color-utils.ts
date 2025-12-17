@@ -1,5 +1,5 @@
 /**
- * Утилиты для работы с цветами
+ * Color utilities
  */
 
 interface FigmaColor {
@@ -10,7 +10,7 @@ interface FigmaColor {
 }
 
 /**
- * Преобразование Figma RGBA (0-1) в HEX строку
+ * Convert Figma RGBA (0-1) to HEX string
  */
 export function rgbaToHex(color: FigmaColor | { r: number; g: number; b: number; a?: number }): string {
   const r = Math.round(color.r * 255);

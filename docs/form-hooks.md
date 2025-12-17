@@ -1,13 +1,13 @@
-# Form Hooks Generator - Примеры использования / Usage Examples
+# Form Hooks Generator - Usage Examples
 
-## Обзор / Overview
+## Overview
 
-Модуль `form-hooks-generator.ts` автоматически обнаруживает элементы формы в дизайне Figma и генерирует:
-- React Native компоненты с react-hook-form
-- Zod схемы валидации
-- TypeScript типы
+Module `form-hooks-generator.ts` automatically detects form elements in Figma design and generates:
+- React Native components with react-hook-form
+- Zod validation schemas
+- TypeScript types
 
-## Пример использования / Usage Example
+## Usage Example
 
 ```typescript
 import {
@@ -17,7 +17,6 @@ import {
   generateFormComponent
 } from './form-hooks-generator';
 
-// 1. Обнаружение формы в узле Figma
 // 1. Detect form in Figma node
 const figmaNode = {
   name: 'Registration Form',
@@ -36,7 +35,7 @@ const figmaNode = {
     {
       name: 'Submit Button',
       type: 'FRAME',
-      children: [{ type: 'TEXT', characters: 'Зарегистрироваться', name: 'button-text' }]
+      children: [{ type: 'TEXT', characters: 'Register', name: 'button-text' }]
     }
   ]
 };
@@ -51,73 +50,70 @@ console.log(detection);
 //     { name: 'password', type: 'password', label: 'Password', required: true, ... }
 //   ],
 //   hasSubmitButton: true,
-//   submitLabel: 'Зарегистрироваться',
+//   submitLabel: 'Register',
 //   formName: 'RegistrationForm'
 // }
 
-// 2. Генерация Zod схемы
 // 2. Generate Zod schema
 const schemaCode = generateZodSchema(detection);
 console.log(schemaCode);
 
-// 3. Генерация хука формы
 // 3. Generate form hook
 const hookCode = generateFormHook(detection, detection.formName);
 console.log(hookCode);
 
-// 4. Генерация React Native компонента
 // 4. Generate React Native component
 const componentCode = generateFormComponent(detection, detection.formName);
 console.log(componentCode);
 ```
 
-## Эвристики обнаружения / Detection Heuristics
+## Detection Heuristics
 
-### Input Fields / Поля ввода
-- Узлы с именами: `input`, `field`, `textfield`, `ввод`, `поле`
-- `FRAME` или `RECTANGLE` с:
-  - Текстом-placeholder внутри
-  - Видимыми границами (strokes)
+### Input Fields
+- Nodes with names: `input`, `field`, `textfield`
+- `FRAME` or `RECTANGLE` with:
+  - Placeholder text inside
+  - Visible borders (strokes)
 
-### Checkboxes / Чекбоксы
-- Имена: `checkbox`, `check`, `галочка`, `согласие`
-- Маленькие квадраты (16-32px)
+### Checkboxes
+- Names: `checkbox`, `check`, `consent`, `agree`
+- Small squares (16-32px)
 
-### Radio Buttons / Радио-кнопки
-- Имена: `radio`, `радио`, `выбор`
-- Маленькие круги (16-32px)
+### Radio Buttons
+- Names: `radio`, `choice`, `option`
+- Small circles (16-32px)
 
-### Select/Dropdown / Выпадающие списки
-- Имена: `select`, `dropdown`, `выпадающ`, `список`
-- Наличие иконки chevron/arrow
+### Select/Dropdown
+- Names: `select`, `dropdown`, `picker`, `list`
+- Presence of chevron/arrow icon
 
-### Submit Buttons / Кнопки отправки
-- Имена: `button` + ключевые слова отправки
-- Ключевые слова: `submit`, `send`, `save`, `отправить`, `сохранить`, `войти`, etc.
+### Submit Buttons
+- Names: `button` + submission keywords
+- Keywords: `submit`, `send`, `save`, `continue`, `login`, `register`, etc.
 
-### Типы полей / Field Types
-Автоопределение по именам и содержимому:
-- `email` - email, почта, e-mail
-- `password` - password, пароль
-- `phone` - phone, телефон, mobile
-- `number` - number, номер, количество
-- `textarea` - message, comment, описание
+### Field Types
+Auto-detection by names and content:
+- `email` - email, e-mail
+- `password` - password, pass
+- `phone` - phone, mobile, telephone
+- `number` - number, amount, quantity
+- `textarea` - message, comment, description
 
-### Обязательные поля / Required Fields
-Детектируются по:
-- `*` в label или placeholder
-- Слова: `required`, `обязательно`, `обязательное поле`
+### Required Fields
+Detected by:
+- `*` in label or placeholder
+- Words: `required`, `mandatory`, `must`
 
-## Пример сгенерированного кода / Generated Code Example
+## Generated Code Example
 
 ### Zod Schema
 ```typescript
 import { z } from 'zod';
 
 export const RegistrationFormSchema = z.object({
-  email: z.string().email('Неверный формат email'),
-  password: z.string().min(8, 'Минимум 8 символов'),
-  phone: z.string().regex(/^[+]?[(]?[0-9]{1,4}[)]?[-\s\.]?/, 'Неверный формат телефона').optional(),
+  email: z.string().email('Invalid email format'),
+  password: z.string().min(8, 'Minimum 8 characters'),
+  phone: z.string().regex(/^[+]?[(]?[0-9]{1,4}[)]?[-\s\.]?/, 'Invalid phone format').optional(),
   agreeToTerms: z.boolean(),
 });
 
@@ -205,7 +201,7 @@ export function RegistrationForm() {
       />
 
       <Button
-        title="Зарегистрироваться"
+        title="Register"
         onPress={handleSubmit}
         disabled={isSubmitting}
         loading={isSubmitting}
@@ -215,9 +211,9 @@ export function RegistrationForm() {
 }
 ```
 
-## Интеграция с MCP Server / MCP Server Integration
+## MCP Server Integration
 
-Для добавления в MCP server, добавьте новый tool в `src/index.ts`:
+To add to MCP server, add new tool to `src/index.ts`:
 
 ```typescript
 {
@@ -240,21 +236,21 @@ export function RegistrationForm() {
 }
 ```
 
-## Возможности / Features
+## Features
 
-✅ **Автоматическое обнаружение** - определение типов полей по именам и структуре
-✅ **Мультиязычность** - поддержка русских и английских названий
-✅ **Умная валидация** - автогенерация Zod правил на основе типов полей
-✅ **React Hook Form** - готовый хук с control, errors, handleSubmit
-✅ **TypeScript типы** - полная типизация через Zod inference
-✅ **React Native** - компонент с Controller и стилями
+✅ **Automatic Detection** - field type detection by names and structure
+✅ **Multilingual** - support for multiple naming conventions
+✅ **Smart Validation** - auto-generation of Zod rules based on field types
+✅ **React Hook Form** - ready-to-use hook with control, errors, handleSubmit
+✅ **TypeScript Types** - full typing through Zod inference
+✅ **React Native** - component with Controller and styles
 
-## Зависимости / Dependencies
+## Dependencies
 
-Проект уже содержит необходимые зависимости:
-- `string-similarity` - для сравнения строк (уже установлен)
+Project already contains necessary dependencies:
+- `string-similarity` - for string comparison (already installed)
 
-Для использования сгенерированного кода потребуются:
-- `react-hook-form` - управление формой
-- `@hookform/resolvers` - интеграция с Zod
-- `zod` - схемы валидации
+To use generated code, you need:
+- `react-hook-form` - form management
+- `@hookform/resolvers` - integration with Zod
+- `zod` - validation schemas

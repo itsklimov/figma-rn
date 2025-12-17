@@ -70,20 +70,20 @@ function inferPropType(value: string): { type: string; propName: string } {
   if (/^\d+:\d+$/.test(value)) {
     return { type: 'string', propName: 'time' };
   }
-  if (/\d+\s*(ч|мин|min|hour|h)/.test(value)) {
+  if (/\d+\s*(h|hr|hour|min|m)/.test(value)) {
     return { type: 'number', propName: 'duration' };
   }
 
   // Date
-  if (/\d+\s*(янв|фев|мар|апр|июл|авг|сен|окт|ноя|дек|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i.test(value)) {
+  if (/\d+\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i.test(value)) {
     return { type: 'Date | string', propName: 'date' };
   }
-  if (/\b(Пн|Вт|Ср|Чт|Пт|Сб|Вс|Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b/.test(value)) {
+  if (/\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b/.test(value)) {
     return { type: 'Date | string', propName: 'date' };
   }
 
   // Names (capitalized words)
-  if (/^[А-ЯЁA-Z][а-яёa-z]+(\s+[А-ЯЁA-Z][а-яёa-z]+)*$/.test(value)) {
+  if (/^[A-Z][a-z]+(\s+[A-Z][a-z]+)*$/.test(value)) {
     return { type: 'string', propName: 'name' };
   }
 

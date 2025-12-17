@@ -1,22 +1,21 @@
 /**
- * Анализатор элементов Figma для умного определения типа компонента
  * Smart element analyzer for Figma nodes - detects component types and recommends actions
  */
 
 import { FigmaNodeFull } from './figma-api-client.js';
 
 /**
- * Тип элемента / Element type classification
+ * Element type classification
  */
 export type ElementType =
-  // Примитивы / Primitives
+  // Primitives
   | 'icon'
   | 'illustration'
   | 'logo'
   | 'avatar'
   | 'token'
 
-  // Базовые компоненты (Молекулы) / Basic Components (Molecules)
+  // Basic Components (Molecules)
   | 'button'
   | 'input'
   | 'checkbox'
@@ -28,7 +27,7 @@ export type ElementType =
   | 'badge'
   | 'indicator'
 
-  // Составные компоненты (Организмы) / Composite Components (Organisms)
+  // Composite Components (Organisms)
   | 'card'
   | 'list-item'
   | 'menu-item'
@@ -37,7 +36,7 @@ export type ElementType =
   | 'form-field'
   | 'section'
 
-  // Оверлеи / Overlays
+  // Overlays
   | 'modal'
   | 'bottom-sheet'
   | 'action-sheet'
@@ -45,38 +44,38 @@ export type ElementType =
   | 'toast'
   | 'popover'
 
-  // Макеты / Layouts
+  // Layouts
   | 'list'
   | 'grid'
   | 'scroll-view'
 
-  // Экраны / Screens
+  // Screens
   | 'screen'
   | 'screen-fragment'
 
-  // Системные элементы / System
+  // System
   | 'status-bar'
   | 'keyboard'
   | 'tab-bar-system'
 
-  // Неизвестный тип / Unknown
+  // Unknown
   | 'unknown';
 
 /**
- * Рекомендуемое действие для элемента / Recommended action for element
+ * Recommended action for element
  */
 export type RecommendedAction =
-  | 'generate_icon'        // Сгенерировать иконку / Generate icon
-  | 'generate_component'   // Сгенерировать компонент / Generate component
-  | 'generate_screen'      // Сгенерировать экран / Generate screen
-  | 'generate_modal'       // Сгенерировать модал / Generate modal
-  | 'generate_sheet'       // Сгенерировать bottom sheet / Generate bottom sheet
-  | 'use_existing'         // Использовать существующий компонент / Use existing component
-  | 'skip_system'          // Пропустить системный элемент / Skip system element
-  | 'ask_llm';            // Спросить LLM для принятия решения / Ask LLM for decision
+  | 'generate_icon'        // Generate icon
+  | 'generate_component'   // Generate component
+  | 'generate_screen'      // Generate screen
+  | 'generate_modal'       // Generate modal
+  | 'generate_sheet'       // Generate bottom sheet
+  | 'use_existing'         // Use existing component
+  | 'skip_system'          // Skip system element
+  | 'ask_llm';            // Ask LLM for decision
 
 /**
- * Проблема целостности компонента / Component integrity issue
+ * Component integrity issue
  */
 export interface IntegrityIssue {
   type: 'detached-instance' | 'override-breaks-component' | 'missing-component';
@@ -86,13 +85,13 @@ export interface IntegrityIssue {
 }
 
 /**
- * Сигналы паттернов в узле / Pattern signals detected in node
+ * Pattern signals detected in node
  */
 export interface PatternSignals {
   hasStatusBar: boolean;
-  /** Настоящий оверлей модала (тёмный, полноэкранный) / True modal overlay (dark, full-screen backdrop) */
+  /** True modal overlay (dark, full-screen backdrop) */
   hasModalOverlay: boolean;
-  /** Плавающий футер с кнопкой (sticky CTA) / Floating footer with button (sticky CTA area) */
+  /** Floating footer with button (sticky CTA area) */
   hasFloatingFooter: boolean;
   hasDragHandle: boolean;
   hasCloseButton: boolean;
@@ -104,7 +103,7 @@ export interface PatternSignals {
 }
 
 /**
- * Анализ дочерних элементов / Children analysis
+ * Children analysis
  */
 export interface ChildrenAnalysis {
   totalCount: number;
@@ -116,7 +115,7 @@ export interface ChildrenAnalysis {
 }
 
 /**
- * Вариант выбора для пользователя / Choice option for user
+ * Choice option for user
  */
 export interface ChoiceOption {
   value: string;
@@ -125,50 +124,50 @@ export interface ChoiceOption {
 }
 
 /**
- * Следующий шаг для LLM / Next step instruction for LLM
- * Определяет точное действие, которое должен выполнить LLM
+ * Next step instruction for LLM
+ * Defines exact action that LLM should perform
  */
 export interface NextStep {
   /**
-   * Тип действия / Action type
-   * - call_tool: Вызвать MCP инструмент / Call MCP tool
-   * - inform_user: Сообщить пользователю информацию / Inform user with message
-   * - ask_user: Спросить пользователя и дождаться выбора / Ask user and wait for choice
-   * - skip: Пропустить элемент / Skip element
+   * Action type
+   * - call_tool: Call MCP tool
+   * - inform_user: Inform user with message
+   * - ask_user: Ask user and wait for choice
+   * - skip: Skip element
    */
   action: 'call_tool' | 'inform_user' | 'ask_user' | 'skip';
 
-  /** Имя MCP инструмента для вызова / MCP tool name to call */
+  /** MCP tool name to call */
   tool?: 'generate_screen' | 'generate_flow' | 'analyze_element';
 
-  /** Параметры для инструмента / Parameters for tool */
+  /** Parameters for tool */
   toolParams?: {
     figmaUrl?: string;
     screenName?: string;
     componentId?: string;
   };
 
-  /** Сообщение для пользователя / Message for user */
+  /** Message for user */
   message?: string;
 
-  /** Вопрос для пользователя / Question for user */
+  /** Question for user */
   question?: string;
 
-  /** Варианты выбора с описаниями / Choice options with descriptions */
+  /** Choice options with descriptions */
   options?: ChoiceOption[];
 
-  /** Причина действия / Reason for action */
+  /** Reason for action */
   reason: string;
 }
 
 /**
- * Полный результат анализа элемента / Complete element analysis result
+ * Complete element analysis result
  */
 export interface ElementAnalysis {
   elementType: ElementType;
   confidence: number;  // 0-1
 
-  // Метаданные Figma / Figma metadata
+  // Figma metadata
   figmaNodeType: string;
   nodeName: string;
   dimensions: { width: number; height: number };
@@ -176,53 +175,53 @@ export interface ElementAnalysis {
   isInstance: boolean;
   componentId?: string;
 
-  // Обнаруженные сигналы паттернов / Pattern signals detected
+  // Pattern signals detected
   signals: PatternSignals;
 
-  // Проблемы целостности / Integrity check
+  // Integrity check
   integrityIssues: IntegrityIssue[];
 
-  // Анализ дочерних элементов / Children analysis
+  // Children analysis
   childrenAnalysis: ChildrenAnalysis;
 
-  // Рекомендация / Recommendation
+  // Recommendation
   recommendedAction: RecommendedAction;
 
-  // Следующий шаг для LLM / Next step for LLM
+  // Next step for LLM
   nextStep: NextStep;
 
-  // Для решения LLM (когда низкая уверенность) / For LLM decision (when confidence low)
+  // For LLM decision (when confidence low)
   screenshotPath?: string;
   analysisContext: string;  // Human-readable analysis
 }
 
 /**
- * Категория размера элемента / Size category
+ * Size category
  */
 type SizeCategory = 'icon' | 'component' | 'screen';
 
 /**
- * Классификация по размерам / Classify by dimensions
- * Определяет категорию элемента на основе размеров
+ * Classify by dimensions
+ * Determines element category based on size
  */
 function classifyByDimensions(width: number, height: number): SizeCategory {
-  // Иконка: меньше 64x64 / Icon: < 64x64
+  // Icon: < 64x64
   if (width < 64 && height < 64) {
     return 'icon';
   }
 
-  // Экран: больше 350 ширина И больше 600 высота / Screen: > 350 width AND > 600 height
+  // Screen: > 350 width AND > 600 height
   if (width > 350 && height > 600) {
     return 'screen';
   }
 
-  // Компонент: промежуточный размер / Component: intermediate size
+  // Component: intermediate size
   return 'component';
 }
 
 /**
- * Классификация по типу узла Figma / Classify by Figma node type
- * Возвращает базовый тип на основе типа узла Figma
+ * Classify by Figma node type
+ * Returns base type based on Figma node type
  */
 function classifyByNodeType(nodeType: string): ElementType {
   switch (nodeType) {
@@ -232,16 +231,16 @@ function classifyByNodeType(nodeType: string): ElementType {
 
     case 'COMPONENT':
     case 'COMPONENT_SET':
-      return 'unknown'; // Нужен дополнительный анализ / Needs further analysis
+      return 'unknown'; // Needs further analysis
 
     case 'FRAME':
-      return 'unknown'; // Нужен дополнительный анализ / Needs further analysis
+      return 'unknown'; // Needs further analysis
 
     case 'INSTANCE':
-      return 'unknown'; // Нужен дополнительный анализ / Needs further analysis
+      return 'unknown'; // Needs further analysis
 
     case 'TEXT':
-      return 'unknown'; // Обычно не анализируем отдельно / Usually not analyzed separately
+      return 'unknown'; // Usually not analyzed separately
 
     default:
       return 'unknown';
@@ -249,20 +248,20 @@ function classifyByNodeType(nodeType: string): ElementType {
 }
 
 // ============================================================================
-// Вспомогательные функции для обнаружения паттернов / Helper functions for pattern detection
+// Helper functions for pattern detection
 // ============================================================================
 
 /**
- * Проверка, является ли цвет тёмным / Check if color is dark
- * Используется для определения настоящего оверлея модала
+ * Check if color is dark
+ * Used to identify true modal overlays
  */
 function isDarkColor(color: { r: number; g: number; b: number }): boolean {
-  // Тёмный цвет: все компоненты RGB < 0.3 (примерно #4D4D4D и темнее)
+  // Dark color: all RGB components < 0.3 (approximately #4D4D4D and darker)
   return color.r < 0.3 && color.g < 0.3 && color.b < 0.3;
 }
 
 /**
- * Проверка, покрывает ли элемент большую часть родителя / Check if element covers most of parent
+ * Check if element covers most of parent
  */
 function isLargeCoverage(
   child: { width: number; height: number },
@@ -270,24 +269,24 @@ function isLargeCoverage(
 ): boolean {
   const widthRatio = child.width / parent.width;
   const heightRatio = child.height / parent.height;
-  // Покрывает > 90% ширины и > 50% высоты
+  // Covers > 90% width and > 50% height
   return widthRatio > 0.9 && heightRatio > 0.5;
 }
 
 /**
- * Проверка, находится ли элемент внизу экрана / Check if element is at bottom of screen
+ * Check if element is at bottom of screen
  */
 function isAtBottom(
   child: { y: number; height: number },
   parent: { height: number }
 ): boolean {
   const childBottom = child.y + child.height;
-  // Элемент заканчивается в нижних 15% экрана
+  // Element ends in bottom 15% of screen
   return childBottom > parent.height * 0.85;
 }
 
 /**
- * Проверка, содержит ли элемент кнопку / Check if element contains a button
+ * Check if element contains a button
  */
 function containsButton(node: FigmaNodeFull): boolean {
   if (!node.children) return false;
@@ -303,8 +302,8 @@ function containsButton(node: FigmaNodeFull): boolean {
 }
 
 /**
- * Обнаружение паттернов в узле / Detect patterns in node
- * Проверяет различные паттерны для определения типа элемента
+ * Detect patterns in node
+ * Checks various patterns to determine element type
  */
 function detectPatterns(node: FigmaNodeFull): PatternSignals {
   const signals: PatternSignals = {
@@ -320,10 +319,10 @@ function detectPatterns(node: FigmaNodeFull): PatternSignals {
     isFullHeight: false,
   };
 
-  // Размеры родителя для сравнений / Parent dimensions for comparisons
+  // Parent dimensions for comparisons
   const parentBounds = node.absoluteBoundingBox;
 
-  // Проверка размеров / Check dimensions
+  // Check dimensions
   if (parentBounds) {
     const { width, height } = parentBounds;
 
@@ -332,27 +331,27 @@ function detectPatterns(node: FigmaNodeFull): PatternSignals {
     signals.isFullHeight = height > 600;
   }
 
-  // Проверка имени узла / Check node name
+  // Check node name
   const nameLower = node.name.toLowerCase();
 
-  // StatusBar: имя содержит "statusbar" или "status bar" / StatusBar detection
+  // StatusBar detection
   if (nameLower.includes('statusbar') || nameLower.includes('status bar') || nameLower.includes('status-bar')) {
     signals.hasStatusBar = true;
   }
 
-  // DragHandle: имя содержит "handle" или "drag" / Drag handle detection
+  // Drag handle detection
   if (nameLower.includes('handle') || nameLower.includes('drag') || nameLower.includes('grip')) {
     signals.hasDragHandle = true;
   }
 
-  // CloseButton: имя содержит "close" или "x" / Close button detection
+  // Close button detection
   if (nameLower.includes('close') || nameLower.includes('dismiss') || nameLower === 'x' || nameLower.includes('×')) {
     signals.hasCloseButton = true;
   }
 
-  // Проверка детей на наличие паттернов / Check children for patterns
+  // Check children for patterns
   if (node.children && node.children.length > 0 && parentBounds) {
-    // Проверка на StatusBar в детях / Check for StatusBar in children
+    // Check for StatusBar in children
     const hasStatusBarChild = node.children.some(child => {
       const childName = child.name.toLowerCase();
       return childName.includes('statusbar') ||
@@ -364,25 +363,25 @@ function detectPatterns(node: FigmaNodeFull): PatternSignals {
     }
 
     // ════════════════════════════════════════════════════════════════════════
-    // Обнаружение НАСТОЯЩЕГО модального оверлея / Detect TRUE modal overlay
-    // Критерии: большой, тёмный, полупрозрачный фон
+    // Detect TRUE modal overlay
+    // Criteria: large, dark, semi-transparent background
     // ════════════════════════════════════════════════════════════════════════
     const hasModalOverlayChild = node.children.some(child => {
       const childName = child.name.toLowerCase();
 
-      // Проверка имени / Check name
+      // Check name
       const hasOverlayName = childName.includes('overlay') ||
                              childName.includes('backdrop') ||
                              childName.includes('scrim') ||
                              childName.includes('dim');
 
-      // Проверка размеров / Check dimensions
+      // Check dimensions
       let isLarge = false;
       if (child.absoluteBoundingBox) {
         isLarge = isLargeCoverage(child.absoluteBoundingBox, parentBounds);
       }
 
-      // Проверка цвета и прозрачности / Check color and opacity
+      // Check color and opacity
       let isDarkAndSemiTransparent = false;
       if (child.fills && Array.isArray(child.fills)) {
         isDarkAndSemiTransparent = child.fills.some(fill => {
@@ -396,7 +395,6 @@ function detectPatterns(node: FigmaNodeFull): PatternSignals {
         });
       }
 
-      // Настоящий оверлей: имя ИЛИ (большой + тёмный + полупрозрачный)
       // True overlay: named OR (large + dark + semi-transparent)
       return hasOverlayName || (isLarge && isDarkAndSemiTransparent);
     });
@@ -405,20 +403,20 @@ function detectPatterns(node: FigmaNodeFull): PatternSignals {
     }
 
     // ════════════════════════════════════════════════════════════════════════
-    // Обнаружение плавающего футера (sticky CTA) / Detect floating footer
-    // Критерии: внизу экрана, небольшой, содержит кнопку
+    // Detect floating footer (sticky CTA)
+    // Criteria: at bottom of screen, small, contains button
     // ════════════════════════════════════════════════════════════════════════
     const hasFloatingFooterChild = node.children.some(child => {
       const childName = child.name.toLowerCase();
 
-      // Проверка имени / Check name
+      // Check name
       const isFooterNamed = childName.includes('footer') ||
                             childName.includes('bottom') ||
                             childName.includes('cta') ||
                             childName.includes('action') ||
                             childName.includes('floating');
 
-      // Проверка позиции и размеров / Check position and dimensions
+      // Check position and dimensions
       let atBottom = false;
       let isSmallHeight = false;
       if (child.absoluteBoundingBox) {
@@ -426,22 +424,22 @@ function detectPatterns(node: FigmaNodeFull): PatternSignals {
         isSmallHeight = child.absoluteBoundingBox.height < 150;
       }
 
-      // Проверка на наличие кнопки / Check for button
+      // Check for button
       const hasButton = containsButton(child as FigmaNodeFull);
 
-      // Плавающий футер: внизу + небольшой высоты + (имя футера ИЛИ есть кнопка)
+      // Floating footer: at bottom + small height + (named footer OR has button)
       return atBottom && isSmallHeight && (isFooterNamed || hasButton);
     });
     if (hasFloatingFooterChild) {
       signals.hasFloatingFooter = true;
     }
 
-    // Проверка на DragHandle в детях / Check for drag handle in children
+    // Check for drag handle in children
     const hasDragHandleChild = node.children.some(child => {
       const childName = child.name.toLowerCase();
       const hasHandleName = childName.includes('handle') || childName.includes('drag') || childName.includes('indicator') || childName.includes('grip');
 
-      // Проверка размеров: маленький горизонтальный элемент / Check dimensions: small horizontal element
+      // Check dimensions: small horizontal element
       let isHandleSize = false;
       if (child.absoluteBoundingBox) {
         const { width, height } = child.absoluteBoundingBox;
@@ -454,7 +452,7 @@ function detectPatterns(node: FigmaNodeFull): PatternSignals {
       signals.hasDragHandle = true;
     }
 
-    // Проверка на CloseButton в детях / Check for close button in children
+    // Check for close button in children
     const hasCloseButtonChild = node.children.some(child => {
       const childName = child.name.toLowerCase();
       return childName.includes('close') || childName.includes('dismiss') || childName === 'x' || childName.includes('×');
@@ -463,9 +461,9 @@ function detectPatterns(node: FigmaNodeFull): PatternSignals {
       signals.hasCloseButton = true;
     }
 
-    // Проверка на список (3+ похожих детей) / Check for list (3+ similar children)
+    // Check for list (3+ similar children)
     if (node.children.length >= 3) {
-      // Группируем детей по размерам / Group children by dimensions
+      // Group children by dimensions
       const dimensionGroups: Map<string, number> = new Map();
 
       node.children.forEach(child => {
@@ -476,14 +474,14 @@ function detectPatterns(node: FigmaNodeFull): PatternSignals {
         }
       });
 
-      // Если есть группа из 3+ элементов одинакового размера / If there's a group of 3+ same-sized elements
+      // If there's a group of 3+ same-sized elements
       const hasLargeGroup = Array.from(dimensionGroups.values()).some(count => count >= 3);
       if (hasLargeGroup) {
         signals.isListLike = true;
       }
     }
 
-    // Проверка на элементы формы / Check for form elements
+    // Check for form elements
     const hasFormChild = node.children.some(child => {
       const childName = child.name.toLowerCase();
       return childName.includes('input') ||
@@ -502,25 +500,25 @@ function detectPatterns(node: FigmaNodeFull): PatternSignals {
 }
 
 /**
- * Проверка целостности компонента / Check component integrity
- * Анализирует, правильно ли связаны компоненты и экземпляры
+ * Check component integrity
+ * Analyzes if components and instances are properly linked
  */
 function checkComponentIntegrity(node: FigmaNodeFull): IntegrityIssue[] {
   const issues: IntegrityIssue[] = [];
 
-  // Проверка: является ли INSTANCE с валидным componentId / Check: is INSTANCE with valid componentId
+  // Check: is INSTANCE with valid componentId
   if (node.type === 'INSTANCE') {
     if (!node.componentId) {
       issues.push({
         type: 'detached-instance',
         nodeId: node.id,
         nodeName: node.name,
-        suggestion: 'Экземпляр отвязан от компонента. Пересоздайте экземпляр из компонента. / Instance is detached from component. Recreate instance from component.',
+        suggestion: 'Instance is detached from component. Recreate instance from component.',
       });
     }
   }
 
-  // Проверка детей на отвязанные экземпляры / Check children for detached instances
+  // Check children for detached instances
   if (node.children) {
     node.children.forEach(child => {
       if (child.type === 'INSTANCE' && !child.componentId) {
@@ -528,20 +526,20 @@ function checkComponentIntegrity(node: FigmaNodeFull): IntegrityIssue[] {
           type: 'detached-instance',
           nodeId: child.id,
           nodeName: child.name,
-          suggestion: `Дочерний экземпляр "${child.name}" отвязан от компонента / Child instance "${child.name}" is detached from component`,
+          suggestion: `Child instance "${child.name}" is detached from component / Child instance "${child.name}" is detached from component`,
         });
       }
 
-      // Проверка на FRAME, который должен быть INSTANCE / Check for FRAME that should be INSTANCE
+      // Check for FRAME that should be INSTANCE
       if (child.type === 'FRAME') {
         const childName = child.name.toLowerCase();
-        // Если имя содержит признаки компонента, но это FRAME / If name suggests it's a component, but it's a FRAME
+        // If name suggests it's a component, but it's a FRAME
         if (childName.includes('component') || childName.includes('instance') || childName.includes('btn') || childName.includes('card')) {
           issues.push({
             type: 'missing-component',
             nodeId: child.id,
             nodeName: child.name,
-            suggestion: `"${child.name}" выглядит как компонент, но это FRAME. Преобразуйте в компонент. / "${child.name}" looks like a component but is a FRAME. Convert to component.`,
+            suggestion: `"${child.name}" looks like a component but is a FRAME. Convert to component. / "${child.name}" looks like a component but is a FRAME. Convert to component.`,
           });
         }
       }
@@ -552,8 +550,8 @@ function checkComponentIntegrity(node: FigmaNodeFull): IntegrityIssue[] {
 }
 
 /**
- * Анализ дочерних элементов / Analyze children
- * Подсчитывает количество различных типов дочерних узлов
+ * Analyze children
+ * Counts number of different child node types
  */
 function analyzeChildren(node: FigmaNodeFull): ChildrenAnalysis {
   const analysis: ChildrenAnalysis = {
@@ -597,8 +595,8 @@ function analyzeChildren(node: FigmaNodeFull): ChildrenAnalysis {
 }
 
 /**
- * Расчет уверенности / Calculate confidence
- * Определяет уровень уверенности в классификации элемента
+ * Calculate confidence
+ * Determines confidence level in element classification
  */
 function calculateConfidence(
   elementType: ElementType,
@@ -610,26 +608,26 @@ function calculateConfidence(
 ): number {
   let confidence = 0;
 
-  // Базовая уверенность по типу узла / Base confidence by node type
+  // Base confidence by node type / Base confidence by node type
   if (nodeType === 'COMPONENT' || nodeType === 'COMPONENT_SET') {
     confidence += 0.4;
   } else if (nodeType === 'INSTANCE') {
     confidence += 0.35;
   } else if (nodeType === 'VECTOR' || nodeType === 'BOOLEAN_OPERATION') {
-    confidence += 0.5; // Векторы обычно иконки / Vectors are usually icons
+    confidence += 0.5; // Vectors are usually icons / Vectors are usually icons
   } else if (nodeType === 'FRAME') {
-    confidence += 0.2; // FRAMEs нуждаются в дополнительном анализе / FRAMEs need more analysis
+    confidence += 0.2; // FRAMEs need more analysis / FRAMEs need more analysis
   }
 
-  // Уверенность по размерам / Confidence by dimensions
+  // Confidence by dimensions / Confidence by dimensions
   const sizeCategory = classifyByDimensions(dimensions.width, dimensions.height);
 
   if (elementType === 'icon' && sizeCategory === 'icon') {
     confidence += 0.3;
   } else if (elementType === 'screen' && sizeCategory === 'screen') {
-    confidence += 0.4; // Высокая уверенность для экранов по размерам / High confidence for screen-sized elements
+    confidence += 0.4; // High confidence for screen-sized elements / High confidence for screen-sized elements
   } else if (sizeCategory === 'component') {
-    // Любой элемент в диапазоне компонентов / Any element in component range
+    // Any element in component range / Any element in component range
     confidence += 0.2;
     if (elementType === 'button' || elementType === 'card' || elementType === 'input' ||
         elementType === 'list-item' || elementType === 'header') {
@@ -637,7 +635,7 @@ function calculateConfidence(
     }
   }
 
-  // Уверенность по сигналам / Confidence by signals
+  // Confidence by signals / Confidence by signals
   if (elementType === 'bottom-sheet' && signals.hasDragHandle) {
     confidence += 0.3;
   }
@@ -657,7 +655,7 @@ function calculateConfidence(
     confidence += 0.2;
   }
 
-  // Уверенность по вариантам / Confidence by variants
+  // Confidence by variants / Confidence by variants
   if (hasVariants) {
     confidence += 0.15;
     if (elementType === 'button' || elementType === 'chip' || elementType === 'badge' || elementType === 'input') {
@@ -665,21 +663,21 @@ function calculateConfidence(
     }
   }
 
-  // Уверенность по структуре детей / Confidence by children structure
+  // Confidence by children structure / Confidence by children structure
   if (childrenAnalysis.instanceCount > 0 && elementType !== 'icon') {
-    confidence += 0.15; // Наличие экземпляров говорит о составном компоненте / Presence of instances suggests composite component
+    confidence += 0.15; // Presence of instances suggests composite component / Presence of instances suggests composite component
   }
   if (childrenAnalysis.totalCount > 5 && (elementType === 'screen' || elementType === 'card' || elementType === 'section')) {
     confidence += 0.1;
   }
 
-  // Ограничиваем в диапазоне 0-1 / Clamp to 0-1 range
+  // Clamp to 0-1 range / Clamp to 0-1 range
   return Math.min(Math.max(confidence, 0), 1);
 }
 
 /**
- * Определение типа элемента / Determine element type
- * Комплексный анализ для определения конкретного типа элемента
+ * Determine element type
+ * Complex analysis to determine specific element type
  */
 function determineElementType(
   node: FigmaNodeFull,
@@ -689,10 +687,10 @@ function determineElementType(
 ): ElementType {
   const nameLower = node.name.toLowerCase();
 
-  // ВАЖНО: Проверяем экран ДО системных элементов / Check screen BEFORE system elements
-  // Экран с StatusBar - это экран, а не status-bar / Screen with StatusBar is a screen, not status-bar
+  // IMPORTANT: Check screen BEFORE system elements
+  // Screen with StatusBar is a screen, not status-bar
   if (sizeCategory === 'screen') {
-    // Если это экран (по размерам) и имеет StatusBar как дочерний элемент - это экран
+    // If it's screen-sized and has StatusBar as child - it's a screen
     // If it's screen-sized and has StatusBar as child - it's a screen
     if (signals.hasStatusBar && !nameLower.includes('statusbar') && !nameLower.includes('status bar')) {
       return 'screen';
@@ -703,11 +701,11 @@ function determineElementType(
     if (nameLower.includes('fragment') || nameLower.includes('section')) {
       return 'screen-fragment';
     }
-    // По умолчанию для больших фреймов - экран / Default for large frames - screen
+    // Default for large frames - screen
     return 'screen';
   }
 
-  // Системные элементы - только если сам узел является системным / System elements - only if node itself is system
+  // System elements - only if node itself is system
   if (nameLower.includes('statusbar') || nameLower.includes('status bar') || nameLower.includes('status-bar')) {
     return 'status-bar';
   }
@@ -718,7 +716,7 @@ function determineElementType(
     return 'tab-bar-system';
   }
 
-  // Оверлеи / Overlays
+  // Overlays
   if (nameLower.includes('bottom') && nameLower.includes('sheet')) {
     return 'bottom-sheet';
   }
@@ -735,7 +733,7 @@ function determineElementType(
     return 'popover';
   }
 
-  // По сигналам оверлея / By overlay signals
+  // By overlay signals
   if (signals.hasDragHandle) {
     return 'bottom-sheet';
   }
@@ -746,7 +744,7 @@ function determineElementType(
     return 'modal';
   }
 
-  // Иконки / Icons
+  // Icons
   if (sizeCategory === 'icon') {
     if (node.type === 'VECTOR' || node.type === 'BOOLEAN_OPERATION') {
       if (nameLower.includes('logo')) {
@@ -769,24 +767,24 @@ function determineElementType(
     return 'token';
   }
 
-  // Составные компоненты / Composite components
-  // ВАЖНО: Проверяем имена компонентов ДО проверки сигналов макетов / Check component names BEFORE layout signals
+  // Composite components
+  // IMPORTANT: Check component names BEFORE layout signals
   if (nameLower.includes('card')) {
     return 'card';
   }
-  // Важно проверить list-item ДО list / Check list-item BEFORE list
+  // Check list-item BEFORE list
   if (nameLower.includes('listitem') || nameLower.includes('list-item') || nameLower.includes('list item') || nameLower.includes('row')) {
     return 'list-item';
   }
 
-  // Макеты / Layouts - ПОСЛЕ проверки list-item / AFTER list-item check
+  // Layouts - AFTER list-item check
   if (nameLower.includes('grid')) {
     return 'grid';
   }
   if (nameLower.includes('scroll')) {
     return 'scroll-view';
   }
-  // List check - только если это не list-item (проверили выше) / Only if not list-item (checked above)
+  // List check - only if not list-item (checked above)
   if (signals.isListLike || nameLower.includes('list')) {
     return 'list';
   }
@@ -809,7 +807,7 @@ function determineElementType(
     return 'section';
   }
 
-  // Базовые компоненты / Basic components
+  // Basic components
   if (nameLower.includes('button') || nameLower.includes('btn')) {
     return 'button';
   }
@@ -841,7 +839,7 @@ function determineElementType(
     return 'indicator';
   }
 
-  // Если есть дети-экземпляры, вероятно это составной компонент / If has instance children, probably composite
+  // If has instance children, probably composite
   if (childrenAnalysis.instanceCount > 2) {
     return 'card';
   }
@@ -850,8 +848,8 @@ function determineElementType(
 }
 
 /**
- * Определение рекомендуемого действия / Determine recommended action
- * На основе типа элемента и уверенности
+ * Determine recommended action
+ * Based on element type and confidence
  */
 function determineRecommendedAction(
   elementType: ElementType,
@@ -859,22 +857,22 @@ function determineRecommendedAction(
   isInstance: boolean,
   hasComponentId: boolean
 ): RecommendedAction {
-  // Низкая уверенность - спросить LLM / Low confidence - ask LLM
+  // Low confidence - ask LLM
   if (confidence < 0.5) {
     return 'ask_llm';
   }
 
-  // Системные элементы - пропустить / System elements - skip
+  // System elements - skip
   if (elementType === 'status-bar' || elementType === 'keyboard' || elementType === 'tab-bar-system') {
     return 'skip_system';
   }
 
-  // Экземпляр с валидным componentId - использовать существующий / Instance with valid componentId - use existing
+  // Instance with valid componentId - use existing
   if (isInstance && hasComponentId) {
     return 'use_existing';
   }
 
-  // Оверлеи / Overlays
+  // Overlays
   if (elementType === 'bottom-sheet' || elementType === 'action-sheet') {
     return 'generate_sheet';
   }
@@ -882,23 +880,23 @@ function determineRecommendedAction(
     return 'generate_modal';
   }
 
-  // Иконки / Icons
+  // Icons
   if (elementType === 'icon' || elementType === 'logo' || elementType === 'illustration') {
     return 'generate_icon';
   }
 
-  // Экраны / Screens
+  // Screens
   if (elementType === 'screen' || elementType === 'screen-fragment') {
     return 'generate_screen';
   }
 
-  // Все остальные компоненты / All other components
+  // All other components
   return 'generate_component';
 }
 
 /**
- * Генерация контекста анализа для LLM / Generate analysis context for LLM
- * Создает читаемое описание анализа для принятия решения
+ * Generate analysis context for LLM
+ * Creates human-readable analysis description for decision making
  */
 function generateAnalysisContext(analysis: ElementAnalysis): string {
   let context = `## Element Analysis: ${analysis.nodeName}\n\n`;
@@ -908,7 +906,7 @@ function generateAnalysisContext(analysis: ElementAnalysis): string {
   context += `**Detected Type**: ${analysis.elementType} (confidence: ${Math.round(analysis.confidence * 100)}%)\n`;
   context += `**Recommended Action**: ${analysis.recommendedAction}\n\n`;
 
-  // Информация о компоненте / Component info
+  // Component info
   if (analysis.isInstance) {
     context += `**Component Status**: Instance`;
     if (analysis.componentId) {
@@ -927,7 +925,7 @@ function generateAnalysisContext(analysis: ElementAnalysis): string {
 
   context += '\n';
 
-  // Сигналы паттернов / Pattern signals
+  // Pattern signals
   context += `### Pattern Signals\n\n`;
   const activeSignals = Object.entries(analysis.signals)
     .filter(([_, value]) => value)
@@ -942,7 +940,7 @@ function generateAnalysisContext(analysis: ElementAnalysis): string {
   }
   context += '\n';
 
-  // Анализ детей / Children analysis
+  // Children analysis
   context += `### Children Structure\n\n`;
   context += `- **Total**: ${analysis.childrenAnalysis.totalCount}\n`;
   if (analysis.childrenAnalysis.componentCount > 0) {
@@ -962,7 +960,7 @@ function generateAnalysisContext(analysis: ElementAnalysis): string {
   }
   context += '\n';
 
-  // Проблемы целостности / Integrity issues
+  // Integrity issues
   if (analysis.integrityIssues.length > 0) {
     context += `### ⚠️ Integrity Issues\n\n`;
     analysis.integrityIssues.forEach((issue, index) => {
@@ -971,7 +969,7 @@ function generateAnalysisContext(analysis: ElementAnalysis): string {
     });
   }
 
-  // Скриншот / Screenshot
+  // Screenshot
   if (analysis.screenshotPath) {
     context += `### Screenshot\n\n`;
     context += `![${analysis.nodeName}](${analysis.screenshotPath})\n\n`;
@@ -981,11 +979,11 @@ function generateAnalysisContext(analysis: ElementAnalysis): string {
 }
 
 // ============================================================================
-// Умное преобразование имён / Smart Name Conversion
+// Smart Name Conversion
 // ============================================================================
 
 /**
- * Словари для классификации слов в контексте UI / Word classification dictionaries for UI context
+ * Word classification dictionaries for UI context
  */
 const UI_VERBS = new Set([
   'edit', 'create', 'delete', 'add', 'remove', 'select', 'search', 'filter',
@@ -998,31 +996,31 @@ const UI_VERBS = new Set([
 ]);
 
 const UI_ADJECTIVES = new Set([
-  // Состояния / States
+  // States
   'empty', 'full', 'loading', 'loaded', 'active', 'inactive', 'disabled',
   'enabled', 'selected', 'unselected', 'checked', 'unchecked', 'open', 'closed',
   'expanded', 'collapsed', 'visible', 'hidden', 'focused', 'blurred',
   'valid', 'invalid', 'error', 'success', 'warning', 'pending', 'complete',
   'done', 'failed', 'cancelled', 'locked', 'unlocked',
-  // Размеры / Sizes
+  // Sizes
   'large', 'small', 'medium', 'mini', 'tiny', 'big', 'compact', 'wide', 'narrow',
-  // Позиции / Positions
+  // Positions
   'top', 'bottom', 'left', 'right', 'center', 'middle', 'start', 'end',
   'first', 'last', 'next', 'prev', 'previous',
-  // Приоритеты / Priorities
+  // Priorities
   'primary', 'secondary', 'tertiary', 'main', 'default', 'alt', 'alternative',
-  // Состояния UI / UI states
+  // UI states
   'new', 'old', 'recent', 'featured', 'popular', 'trending', 'hot', 'premium',
-  // Специфичные / Specific
+  // Specific
   'master', 'detail', 'overview', 'summary', 'preview', 'draft', 'final',
 ]);
 
 const UI_TYPES = new Set([
-  // Экраны / Screens
+  // Screens
   'screen', 'page', 'view', 'fragment',
-  // Оверлеи / Overlays
+  // Overlays
   'modal', 'dialog', 'sheet', 'popup', 'popover', 'tooltip', 'toast', 'alert',
-  // Компоненты / Components
+  // Components
   'card', 'button', 'btn', 'input', 'field', 'form', 'list', 'item', 'row',
   'cell', 'header', 'footer', 'nav', 'navbar', 'sidebar', 'tab', 'tabs',
   'menu', 'dropdown', 'select', 'picker', 'slider', 'switch', 'toggle',
@@ -1032,12 +1030,12 @@ const UI_TYPES = new Set([
 ]);
 
 /**
- * Тип слова для классификации / Word type for classification
+ * Word type for classification
  */
 type WordType = 'verb' | 'adjective' | 'noun' | 'type';
 
 /**
- * Классификация слова / Classify a word
+ * Classify a word
  */
 function classifyWord(word: string): WordType {
   const lower = word.toLowerCase();
@@ -1046,23 +1044,23 @@ function classifyWord(word: string): WordType {
   if (UI_ADJECTIVES.has(lower)) return 'adjective';
   if (UI_TYPES.has(lower)) return 'type';
 
-  // По умолчанию - существительное (сущность) / Default - noun (entity)
+  // Default - noun (entity)
   return 'noun';
 }
 
 /**
- * Умное преобразование имени компонента / Smart component name conversion
+ * Smart component name conversion
  *
- * Порядок слов: [Adjective] + [Verb] + [Noun] + [Type]
+ * Word order: [Adjective] + [Verb] + [Noun] + [Type]
  *
- * Примеры / Examples:
+ * Examples:
  * - "Search/emty" → "EmptySearchScreen"
  * - "Profile master" → "MasterProfileScreen"
  * - "edit_profile" → "EditProfileScreen"
  * - "Card_Visit" → "VisitCard"
  */
 function toSmartPascalCase(name: string, elementType?: ElementType): string {
-  // Очистка и разбиение на слова / Clean and split into words
+  // Clean and split into words
   const words = name
     .replace(/[^a-zA-Z0-9\s_\-/]/g, '')
     .split(/[\s_\-/]+/)
@@ -1071,13 +1069,13 @@ function toSmartPascalCase(name: string, elementType?: ElementType): string {
 
   if (words.length === 0) return 'Unknown';
 
-  // Классификация каждого слова / Classify each word
+  // Classify each word
   const classified = words.map(word => ({
     word,
     type: classifyWord(word),
   }));
 
-  // Группировка по типам / Group by types
+  // Group by types
   const adjectives: string[] = [];
   const verbs: string[] = [];
   const nouns: string[] = [];
@@ -1099,10 +1097,10 @@ function toSmartPascalCase(name: string, elementType?: ElementType): string {
     }
   });
 
-  // Определение суффикса типа на основе elementType / Determine type suffix based on elementType
+  // Determine type suffix based on elementType
   let typeSuffix = '';
   if (types.length === 0 && elementType) {
-    // Добавляем суффикс только для определённых типов / Add suffix only for certain types
+    // Add suffix only for certain types
     switch (elementType) {
       case 'screen':
       case 'screen-fragment':
@@ -1131,11 +1129,11 @@ function toSmartPascalCase(name: string, elementType?: ElementType): string {
       case 'list-item':
         typeSuffix = 'Item';
         break;
-      // Для остальных типов суффикс не добавляем / No suffix for other types
+      // No suffix for other types
     }
   }
 
-  // Сборка имени в правильном порядке / Assemble name in correct order
+  // Assemble name in correct order
   // [Adjective] + [Verb] + [Noun] + [Type]
   const orderedWords = [
     ...adjectives,
@@ -1144,12 +1142,12 @@ function toSmartPascalCase(name: string, elementType?: ElementType): string {
     ...types,
   ];
 
-  // Преобразование в PascalCase / Convert to PascalCase
+  // Convert to PascalCase
   const pascalName = orderedWords
     .map(w => w.charAt(0).toUpperCase() + w.slice(1))
     .join('');
 
-  // Добавление суффикса если нужно / Add suffix if needed
+  // Add suffix if needed
   if (typeSuffix && !pascalName.toLowerCase().includes(typeSuffix.toLowerCase())) {
     return pascalName + typeSuffix;
   }
@@ -1158,33 +1156,33 @@ function toSmartPascalCase(name: string, elementType?: ElementType): string {
 }
 
 /**
- * Построение URL для компонента / Build URL for component
- * Заменяет node-id в URL на ID компонента, сохраняя остальные параметры (m=dev и др.)
+ * Build URL for component
+ * Replaces node-id in URL with component ID, preserving other params (m=dev etc.)
  * Replaces node-id in URL with component ID, preserving other params (m=dev etc.)
  */
 function buildComponentUrl(figmaUrl: string | undefined, componentId: string): string {
   if (!figmaUrl) {
-    // Если URL не передан, создаём placeholder / If URL not provided, create placeholder
+    // If URL not provided, create placeholder
     return `[Figma URL with node-id=${componentId.replace(':', '-')}]`;
   }
 
-  // Нормализуем ID компонента (: → -) / Normalize component ID (: → -)
+  // Normalize component ID (: → -)
   const normalizedComponentId = componentId.replace(':', '-');
 
   try {
     const url = new URL(figmaUrl);
 
-    // Заменяем или добавляем node-id / Replace or add node-id
+    // Replace or add node-id
     url.searchParams.set('node-id', normalizedComponentId);
 
-    // Убеждаемся что m=dev присутствует / Ensure m=dev is present
+    // Ensure m=dev is present
     if (!url.searchParams.has('m')) {
       url.searchParams.set('m', 'dev');
     }
 
     return url.toString();
   } catch {
-    // Fallback для невалидных URL / Fallback for invalid URLs
+    // Fallback for invalid URLs
     if (figmaUrl.includes('node-id=')) {
       return figmaUrl.replace(/node-id=[^&]+/, `node-id=${normalizedComponentId}`);
     }
@@ -1194,8 +1192,8 @@ function buildComponentUrl(figmaUrl: string | undefined, componentId: string): s
 }
 
 /**
- * Генерация следующего шага для LLM / Generate next step for LLM
- * Определяет точное действие на основе анализа
+ * Generate next step for LLM
+ * Determines exact action based on analysis
  */
 function generateNextStep(
   analysis: Omit<ElementAnalysis, 'nextStep' | 'analysisContext'>,
@@ -1203,10 +1201,10 @@ function generateNextStep(
 ): NextStep {
   const { elementType, confidence, recommendedAction, isInstance, componentId, nodeName, signals } = analysis;
 
-  // Преобразуем имя в PascalCase с учётом типа слов / Convert name to PascalCase with word type awareness
+  // Convert name to PascalCase with word type awareness
   const screenName = toSmartPascalCase(nodeName, elementType);
 
-  // 1. Системные элементы - пропустить / System elements - skip
+  // 1. System elements - skip
   if (recommendedAction === 'skip_system') {
     return {
       action: 'skip',
@@ -1215,11 +1213,11 @@ function generateNextStep(
     };
   }
 
-  // 2. Экземпляр компонента - перенаправить на анализ родительского компонента
+  // 2. Component instance - redirect to analyze parent component
   // Component instance - redirect to analyze parent component
   if (recommendedAction === 'use_existing' && isInstance && componentId) {
     const componentUrl = buildComponentUrl(figmaUrl, componentId);
-    const componentName = toSmartPascalCase(nodeName, undefined); // Без суффикса типа для компонента
+    const componentName = toSmartPascalCase(nodeName, undefined); // Without type suffix for component
 
     return {
       action: 'call_tool',
@@ -1234,21 +1232,21 @@ function generateNextStep(
     };
   }
 
-  // 3. Низкая уверенность - спросить пользователя / Low confidence - ask user
+  // 3. Low confidence - ask user
   if (recommendedAction === 'ask_llm' || confidence < 0.5) {
-    // Определяем возможные варианты на основе сигналов / Determine options based on signals
+    // Determine options based on signals
     const options: ChoiceOption[] = [];
 
     if (signals.hasModalOverlay || signals.hasDragHandle) {
       options.push({
         value: 'bottom-sheet',
         label: 'Bottom Sheet',
-        description: 'Выдвижная панель снизу с drag handle. Используется для фильтров, деталей, выбора опций.',
+        description: 'Bottom drawer with drag handle. Used for filters, details, option selection.',
       });
       options.push({
         value: 'modal',
         label: 'Modal Dialog',
-        description: 'Модальное окно по центру экрана. Используется для подтверждений, алертов, форм.',
+        description: 'Modal dialog centered on screen. Used for confirmations, alerts, forms.',
       });
     }
 
@@ -1256,20 +1254,20 @@ function generateNextStep(
       options.push({
         value: 'form',
         label: 'Form Component',
-        description: 'Форма с полями ввода и валидацией. Генерируется с react-hook-form + Zod.',
+        description: 'Form with input fields and validation. Generated with react-hook-form + Zod.',
       });
     }
 
     options.push({
       value: 'screen',
       label: 'Full Screen',
-      description: 'Полноценный экран приложения с навигацией.',
+      description: 'Full application screen with navigation.',
     });
 
     options.push({
       value: 'component',
       label: 'Reusable Component',
-      description: 'Переиспользуемый компонент для использования на других экранах.',
+      description: 'Reusable component for use on other screens.',
     });
 
     return {
@@ -1280,7 +1278,7 @@ function generateNextStep(
     };
   }
 
-  // 4. Высокая уверенность - вызвать соответствующий инструмент / High confidence - call appropriate tool
+  // 4. High confidence - call appropriate tool
   if (recommendedAction === 'generate_screen') {
     return {
       action: 'call_tool',
@@ -1328,7 +1326,7 @@ function generateNextStep(
     };
   }
 
-  // 5. Компонент по умолчанию / Default component
+  // 5. Default component
   return {
     action: 'call_tool',
     tool: 'generate_screen',
@@ -1342,8 +1340,8 @@ function generateNextStep(
 }
 
 /**
- * Основная функция анализа элемента / Main element analysis function
- * Выполняет полный анализ узла Figma и возвращает рекомендации
+ * Main element analysis function
+ * Performs full Figma node analysis and returns recommendations
  */
 export async function analyzeElement(
   node: FigmaNodeFull,
@@ -1351,34 +1349,34 @@ export async function analyzeElement(
   screenshotPath?: string,
   figmaUrl?: string
 ): Promise<ElementAnalysis> {
-  // Получение размеров / Get dimensions
+  // Get dimensions
   const dimensions = node.absoluteBoundingBox
     ? { width: node.absoluteBoundingBox.width, height: node.absoluteBoundingBox.height }
     : { width: 0, height: 0 };
 
-  // Определение, является ли вариантом / Determine if has variants
+  // Determine if has variants
   const hasVariants = !!(node.componentPropertyDefinitions && Object.keys(node.componentPropertyDefinitions).length > 0);
 
-  // Определение, является ли экземпляром / Determine if is instance
+  // Determine if is instance
   const isInstance = node.type === 'INSTANCE';
   const componentId = node.componentId;
 
-  // Обнаружение паттернов / Detect patterns
+  // Detect patterns
   const signals = detectPatterns(node);
 
-  // Анализ детей / Analyze children
+  // Analyze children
   const childrenAnalysis = analyzeChildren(node);
 
-  // Проверка целостности / Check integrity
+  // Check integrity
   const integrityIssues = checkComponentIntegrity(node);
 
-  // Классификация по размерам / Classify by dimensions
+  // Classify by dimensions
   const sizeCategory = classifyByDimensions(dimensions.width, dimensions.height);
 
-  // Определение типа элемента / Determine element type
+  // Determine element type
   const elementType = determineElementType(node, signals, sizeCategory, childrenAnalysis);
 
-  // Расчет уверенности / Calculate confidence
+  // Calculate confidence
   const confidence = calculateConfidence(
     elementType,
     signals,
@@ -1388,7 +1386,7 @@ export async function analyzeElement(
     childrenAnalysis
   );
 
-  // Определение рекомендуемого действия / Determine recommended action
+  // Determine recommended action
   const recommendedAction = determineRecommendedAction(
     elementType,
     confidence,
@@ -1396,7 +1394,7 @@ export async function analyzeElement(
     !!componentId
   );
 
-  // Создание частичного результата для генерации nextStep / Create partial result for nextStep generation
+  // Create partial result for nextStep generation
   const partialAnalysis = {
     elementType,
     confidence,
@@ -1413,17 +1411,17 @@ export async function analyzeElement(
     screenshotPath: includeScreenshot ? screenshotPath : undefined,
   };
 
-  // Генерация следующего шага / Generate next step
+  // Generate next step
   const nextStep = generateNextStep(partialAnalysis, figmaUrl);
 
-  // Создание полного результата анализа / Create complete analysis result
+  // Create complete analysis result
   const analysis: ElementAnalysis = {
     ...partialAnalysis,
     nextStep,
     analysisContext: '', // Will be filled below
   };
 
-  // Генерация контекста анализа / Generate analysis context
+  // Generate analysis context
   analysis.analysisContext = generateAnalysisContext(analysis);
 
   return analysis;

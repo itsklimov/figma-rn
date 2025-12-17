@@ -2,56 +2,53 @@ import { compareTwoStrings } from 'string-similarity';
 import { toCamelCase, capitalize } from './smart-namer.js';
 
 /**
- * Интерфейс для результата обнаружения паттерна списка
  * Interface for list pattern detection result
  */
 export interface ListPatternDetection {
-  /** Тип списка: FlatList, ScrollView, SectionList или none */
+  /** List type: FlatList, ScrollView, SectionList or none */
   type: 'FlatList' | 'ScrollView' | 'SectionList' | 'none';
-  /** Уверенность в обнаружении (0-1) */
+  /** Detection confidence (0-1) */
   confidence: number;
-  /** Количество элементов в повторяющемся паттерне */
+  /** Number of items in repeating pattern */
   itemCount: number;
-  /** Структура элемента списка (извлеченные свойства) */
+  /** List item structure (extracted properties) */
   itemStructure: Record<string, any>;
-  /** Ориентация списка: вертикальная или горизонтальная */
+  /** List orientation: vertical or horizontal */
   orientation: 'vertical' | 'horizontal';
-  /** Наличие заголовка списка */
+  /** Has list header */
   hasHeader: boolean;
-  /** Наличие футера списка */
+  /** Has list footer */
   hasFooter: boolean;
-  /** Расстояние между элементами (gap) */
+  /** Gap between items */
   gap: number | null;
-  /** Предложенное имя типа элемента для TypeScript */
+  /** Suggested item type name for TypeScript */
   suggestedItemTypeName: string;
-  /** Узлы, которые были идентифицированы как элементы списка */
+  /** Nodes identified as list items */
   itemNodes: any[];
-  /** Узел заголовка (если есть) */
+  /** Header node (if exists) */
   headerNode?: any;
-  /** Узел футера (если есть) */
+  /** Footer node (if exists) */
   footerNode?: any;
 }
 
 /**
- * Интерфейс для настроек обнаружения паттернов
  * Interface for pattern detection settings
  */
 export interface DetectionOptions {
-  /** Минимальное количество элементов для определения паттерна (по умолчанию 3) */
+  /** Minimum number of items to define a pattern (default 3) */
   minItemCount?: number;
-  /** Минимальная уверенность в структурном сходстве (по умолчанию 0.7) */
+  /** Minimum confidence in structural similarity (default 0.7) */
   minConfidence?: number;
-  /** Учитывать порядок элементов при обнаружении паттерна */
+  /** Consider item order when detecting pattern */
   strictOrder?: boolean;
 }
 
 /**
- * Обнаруживает повторяющиеся паттерны в Figma узлах
  * Detects repeating patterns in Figma nodes
  *
- * @param node - Figma узел для анализа
- * @param options - Настройки обнаружения
- * @returns Результат обнаружения паттерна списка
+ * @param node - Figma node to analyze
+ * @param options - Detection settings
+ * @returns List pattern detection result
  */
 export function detectListPattern(
   node: any,
@@ -63,7 +60,6 @@ export function detectListPattern(
     strictOrder = false,
   } = options;
 
-  // Инициализация результата по умолчанию
   // Initialize default result
   const defaultResult: ListPatternDetection = {
     type: 'none',
@@ -78,7 +74,6 @@ export function detectListPattern(
     itemNodes: [],
   };
 
-  // Проверяем наличие дочерних элементов
   // Check for children
   if (!node.children || !Array.isArray(node.children) || node.children.length < minItemCount) {
     return defaultResult;
@@ -86,20 +81,16 @@ export function detectListPattern(
 
   const children = node.children;
 
-  // Определяем ориентацию на основе layoutMode
   // Determine orientation based on layoutMode
   const orientation: 'vertical' | 'horizontal' =
     node.layoutMode === 'HORIZONTAL' ? 'horizontal' : 'vertical';
 
-  // Извлекаем gap из itemSpacing
   // Extract gap from itemSpacing
   const gap = node.itemSpacing !== undefined ? node.itemSpacing : null;
 
-  // Анализируем структуру дочерних элементов
   // Analyze children structure
   const childStructures = children.map((child: any) => extractNodeStructure(child));
 
-  // Ищем повторяющийся паттерн
   // Find repeating pattern
   const patternAnalysis = analyzeRepeatingPattern(
     children,
@@ -113,14 +104,12 @@ export function detectListPattern(
     return defaultResult;
   }
 
-  // Определяем заголовок и футер
   // Determine header and footer
   const { headerNode, footerNode, itemNodes } = identifyHeaderFooter(
     children,
     patternAnalysis.itemIndices
   );
 
-  // Определяем тип списка
   // Determine list type
   const listType = determineListType(
     node,
@@ -128,7 +117,6 @@ export function detectListPattern(
     patternAnalysis.hasSectionHeaders
   );
 
-  // Генерируем имя типа элемента
   // Generate item type name
   const suggestedItemTypeName = generateItemTypeName(node, itemNodes[0]);
 
@@ -149,11 +137,10 @@ export function detectListPattern(
 }
 
 /**
- * Извлекает структуру узла для сравнения
  * Extracts node structure for comparison
  *
- * @param node - Figma узел
- * @returns Объект с ключевыми свойствами структуры
+ * @param node - Figma node
+ * @returns Object with key structure properties
  */
 function extractNodeStructure(node: any): Record<string, any> {
   const structure: Record<string, any> = {
@@ -164,7 +151,6 @@ function extractNodeStructure(node: any): Record<string, any> {
     layoutMode: node.layoutMode || 'NONE',
   };
 
-  // Добавляем информацию о дочерних типах
   // Add child types information
   if (node.children && node.children.length > 0) {
     structure.childTypes = node.children.map((child: any) => child.type).sort();
@@ -177,15 +163,14 @@ function extractNodeStructure(node: any): Record<string, any> {
 }
 
 /**
- * Анализирует дочерние элементы на наличие повторяющегося паттерна
  * Analyzes children for repeating pattern
  *
- * @param children - Массив дочерних узлов
- * @param structures - Массив структур узлов
- * @param minItemCount - Минимальное количество элементов
- * @param minConfidence - Минимальная уверенность
- * @param strictOrder - Строгий порядок
- * @returns Результат анализа паттерна
+ * @param children - Array of child nodes
+ * @param structures - Array of node structures
+ * @param minItemCount - Minimum number of items
+ * @param minConfidence - Minimum confidence
+ * @param strictOrder - Strict order
+ * @returns Pattern analysis result
  */
 function analyzeRepeatingPattern(
   children: any[],
@@ -208,32 +193,26 @@ function analyzeRepeatingPattern(
     hasSectionHeaders: false,
   };
 
-  // Проверяем похожесть имен (Item 1, Item 2, Card, Card Copy и т.д.)
-  // Check name similarity patterns
+  // Check name similarity patterns (Item 1, Item 2, Card, Card Copy, etc.)
   const nameSimilarity = analyzeNamePatterns(children);
 
-  // Группируем похожие структуры
   // Group similar structures
   const groups = groupSimilarStructures(structures, minConfidence);
 
-  // Находим самую большую группу
   // Find the largest group
   const largestGroup = groups.reduce(
     (max, group) => (group.indices.length > max.indices.length ? group : max),
     { indices: [], confidence: 0 }
   );
 
-  // Проверяем, достаточно ли элементов в группе
   // Check if group has enough items
   if (largestGroup.indices.length < minItemCount) {
     return result;
   }
 
-  // Проверяем на наличие секционных заголовков
   // Check for section headers
   const hasSectionHeaders = detectSectionHeaders(children, largestGroup.indices);
 
-  // Вычисляем итоговую уверенность
   // Calculate final confidence
   const structureConfidence = largestGroup.confidence;
   const nameConfidence = nameSimilarity.confidence;
@@ -253,12 +232,11 @@ function analyzeRepeatingPattern(
 }
 
 /**
- * Группирует структуры по сходству
  * Groups structures by similarity
  *
- * @param structures - Массив структур узлов
- * @param minConfidence - Минимальная уверенность для группировки
- * @returns Массив групп с индексами и уверенностью
+ * @param structures - Array of node structures
+ * @param minConfidence - Minimum confidence for grouping
+ * @returns Array of groups with indices and confidence
  */
 function groupSimilarStructures(
   structures: Record<string, any>[],
@@ -269,7 +247,6 @@ function groupSimilarStructures(
   for (let i = 0; i < structures.length; i++) {
     let addedToGroup = false;
 
-    // Проверяем существующие группы
     // Check existing groups
     for (const group of groups) {
       const referenceStructure = structures[group.indices[0]];
@@ -277,13 +254,12 @@ function groupSimilarStructures(
 
       if (similarity >= minConfidence) {
         group.indices.push(i);
-        group.confidence = (group.confidence + similarity) / 2; // Усредняем уверенность
+        group.confidence = (group.confidence + similarity) / 2; // Average confidence
         addedToGroup = true;
         break;
       }
     }
 
-    // Создаем новую группу, если элемент не подошел ни к одной
     // Create new group if item doesn't fit any existing group
     if (!addedToGroup) {
       groups.push({ indices: [i], confidence: 1.0 });
@@ -294,12 +270,11 @@ function groupSimilarStructures(
 }
 
 /**
- * Вычисляет сходство между двумя структурами
  * Calculates similarity between two structures
  *
- * @param struct1 - Первая структура
- * @param struct2 - Вторая структура
- * @returns Коэффициент сходства (0-1)
+ * @param struct1 - First structure
+ * @param struct2 - Second structure
+ * @returns Similarity coefficient (0-1)
  */
 function calculateStructureSimilarity(
   struct1: Record<string, any>,
@@ -308,7 +283,6 @@ function calculateStructureSimilarity(
   let matches = 0;
   let total = 0;
 
-  // Сравниваем основные свойства
   // Compare basic properties
   const keys = Array.from(new Set([...Object.keys(struct1), ...Object.keys(struct2)]));
 
@@ -316,7 +290,6 @@ function calculateStructureSimilarity(
     total++;
 
     if (key === 'childTypes' || key === 'childNames') {
-      // Специальная обработка для массивов
       // Special handling for arrays
       if (
         Array.isArray(struct1[key]) &&
@@ -334,11 +307,10 @@ function calculateStructureSimilarity(
 }
 
 /**
- * Анализирует паттерны в именах узлов
  * Analyzes patterns in node names
  *
- * @param nodes - Массив узлов
- * @returns Результат анализа с уверенностью
+ * @param nodes - Array of nodes
+ * @returns Analysis result with confidence
  */
 function analyzeNamePatterns(nodes: any[]): { confidence: number } {
   const names = nodes.map((node) => node.name || '').filter((name) => name.length > 0);
@@ -347,8 +319,7 @@ function analyzeNamePatterns(nodes: any[]): { confidence: number } {
     return { confidence: 0 };
   }
 
-  // Проверяем на числовые суффиксы (Item 1, Item 2, Item 3)
-  // Check for numeric suffixes
+  // Check for numeric suffixes (Item 1, Item 2, Item 3)
   const numericPattern = /^(.+?)\s*(\d+)$/;
   const numericMatches = names.filter((name) => numericPattern.test(name));
 
@@ -356,8 +327,7 @@ function analyzeNamePatterns(nodes: any[]): { confidence: number } {
     return { confidence: 0.9 };
   }
 
-  // Проверяем на паттерн "Copy" (Card, Card Copy, Card Copy 2)
-  // Check for "Copy" pattern
+  // Check for "Copy" pattern (Card, Card Copy, Card Copy 2)
   const copyPattern = /^(.+?)(\s+Copy(\s+\d+)?)?$/;
   const copyMatches = names.filter((name) => {
     const match = name.match(copyPattern);
@@ -368,7 +338,6 @@ function analyzeNamePatterns(nodes: any[]): { confidence: number } {
     return { confidence: 0.8 };
   }
 
-  // Проверяем общее сходство имен
   // Check general name similarity
   const baseName = names[0];
   let totalSimilarity = 0;
@@ -387,15 +356,13 @@ function analyzeNamePatterns(nodes: any[]): { confidence: number } {
 }
 
 /**
- * Обнаруживает секционные заголовки в списке
  * Detects section headers in list
  *
- * @param children - Массив дочерних узлов
- * @param itemIndices - Индексы элементов списка
- * @returns true если найдены секционные заголовки
+ * @param children - Array of child nodes
+ * @param itemIndices - List item indices
+ * @returns true if section headers found
  */
 function detectSectionHeaders(children: any[], itemIndices: number[]): boolean {
-  // Ищем узлы между элементами списка, которые могут быть заголовками секций
   // Look for nodes between list items that could be section headers
   const nonItemIndices = children
     .map((_, index) => index)
@@ -405,7 +372,6 @@ function detectSectionHeaders(children: any[], itemIndices: number[]): boolean {
     return false;
   }
 
-  // Проверяем, являются ли эти узлы текстовыми и имеют ли признаки заголовков
   // Check if these nodes are text and have header characteristics
   const potentialHeaders = nonItemIndices.filter((index) => {
     const node = children[index];
@@ -419,18 +385,16 @@ function detectSectionHeaders(children: any[], itemIndices: number[]): boolean {
     );
   });
 
-  // Если найдено более одного потенциального заголовка, считаем что это SectionList
   // If more than one potential header found, consider it a SectionList
   return potentialHeaders.length > 1;
 }
 
 /**
- * Идентифицирует заголовок и футер списка
  * Identifies list header and footer
  *
- * @param children - Массив дочерних узлов
- * @param itemIndices - Индексы элементов списка
- * @returns Объект с заголовком, футером и элементами списка
+ * @param children - Array of child nodes
+ * @param itemIndices - List item indices
+ * @returns Object with header, footer and list items
  */
 function identifyHeaderFooter(
   children: any[],
@@ -444,7 +408,6 @@ function identifyHeaderFooter(
     itemNodes: itemIndices.map((index) => children[index]),
   } as { headerNode?: any; footerNode?: any; itemNodes: any[] };
 
-  // Проверяем, есть ли узел перед первым элементом списка
   // Check if there's a node before the first list item
   const firstItemIndex = Math.min(...itemIndices);
   if (firstItemIndex > 0) {
@@ -454,7 +417,6 @@ function identifyHeaderFooter(
     }
   }
 
-  // Проверяем, есть ли узел после последнего элемента списка
   // Check if there's a node after the last list item
   const lastItemIndex = Math.max(...itemIndices);
   if (lastItemIndex < children.length - 1) {
@@ -468,11 +430,10 @@ function identifyHeaderFooter(
 }
 
 /**
- * Определяет, является ли узел вероятным заголовком
  * Determines if node is likely a header
  *
- * @param node - Узел для проверки
- * @returns true если узел похож на заголовок
+ * @param node - Node to check
+ * @returns true if node looks like a header
  */
 function isLikelyHeader(node: any): boolean {
   const name = (node.name || '').toLowerCase();
@@ -485,11 +446,10 @@ function isLikelyHeader(node: any): boolean {
 }
 
 /**
- * Определяет, является ли узел вероятным футером
  * Determines if node is likely a footer
  *
- * @param node - Узел для проверки
- * @returns true если узел похож на футер
+ * @param node - Node to check
+ * @returns true if node looks like a footer
  */
 function isLikelyFooter(node: any): boolean {
   const name = (node.name || '').toLowerCase();
@@ -502,49 +462,43 @@ function isLikelyFooter(node: any): boolean {
 }
 
 /**
- * Определяет тип списка на основе анализа узлов
  * Determines list type based on node analysis
  *
- * @param parentNode - Родительский узел
- * @param itemNodes - Элементы списка
- * @param hasSectionHeaders - Наличие секционных заголовков
- * @returns Тип списка
+ * @param parentNode - Parent node
+ * @param itemNodes - List items
+ * @param hasSectionHeaders - Has section headers
+ * @returns List type
  */
 function determineListType(
   parentNode: any,
   itemNodes: any[],
   hasSectionHeaders: boolean
 ): 'FlatList' | 'ScrollView' | 'SectionList' {
-  // Если есть секционные заголовки, это SectionList
   // If section headers exist, it's a SectionList
   if (hasSectionHeaders) {
     return 'SectionList';
   }
 
-  // Если элементов мало (< 5), можно использовать ScrollView
   // If few items (< 5), ScrollView can be used
   if (itemNodes.length < 5) {
     return 'ScrollView';
   }
 
-  // По умолчанию FlatList для оптимальной производительности
   // Default to FlatList for optimal performance
   return 'FlatList';
 }
 
 /**
- * Генерирует имя типа элемента на основе узла
  * Generates item type name based on node
  *
- * @param parentNode - Родительский узел
- * @param itemNode - Узел элемента
- * @returns Имя типа в PascalCase
+ * @param parentNode - Parent node
+ * @param itemNode - Item node
+ * @returns Type name in PascalCase
  */
 function generateItemTypeName(parentNode: any, itemNode: any): string {
   const parentName = parentNode.name || '';
   const itemName = itemNode.name || '';
 
-  // Пытаемся извлечь базовое имя из имени элемента
   // Try to extract base name from item name
   const baseNameMatch = itemName.match(/^([A-Za-z]+)/);
   if (baseNameMatch) {
@@ -552,7 +506,6 @@ function generateItemTypeName(parentNode: any, itemNode: any): string {
     return capitalize(toCamelCase(baseName));
   }
 
-  // Используем имя родителя, если доступно
   // Use parent name if available
   if (parentName) {
     const cleanName = parentName.replace(/list|items|collection/gi, '').trim();
@@ -565,13 +518,12 @@ function generateItemTypeName(parentNode: any, itemNode: any): string {
 }
 
 /**
- * Генерирует код React Native для списка
  * Generates React Native code for list
  *
- * @param detection - Результат обнаружения паттерна
- * @param itemCode - Код для отображения элемента
- * @param screenName - Имя экрана/компонента
- * @returns Сгенерированный код
+ * @param detection - Pattern detection result
+ * @param itemCode - Code for rendering item
+ * @param screenName - Screen/component name
+ * @returns Generated code
  */
 export function generateListCode(
   detection: ListPatternDetection,
@@ -587,15 +539,12 @@ export function generateListCode(
 
   let code = '';
 
-  // Генерируем TypeScript интерфейс для элемента
   // Generate TypeScript interface for item
   code += `interface ${itemTypeName} {\n`;
   code += `  id: string;\n`;
-  code += `  // TODO: Добавьте свойства на основе вашей модели данных\n`;
-  code += `  // Add properties based on your data model\n`;
+  code += `  // TODO: Add properties based on your data model\n`;
   code += `}\n\n`;
 
-  // Генерируем mock данные
   // Generate mock data
   code += `const ${listName}: ${itemTypeName}[] = [\n`;
   for (let i = 0; i < Math.min(3, detection.itemCount); i++) {
@@ -603,17 +552,14 @@ export function generateListCode(
   }
   code += `];\n\n`;
 
-  // Генерируем renderItem функцию
   // Generate renderItem function
   code += `const renderItem = ({ item }: { item: ${itemTypeName} }) => (\n`;
   code += `  ${itemCode}\n`;
   code += `);\n\n`;
 
-  // Генерируем keyExtractor
   // Generate keyExtractor
   code += `const keyExtractor = (item: ${itemTypeName}) => item.id;\n\n`;
 
-  // Генерируем ItemSeparatorComponent если есть gap
   // Generate ItemSeparatorComponent if gap exists
   if (detection.gap !== null && detection.gap > 0) {
     code += `const ItemSeparator = () => (\n`;
@@ -621,15 +567,13 @@ export function generateListCode(
     code += `);\n\n`;
   }
 
-  // Генерируем ListEmptyComponent
   // Generate ListEmptyComponent
   code += `const ListEmptyComponent = () => (\n`;
   code += `  <View style={styles.emptyContainer}>\n`;
-  code += `    <Text style={styles.emptyText}>Нет данных для отображения</Text>\n`;
+  code += `    <Text style={styles.emptyText}>No data to display</Text>\n`;
   code += `  </View>\n`;
   code += `);\n\n`;
 
-  // Генерируем основной компонент списка
   // Generate main list component
   if (detection.type === 'FlatList') {
     code += `<FlatList\n`;
@@ -647,35 +591,33 @@ export function generateListCode(
 
     code += `  ListEmptyComponent={ListEmptyComponent}\n`;
 
-    // Добавляем pull-to-refresh паттерн
     // Add pull-to-refresh pattern
-    code += `  refreshing={false} // TODO: Подключите состояние загрузки\n`;
-    code += `  onRefresh={() => {}} // TODO: Реализуйте логику обновления\n`;
+    code += `  refreshing={false} // TODO: Connect loading state\n`;
+    code += `  onRefresh={() => {}} // TODO: Implement refresh logic\n`;
 
-    // Добавляем pagination hints
     // Add pagination hints
-    code += `  onEndReached={() => {}} // TODO: Реализуйте загрузку следующей страницы\n`;
+    code += `  onEndReached={() => {}} // TODO: Implement next page loading\n`;
     code += `  onEndReachedThreshold={0.5}\n`;
 
     if (detection.hasHeader && detection.headerNode) {
       code += `  ListHeaderComponent={() => (\n`;
-      code += `    // TODO: Реализуйте компонент заголовка\n`;
+      code += `    // TODO: Implement header component\n`;
       code += `    <View />\n`;
       code += `  )}\n`;
     }
 
     if (detection.hasFooter && detection.footerNode) {
       code += `  ListFooterComponent={() => (\n`;
-      code += `    // TODO: Реализуйте компонент футера\n`;
+      code += `    // TODO: Implement footer component\n`;
       code += `    <View />\n`;
       code += `  )}\n`;
     }
 
     code += `/>\n`;
   } else if (detection.type === 'SectionList') {
-    code += `// TODO: Реализуйте SectionList с секционными данными\n`;
+    code += `// TODO: Implement SectionList with sectioned data\n`;
     code += `<SectionList\n`;
-    code += `  sections={[]} // TODO: Структурируйте данные по секциям\n`;
+    code += `  sections={[]} // TODO: Structure data by sections\n`;
     code += `  renderItem={renderItem}\n`;
     code += `  renderSectionHeader={({ section }) => (\n`;
     code += `    <Text style={styles.sectionHeader}>{section.title}</Text>\n`;
@@ -696,12 +638,10 @@ export function generateListCode(
 }
 
 // ============================================================================
-// Вспомогательные функции
 // Helper functions
 // ============================================================================
 
 /**
- * Проверяет наличие текстовых дочерних элементов
  * Checks for text children
  */
 function hasTextChildren(node: any): boolean {
@@ -710,7 +650,6 @@ function hasTextChildren(node: any): boolean {
 }
 
 /**
- * Проверяет наличие изображений в fills
  * Checks for images in fills
  */
 function hasImageFills(node: any): boolean {
@@ -719,19 +658,17 @@ function hasImageFills(node: any): boolean {
 }
 
 /**
- * Нормализует имя узла для сравнения
  * Normalizes node name for comparison
  */
 function normalizeNodeName(name: string): string {
   return name
     .toLowerCase()
-    .replace(/\s+\d+$/g, '') // Удаляем числовые суффиксы
-    .replace(/\s+copy(\s+\d+)?$/gi, '') // Удаляем "Copy" суффиксы
+    .replace(/\s+\d+$/g, '') // Remove numeric suffixes
+    .replace(/\s+copy(\s+\d+)?$/gi, '') // Remove "Copy" suffixes
     .trim();
 }
 
 /**
- * Проверяет равенство двух массивов
  * Checks equality of two arrays
  */
 function arraysEqual(arr1: any[], arr2: any[]): boolean {

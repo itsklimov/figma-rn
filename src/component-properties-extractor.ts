@@ -1,6 +1,6 @@
 /**
- * Извлечение свойств компонентов и информации о вариантах из Figma
- * Отображение вариантов Figma на React пропсы
+ * Extract component properties and variant information from Figma
+ * Map Figma variants to React props
  */
 
 interface FigmaApiNode {
@@ -40,7 +40,7 @@ interface ComponentPropertyInfo {
 }
 
 /**
- * Преобразование строки в camelCase
+ * Convert string to camelCase
  */
 function camelCase(str: string): string {
   return str
@@ -49,7 +49,7 @@ function camelCase(str: string): string {
 }
 
 /**
- * Генерация предложений по React пропсам на основе свойств компонента Figma
+ * Generate suggested React props based on Figma component properties
  */
 function generateSuggestedProps(info: ComponentPropertyInfo): ComponentPropertyInfo['suggestedProps'] {
   const props: ComponentPropertyInfo['suggestedProps'] = [];
@@ -101,7 +101,7 @@ function generateSuggestedProps(info: ComponentPropertyInfo): ComponentPropertyI
 }
 
 /**
- * Извлечение информации о свойствах компонента из узла Figma
+ * Extract component property information from Figma node
  */
 export function extractComponentProperties(node: FigmaApiNode): ComponentPropertyInfo | null {
   if (node.type !== 'COMPONENT' && node.type !== 'INSTANCE') {
@@ -113,7 +113,7 @@ export function extractComponentProperties(node: FigmaApiNode): ComponentPropert
     isInstance: node.type === 'INSTANCE',
   };
 
-  // Извлечение определений свойств (для узлов COMPONENT)
+  // Extract property definitions (for COMPONENT nodes)
   if (node.componentPropertyDefinitions) {
     info.availableProperties = Object.entries(node.componentPropertyDefinitions).map(
       ([name, def]: [string, any]) => ({
@@ -125,7 +125,7 @@ export function extractComponentProperties(node: FigmaApiNode): ComponentPropert
     );
   }
 
-  // Извлечение выбранных значений (для узлов INSTANCE)
+  // Extract selected values (for INSTANCE nodes)
   if (node.componentPropertyReferences) {
     info.selectedValues = {};
     for (const [propName, value] of Object.entries(node.componentPropertyReferences)) {
@@ -133,14 +133,14 @@ export function extractComponentProperties(node: FigmaApiNode): ComponentPropert
     }
   }
 
-  // Генерация предложений по React пропсам
+  // Generate React prop suggestions
   info.suggestedProps = generateSuggestedProps(info);
 
   return info;
 }
 
 /**
- * Форматирование свойств компонента для LLM
+ * Format component properties for LLM
  */
 export function formatComponentProperties(info: ComponentPropertyInfo): string {
   let output = `## Component: ${info.componentName}\n\n`;
@@ -185,7 +185,7 @@ export function formatComponentProperties(info: ComponentPropertyInfo): string {
 }
 
 /**
- * Рекурсивный поиск всех экземпляров компонентов в дереве узлов
+ * Recursively find all component instances in node tree
  */
 export function findAllComponentInstances(node: FigmaApiNode): ComponentPropertyInfo[] {
   const results: ComponentPropertyInfo[] = [];

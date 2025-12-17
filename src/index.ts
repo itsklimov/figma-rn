@@ -2,9 +2,6 @@
 /**
  * Marafet Figma MCP Server v12.0 - SIMPLIFIED ONE-SHOT EDITION
  *
- * Единственный MCP сервер, который генерирует production-ready React Native код
- * из Figma URL в ОДНОМ вызове. Один URL = одна папка со всем содержимым.
- *
  * The only MCP server that generates production-ready React Native code
  * from a Figma URL in ONE call. One URL = one folder with all contents.
  */
@@ -18,7 +15,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { join } from 'path';
 
-// Основные модули ONE-SHOT генерации / Core ONE-SHOT generation modules
+// Core ONE-SHOT generation modules
 import { generateCompleteScreen, saveGeneratedFiles, extractCategorizationSignals, categorizeBySignals, type CategorizationSignals } from './one-shot-generator.js';
 import { generateCompleteFlow } from './flow-generator.js';
 import { generateProjectConfig, configExists } from './config-generator.js';
@@ -50,7 +47,7 @@ if (!FIGMA_TOKEN) {
   process.exit(1);
 }
 
-// Валидация формата токена
+// Token format validation
 if (FIGMA_TOKEN.length < 20 || !/^[a-zA-Z0-9_-]+$/.test(FIGMA_TOKEN)) {
   console.error('Error: FIGMA_TOKEN appears to be invalid');
   console.error('Expected format: 40+ alphanumeric characters (e.g., figd_xxxx...)');
@@ -72,7 +69,6 @@ const server = new Server(
 );
 
 // ═══════════════════════════════════════════════════════════════════
-// ТОЛЬКО 2 ИНСТРУМЕНТА - ВСЁ ЧТО НУЖНО ДЛЯ ONE-SHOT ГЕНЕРАЦИИ
 // ONLY 2 TOOLS - EVERYTHING YOU NEED FOR ONE-SHOT GENERATION
 // ═══════════════════════════════════════════════════════════════════
 
@@ -245,21 +241,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           };
         };
 
-        // Определяем корень проекта / Determine project root
+        // Determine project root
         const root = projectRoot || process.cwd();
 
         // ═══════════════════════════════════════════════════════════════
-        // Генерация уникального имени с дедупликацией по nodeId
         // Generate unique name with nodeId-based deduplication
         // ═══════════════════════════════════════════════════════════════
         const manifest = await getOrCreateManifest(root);
 
-        // Извлекаем nodeId из URL (конвертируем в канонический формат с двоеточием)
         // Extract nodeId from URL (convert to canonical colon format)
         const nodeIdMatch = figmaUrl.match(/node-id=([^&]+)/);
         const nodeId = nodeIdMatch ? decodeURIComponent(nodeIdMatch[1]).replace(/-/g, ':') : 'unknown';
 
-        // Проверяем, существует ли уже элемент с этим nodeId
         // Check if element with this nodeId already exists
         const categories: ManifestCategory[] = ['screens', 'modals', 'sheets', 'components', 'icons'];
         let existingEntry: ManifestEntry | null = null;
@@ -271,29 +264,27 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
         }
 
-        // Собираем все имена из всех категорий (кроме текущего nodeId)
         // Collect all names from all categories (except current nodeId)
         const existingNames = new Set<string>();
         for (const category of categories) {
           for (const [key, entry] of Object.entries(manifest[category])) {
-            if (key !== nodeId) {  // Исключаем текущий nodeId
+            if (key !== nodeId) {  // Exclude current nodeId
               existingNames.add(entry.name);
             }
           }
         }
 
-        // Определяем имя / Determine name
+        // Determine name
         let screenName: string;
         if (existingEntry && !providedName) {
-          // Если nodeId уже существует и пользователь не указал новое имя - используем старое
           // If nodeId exists and user didn't provide new name - reuse existing
           screenName = existingEntry.name;
           console.error(`\n🎯 [ONE-SHOT] Updating ${screenName} (same nodeId)...`);
         } else {
-          // Базовое имя: от пользователя или дефолтное / Base name: from user or default
+          // Base name: from user or default
           const baseName = providedName || 'Screen';
 
-          // Обеспечиваем уникальность / Ensure uniqueness
+          // Ensure uniqueness
           screenName = baseName;
           let counter = 2;
           while (existingNames.has(screenName)) {
@@ -315,13 +306,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         // ═══════════════════════════════════════════════════════════════
-        // Загрузка конфигурации / Load configuration
+        // Load configuration
         // ═══════════════════════════════════════════════════════════════
         const figmaConfig = await getOrCreateFigmaConfig(root);
         console.error(`📁 Config loaded from: ${root}/.figma/config.json`);
 
         // ═══════════════════════════════════════════════════════════════
-        // Категоризация на основе сигналов (ДО генерации) / Categorization before generation
+        // Categorization before generation
         // ═══════════════════════════════════════════════════════════════
         let category: ManifestCategory = 'screens';
         const categorizationUrlMatch = figmaUrl.match(/figma\.com\/(?:file|design)\/([a-zA-Z0-9]+).*node-id=([^&]+)/);
@@ -341,11 +332,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
         }
 
-        // Вычисляем outputFolder для прямого сохранения файлов / Calculate outputFolder for direct file saving
+        // Calculate outputFolder for direct file saving
         const outputFolder = join(root, '.figma', category, screenName);
         console.error(`📁 Output folder: ${outputFolder}`);
 
-        // Генерируем код / Generate code
+        // Generate code
         const result = await generateCompleteScreen(
           FIGMA_TOKEN,
           figmaUrl,
@@ -354,42 +345,39 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             generateTypes: options.generateTypes ?? true,
             generateHooks: options.generateHooks ?? true,
             detectAnimations: options.detectAnimations ?? false,
-            outputFolder,  // Прямое сохранение в локальную папку / Direct save to local folder
+            outputFolder,  // Direct save to local folder
             config: figmaConfig.theme?.colorsFile ? {
               framework: 'react-native',
               projectRoot: root,
               codeStyle: figmaConfig.codeStyle,
               theme: {
-                // Абсолютный путь к файлу цветов / Absolute path to colors file
+                // Absolute path to colors file
                 location: `${root}/${figmaConfig.theme.colorsFile}`,
                 type: figmaConfig.theme.type,
-                // Путь к основному файлу темы для spacing/radii/shadows
                 // Path to main theme file for spacing/radii/shadows
                 mainThemeLocation: figmaConfig.theme.mainThemeFile
                   ? `${root}/${figmaConfig.theme.mainThemeFile}`
                   : undefined,
-                // Путь к файлу типографики для spread syntax / Path to typography file for spread syntax
+                // Path to typography file for spread syntax
                 typographyFile: figmaConfig.theme.typographyFile,
               },
-              // Маппинги будут сгенерированы on-the-fly в code-generator-v2.ts
               // Mappings will be generated on-the-fly in code-generator-v2.ts
               mappings: {},
             } : {
               framework: 'react-native',
               codeStyle: figmaConfig.codeStyle,
-              // Маппинги будут сгенерированы on-the-fly в code-generator-v2.ts
               // Mappings will be generated on-the-fly in code-generator-v2.ts
               mappings: {},
             },
           }
         );
 
-        // Собираем весь код в один файл / Combine all code into one file
+        // Combine all code into one file
         const mainFile = result.files.find(f => f.type === 'screen') || result.files[0];
         const typesFile = result.files.find(f => f.type === 'types');
         const hooksFile = result.files.find(f => f.type === 'hooks');
 
-        // Объединяем код / Combine code
+        // Combine code
         let combinedCode = '';
         if (typesFile) {
           combinedCode += `// ============================================================================\n`;
@@ -408,10 +396,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         combinedCode += `// ============================================================================\n\n`;
         combinedCode += mainFile?.content || '';
 
-        // Определяем экспорты и зависимости / Determine exports and dependencies
+        // Determine exports and dependencies
         const exports = [screenName, `${screenName}Props`];
         if (typesFile) {
-          // Извлекаем имена типов из файла типов / Extract type names from types file
+          // Extract type names from types file
           const typeMatches = typesFile.content.match(/export\s+(?:interface|type)\s+(\w+)/g);
           if (typeMatches) {
             typeMatches.forEach(m => {
@@ -423,7 +411,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         const dependencies = result.summary.componentMatches || [];
 
-        // Извлекаем дизайн токены / Extract design tokens
+        // Extract design tokens
         const urlMatch = figmaUrl.match(/figma\.com\/(?:file|design)\/([a-zA-Z0-9]+).*node-id=([^&]+)/);
         let designTokens: DesignTokens | undefined;
         if (urlMatch) {
@@ -444,13 +432,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         // ═══════════════════════════════════════════════════════════════
-        // Маппинги цветов генерируются on-the-fly в code-generator-v2.ts
         // Color mappings are generated on-the-fly in code-generator-v2.ts
-        // НЕ сохраняем их в config.json - это делается каждый раз заново
         // DON'T save them to config.json - they are regenerated every time
         // ═══════════════════════════════════════════════════════════════
 
-        // Конвертируем изображения в AssetInfo / Convert images to AssetInfo
+        // Convert images to AssetInfo
         const assets: AssetInfo[] = (result.images || []).map(img => ({
           filename: img.suggestedFilename,
           type: img.category,
@@ -461,7 +447,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           dimensions: img.dimensions,
         }));
 
-        // Записываем файл в .figma/ / Write file to .figma/
+        // Write file to .figma/
         const genResult = await registerGeneration(
           root,
           figmaUrl,
@@ -479,8 +465,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             assets,
             screenshotPath: result.screenshotPath,
             tokens: designTokens,
-            // Новые поля метаданных / New metadata fields
-            figmaName: result.screenName, // Имя из Figma / Name from Figma
+            // New metadata fields
+            figmaName: result.screenName, // Name from Figma
             hierarchy: result.hierarchy,
             hiddenNodes: result.hiddenNodes,
             totalNodes: result.totalNodes,
@@ -490,16 +476,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
         );
 
-        // Ассеты уже сохранены напрямую в локальную папку / Assets already saved directly to local folder
+        // Assets already saved directly to local folder
         console.error(`   📦 Assets saved directly to: ${outputFolder}/assets/`);
 
-        // Форматируем ответ (метаданные, не код) / Format response (metadata, not code)
+        // Format response (metadata, not code)
         let response = `# 🎯 Generated: ${screenName}\n\n`;
 
-        // Основная информация / Main info
+        // Main info
         response += formatResultForLLM(genResult);
 
-        // Детали генерации / Generation details
+        // Generation details
         response += `\n## Generation Details\n\n`;
         response += `| Property | Value |\n`;
         response += `|----------|-------|\n`;
@@ -508,7 +494,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         response += `| **Has Animations** | ${result.summary.hasAnimations ? '✅' : '❌'} |\n`;
         response += `\n`;
 
-        // Обнаруженные паттерны / Detected patterns
+        // Detected patterns
         response += `## Detected Patterns\n\n`;
         const d = result.detections;
         if (d.list) response += `- **List**: ${d.list.type} (${d.list.itemCount} items)\n`;
@@ -517,12 +503,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (d.dataModels.length > 0) response += `- **Data Models**: ${d.dataModels.map(m => m.name).join(', ')}\n`;
         response += `\n`;
 
-        // Дизайн токены / Design tokens
+        // Design tokens
         if (designTokens) {
           response += formatTokensForLLM(designTokens);
         }
 
-        // Изображения / Images
+        // Images
         if (result.images && result.images.length > 0) {
           response += `## 🖼️ Images (${result.images.length})\n\n`;
           for (const img of result.images) {
@@ -532,14 +518,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           response += `\n`;
         }
 
-        // Скриншот / Screenshot
+        // Screenshot
         if (genResult.screenshotPath) {
           response += `## 📸 Screenshot\n\n`;
           response += `\`${genResult.screenshotPath}\`\n\n`;
         }
 
         // ═══════════════════════════════════════════════════════════════
-        // Review Checklist для валидации кода
         // Review Checklist for code validation
         // ═══════════════════════════════════════════════════════════════
         response += `## 📋 Review Checklist\n\n`;
@@ -547,7 +532,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         response += `| Visual Element | Type | Status |\n`;
         response += `|----------------|------|--------|\n`;
 
-        // Изображения и иконки / Images and icons
+        // Images and icons
         if (result.images && result.images.length > 0) {
           for (const img of result.images) {
             const status = img.downloadedPath ? '✅ Extracted' : '❌ Missing';
@@ -556,19 +541,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
         }
 
-        // Поля формы / Form fields
+        // Form fields
         if (d.form && d.form.fields.length > 0) {
           for (const field of d.form.fields) {
             response += `| ${field.label || field.name} | form-field (${field.type}) | ✅ Detected |\n`;
           }
         }
 
-        // Элементы списка / List items
+        // List items
         if (d.list && d.list.itemCount > 0) {
           response += `| List items | list-pattern (${d.list.type}) | ✅ Detected (${d.list.itemCount} items) |\n`;
         }
 
-        // Модели данных / Data models
+        // Data models
         if (d.dataModels && d.dataModels.length > 0) {
           for (const model of d.dataModels) {
             response += `| ${model.name} data model | data-structure | ✅ Generated |\n`;
@@ -617,7 +602,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
         );
 
-        // Форматируем ответ / Format response
+        // Format response
         let response = `# 🚀 FLOW Generation Complete\n\n`;
 
         response += `## Summary\n\n`;
@@ -629,7 +614,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         response += `| **Duration** | ${result.summary.duration}ms |\n`;
         response += `\n`;
 
-        // Показываем типы экранов / Show screen types
+        // Show screen types
         if (Object.keys(result.summary.screenTypes).length > 0) {
           response += `### Screen Types\n\n`;
           for (const [type, count] of Object.entries(result.summary.screenTypes)) {
@@ -638,7 +623,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           response += `\n`;
         }
 
-        // Показываем каждый экран / Show each screen
+        // Show each screen
         response += `## Generated Screens\n\n`;
         for (const screen of result.screens) {
           response += `### ${screen.status === 'success' ? '✅' : '❌'} ${screen.screenName}\n\n`;
@@ -654,7 +639,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
           response += `\n`;
 
-          // Показываем код первого файла (основной компонент) / Show first file code (main component)
+          // Show first file code (main component)
           if (screen.files.length > 0) {
             const mainFile = screen.files[0];
             response += `**${mainFile.path}**:\n\n`;
@@ -662,25 +647,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
         }
 
-        // Показываем navigation types / Show navigation types
+        // Show navigation types
         if (result.navigation.types) {
           response += `## Navigation Types\n\n`;
           response += `\`\`\`typescript\n${result.navigation.types}\n\`\`\`\n\n`;
         }
 
-        // Показываем navigator / Show navigator
+        // Show navigator
         if (result.navigation.navigator) {
           response += `## Navigator Component\n\n`;
           response += `\`\`\`typescript\n${result.navigation.navigator}\n\`\`\`\n\n`;
         }
 
-        // Показываем shared types / Show shared types
+        // Show shared types
         if (result.sharedTypes) {
           response += `## Shared Types\n\n`;
           response += `\`\`\`typescript\n${result.sharedTypes}\n\`\`\`\n\n`;
         }
 
-        // Показываем index file / Show index file
+        // Show index file
         if (result.indexFile) {
           response += `## Index File (Barrel Export)\n\n`;
           response += `\`\`\`typescript\n${result.indexFile}\n\`\`\`\n\n`;

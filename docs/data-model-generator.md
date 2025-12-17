@@ -2,48 +2,43 @@
 
 **File**: `src/data-model-generator.ts`
 
-## Описание / Description
-
-Модуль для автоматического вывода моделей данных и API типов из Figma экранов. Анализирует содержимое экрана и генерирует:
-- TypeScript интерфейсы для данных
-- React Query хуки для загрузки данных
-- API endpoint структуру
+## Description
 
 Module for automatic data model and API type inference from Figma screens. Analyzes screen content and generates:
 - TypeScript interfaces for data
 - React Query hooks for data fetching
 - API endpoint structure
 
-## Возможности / Features
+## Features
 
-### 1. Определение типа экрана / Screen Type Detection
+### 1. Screen Type Detection
 
-Автоматически определяет тип экрана по названию:
-- **List screens** (списки) → генерирует массивы данных
-- **Detail screens** (детали) → генерирует одиночные объекты
-- **Form screens** (формы) → генерирует Input и Output типы
-- **Profile screens** (профиль) → генерирует User модель
+Automatically detects screen type by name:
+- **List screens** → generates data arrays
+- **Detail screens** → generates single objects
+- **Form screens** → generates Input and Output types
+- **Profile screens** → generates User model
 
-### 2. Эвристики определения сущностей / Entity Detection Heuristics
+### 2. Entity Detection Heuristics
 
-Автоматически определяет специфические сущности:
-- **Product** (товар) → поля: id, name, description, price, image, category, inStock
-- **Order** (заказ) → поля: id, orderNumber, status, total, createdAt, customerId
-- **Visit** (визит) → поля: id, date, time, serviceId, masterId, status, price
-- **Master** (мастер) → поля: id, name, specialty, rating, avatar, experience
-- **User** (пользователь) → поля: id, name, email, phone, avatar, createdAt
+Automatically detects specific entities:
+- **Product** → fields: id, name, description, price, image, category, inStock
+- **Order** → fields: id, orderNumber, status, total, createdAt, customerId
+- **Visit** → fields: id, date, time, serviceId, masterId, status, price
+- **Master** → fields: id, name, specialty, rating, avatar, experience
+- **User** → fields: id, name, email, phone, avatar, createdAt
 
-### 3. Определение типов полей / Field Type Inference
+### 3. Field Type Inference
 
-Анализирует текстовое содержимое для определения типов:
-- **number**: цены (1990 ₽), рейтинги (4.8), счётчики (123)
-- **Date**: даты (15 ноя 2023, 2023-11-15)
-- **string**: имена, описания, статусы, время (14:30)
-- **boolean**: флаги (true/false, isActive, hasAccess)
+Analyzes text content to determine types:
+- **number**: prices (1990 ₽), ratings (4.8), counters (123)
+- **Date**: dates (Nov 15 2023, 2023-11-15)
+- **string**: names, descriptions, statuses, time (14:30)
+- **boolean**: flags (true/false, isActive, hasAccess)
 
-### 4. Генерация API endpoints / API Endpoint Generation
+### 4. API Endpoint Generation
 
-Автоматически создаёт правильные REST endpoints:
+Automatically creates correct REST endpoints:
 - List screens → `/api/products`
 - Detail screens → `/api/product/:id`
 - Create forms → `/api/product` (POST)
@@ -51,7 +46,7 @@ Module for automatic data model and API type inference from Figma screens. Analy
 
 ## API
 
-### Интерфейсы / Interfaces
+### Interfaces
 
 ```typescript
 interface DataField {
@@ -78,19 +73,19 @@ interface APIHook {
 }
 ```
 
-### Функции / Functions
+### Functions
 
 #### `inferDataModels(node: any, screenName: string): DataModel[]`
 
-Анализирует Figma узел и выводит модели данных.
+Analyzes Figma node and infers data models.
 
-**Параметры**:
-- `node` - Figma узел для анализа
-- `screenName` - Название экрана (например, "ProductsListScreen")
+**Parameters**:
+- `node` - Figma node to analyze
+- `screenName` - Screen name (e.g., "ProductsListScreen")
 
-**Возвращает**: Массив моделей данных
+**Returns**: Array of data models
 
-**Пример**:
+**Example**:
 ```typescript
 const models = inferDataModels(figmaNode, 'ProductsListScreen');
 // [{
@@ -107,14 +102,14 @@ const models = inferDataModels(figmaNode, 'ProductsListScreen');
 
 #### `generateTypeDefinitions(models: DataModel[]): string`
 
-Генерирует TypeScript интерфейсы из моделей данных.
+Generates TypeScript interfaces from data models.
 
-**Параметры**:
-- `models` - Массив моделей данных
+**Parameters**:
+- `models` - Array of data models
 
-**Возвращает**: TypeScript код интерфейсов
+**Returns**: TypeScript interface code
 
-**Пример**:
+**Example**:
 ```typescript
 const types = generateTypeDefinitions(models);
 // export interface Product {
@@ -133,15 +128,15 @@ const types = generateTypeDefinitions(models);
 
 #### `generateReactQueryHooks(models: DataModel[], screenName: string): string`
 
-Генерирует React Query хуки для загрузки данных.
+Generates React Query hooks for data loading.
 
-**Параметры**:
-- `models` - Массив моделей данных
-- `screenName` - Название экрана
+**Parameters**:
+- `models` - Array of data models
+- `screenName` - Screen name
 
-**Возвращает**: TypeScript код с React Query хуками
+**Returns**: TypeScript code with React Query hooks
 
-**Пример**:
+**Example**:
 ```typescript
 const hooks = generateReactQueryHooks(models, 'ProductsListScreen');
 // export function useProducts() {
@@ -157,24 +152,24 @@ const hooks = generateReactQueryHooks(models, 'ProductsListScreen');
 
 #### `inferAPIEndpoint(screenName: string, modelName: string): string`
 
-Выводит API endpoint из названия экрана и модели.
+Infers API endpoint from screen and model names.
 
-**Параметры**:
-- `screenName` - Название экрана
-- `modelName` - Название модели
+**Parameters**:
+- `screenName` - Screen name
+- `modelName` - Model name
 
-**Возвращает**: API endpoint
+**Returns**: API endpoint
 
-**Пример**:
+**Example**:
 ```typescript
 inferAPIEndpoint('ProductsListScreen', 'Product');  // "/api/products"
 inferAPIEndpoint('ProductDetailsScreen', 'Product'); // "/api/product/:id"
 inferAPIEndpoint('CreateProductForm', 'Product');   // "/api/product"
 ```
 
-## Примеры использования / Usage Examples
+## Usage Examples
 
-### Пример 1: Экран списка продуктов
+### Example 1: Product List Screen
 
 ```typescript
 import { inferDataModels, generateTypeDefinitions, generateReactQueryHooks } from './data-model-generator';
@@ -195,27 +190,27 @@ const productListNode = {
   ],
 };
 
-// 1. Вывести модели данных
+// 1. Infer data models
 const models = inferDataModels(productListNode, 'ProductsListScreen');
 
-// 2. Сгенерировать TypeScript интерфейсы
+// 2. Generate TypeScript interfaces
 const types = generateTypeDefinitions(models);
 
-// 3. Сгенерировать React Query хуки
+// 3. Generate React Query hooks
 const hooks = generateReactQueryHooks(models, 'ProductsListScreen');
 
 console.log(types);
 console.log(hooks);
 ```
 
-### Пример 2: Форма создания визита
+### Example 2: Visit Creation Form
 
 ```typescript
 const visitFormNode = {
   type: 'FRAME',
   name: 'CreateVisitForm',
   children: [
-    { type: 'TEXT', name: 'Date', characters: '20 дек 2023' },
+    { type: 'TEXT', name: 'Date', characters: 'Dec 20 2023' },
     { type: 'TEXT', name: 'Time', characters: '14:30' },
     { type: 'TEXT', name: 'ServiceId', characters: 'service-123' },
     { type: 'TEXT', name: 'Price', characters: '2500 ₽' },
@@ -223,43 +218,43 @@ const visitFormNode = {
 };
 
 const models = inferDataModels(visitFormNode, 'CreateVisitForm');
-// Создаёт два типа:
-// - VisitInput (без id, для создания)
-// - Visit (с id, полная модель)
+// Creates two types:
+// - VisitInput (without id, for creation)
+// - Visit (with id, full model)
 
 const types = generateTypeDefinitions(models);
 const hooks = generateReactQueryHooks(models, 'CreateVisitForm');
-// Генерирует хуки:
-// - useCreateVisit() - для создания
-// - useUpdateVisit() - для обновления
-// - useDeleteVisit() - для удаления
+// Generates hooks:
+// - useCreateVisit() - for creation
+// - useUpdateVisit() - for update
+// - useDeleteVisit() - for deletion
 ```
 
-### Пример 3: Экран профиля
+### Example 3: Profile Screen
 
 ```typescript
 const profileNode = {
   type: 'FRAME',
   name: 'ProfileScreen',
   children: [
-    { type: 'TEXT', name: 'Name', characters: 'Иван Иванов' },
-    { type: 'TEXT', name: 'Email', characters: 'ivan@example.com' },
-    { type: 'TEXT', name: 'Phone', characters: '+7 900 123-45-67' },
+    { type: 'TEXT', name: 'Name', characters: 'John Smith' },
+    { type: 'TEXT', name: 'Email', characters: 'john@example.com' },
+    { type: 'TEXT', name: 'Phone', characters: '+1 900 123-4567' },
   ],
 };
 
 const models = inferDataModels(profileNode, 'ProfileScreen');
-// Автоматически создаёт модель User с полями:
+// Automatically creates User model with fields:
 // id, name, email, phone, avatar, createdAt
 
 const hooks = generateReactQueryHooks(models, 'ProfileScreen');
-// Генерирует хук:
-// - useUser(id) - для получения профиля пользователя
+// Generates hook:
+// - useUser(id) - for getting user profile
 ```
 
-## Интеграция с Figma MCP Server
+## Figma MCP Server Integration
 
-Модуль можно интегрировать как новый инструмент MCP:
+Module can be integrated as a new MCP tool:
 
 ```typescript
 {
@@ -292,40 +287,40 @@ const hooks = generateReactQueryHooks(models, 'ProfileScreen');
 }
 ```
 
-## Тестирование / Testing
+## Testing
 
-Запустить примеры:
+Run examples:
 ```bash
 npx tsx examples/data-model-example.ts
 ```
 
-Выход покажет:
-- Выведенные модели данных
-- Сгенерированные TypeScript интерфейсы
-- Сгенерированные React Query хуки
-- Выведенные API endpoints
+Output shows:
+- Inferred data models
+- Generated TypeScript interfaces
+- Generated React Query hooks
+- Inferred API endpoints
 
-## Ограничения / Limitations
+## Limitations
 
-1. **Текстовый контент**: Вывод основан на текстовых элементах в Figma. Если в дизайне нет текста, модель будет базовой.
+1. **Text Content**: Inference based on text elements in Figma. If design has no text, model will be basic.
 
-2. **Вложенные структуры**: Текущая версия не поддерживает глубоко вложенные объекты. Для сложных структур требуется ручная доработка.
+2. **Nested Structures**: Current version doesn't support deeply nested objects. Complex structures require manual refinement.
 
-3. **Специфические типы**: Определяет только базовые типы (string, number, boolean, Date). Для enum или union types требуется ручное редактирование.
+3. **Specific Types**: Only detects basic types (string, number, boolean, Date). For enum or union types, manual editing required.
 
-## Будущие улучшения / Future Improvements
+## Future Improvements
 
-- [ ] Поддержка вложенных объектов и массивов
-- [ ] Определение enum типов из повторяющихся значений
-- [ ] Генерация Zod схем для валидации
-- [ ] Поддержка GraphQL типов
-- [ ] Определение связей между моделями (foreign keys)
-- [ ] Генерация mock данных для тестирования
-- [ ] Интеграция с существующими API схемами (OpenAPI, GraphQL)
+- [ ] Support for nested objects and arrays
+- [ ] Detection of enum types from repeating values
+- [ ] Generation of Zod schemas for validation
+- [ ] Support for GraphQL types
+- [ ] Detection of relationships between models (foreign keys)
+- [ ] Generation of mock data for testing
+- [ ] Integration with existing API schemas (OpenAPI, GraphQL)
 
-## Зависимости / Dependencies
+## Dependencies
 
-Модуль использует только встроенные TypeScript типы и не требует дополнительных зависимостей. Для использования сгенерированных хуков требуется:
+Module uses only built-in TypeScript types and requires no additional dependencies. To use generated hooks, you need:
 
 ```json
 {
@@ -335,11 +330,11 @@ npx tsx examples/data-model-example.ts
 }
 ```
 
-## Стиль кода / Code Style
+## Code Style
 
-Код следует существующему стилю проекта:
-- ✅ Комментарии на русском и английском языках
-- ✅ JSDoc документация для всех экспортируемых функций
-- ✅ TypeScript строгая типизация
-- ✅ Функциональный подход без мутаций
-- ✅ Чистые функции без побочных эффектов
+Code follows existing project style:
+- ✅ Comments in English
+- ✅ JSDoc documentation for all exported functions
+- ✅ TypeScript strict typing
+- ✅ Functional approach without mutations
+- ✅ Pure functions without side effects

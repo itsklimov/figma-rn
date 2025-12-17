@@ -1,11 +1,8 @@
 /**
- * Менеджер рабочей папки .figma/ v2.0
- * Один URL = одна папка со всем содержимым
- *
  * Figma Workspace Manager v2.0
  * One URL = one folder with all contents
  *
- * Структура / Structure:
+ * Structure:
  * .figma/
  * ├── manifest.json         # URL → folder mapping
  * ├── theme.json            # Global design tokens
@@ -32,69 +29,67 @@ import { DesignTokens, mergeDesignTokens } from './design-tokens.js';
 import { HierarchyNode } from './one-shot-generator.js';
 
 // ============================================================================
-// Типы / Types
+// Types
 // ============================================================================
 
 /**
- * Категория элемента / Element category
+ * Element category
  */
 export type ManifestCategory = 'screens' | 'modals' | 'sheets' | 'components' | 'icons';
 
 /**
- * Информация об ассете / Asset info
+ * Asset info
  */
 export interface AssetInfo {
-  /** Имя файла / Filename */
+  /** Filename */
   filename: string;
-  /** Тип: icon или image / Type: icon or image */
+  /** Type: icon or image */
   type: 'icon' | 'image';
-  /** ID экземпляра в Figma / Instance ID in Figma */
+  /** Instance ID in Figma */
   nodeId: string;
-  /** ID компонента (стабильный для дедупликации) / Component ID (stable for deduplication) */
+  /** Component ID (stable for deduplication) */
   componentId?: string;
-  /** Имя в Figma (может меняться) / Name in Figma (can change) */
+  /** Name in Figma (can change) */
   figmaName?: string;
-  /** Формат / Format */
+  /** Format */
   format: 'svg' | 'png' | 'jpg';
-  /** Размеры / Dimensions */
+  /** Dimensions */
   dimensions?: { width: number; height: number };
 }
 
 /**
- * Информация о компоненте Figma (группировка по componentId)
  * Figma component info (grouped by componentId)
  */
 export interface ComponentInfo {
-  /** Тип компонента / Component type */
+  /** Component type */
   type: 'icon' | 'image' | 'component';
-  /** Имя в Figma (может меняться) / Name in Figma (can change) */
+  /** Name in Figma (can change) */
   figmaName: string;
-  /** Локальный путь к файлу / Local file path */
+  /** Local file path */
   localPath: string;
-  /** Все экземпляры этого компонента / All instances of this component */
+  /** All instances of this component */
   instances: string[];
 }
 
 /**
- * Метаданные элемента (meta.json внутри папки элемента)
  * Element metadata (meta.json inside element folder)
  */
 export interface ElementMeta {
-  /** Имя компонента / Component name */
+  /** Component name */
   name: string;
   /** Figma URL */
   figmaUrl: string;
   /** Figma node ID */
   nodeId: string;
-  /** Имя в Figma (может отличаться от name) / Figma name (may differ from name) */
+  /** Figma name (may differ from name) */
   figmaName?: string;
-  /** Время генерации / Generation timestamp */
+  /** Generation timestamp */
   generatedAt: string;
-  /** Экспортируемые сущности / Exported entities */
+  /** Exported entities */
   exports: string[];
-  /** Зависимости / Dependencies */
+  /** Dependencies */
   dependencies: string[];
-  /** Обнаруженные паттерны / Detected patterns */
+  /** Detected patterns */
   patterns: {
     hasFloatingFooter?: boolean;
     hasModalOverlay?: boolean;
@@ -103,53 +98,53 @@ export interface ElementMeta {
     hasStatusBar?: boolean;
     hasDragHandle?: boolean;
   };
-  /** Список ассетов (legacy, для обратной совместимости) / Asset list (legacy, for backwards compatibility) */
+  /** Asset list (legacy, for backwards compatibility) */
   assets: AssetInfo[];
-  /** Полная иерархия узла / Full node hierarchy */
+  /** Full node hierarchy */
   hierarchy?: HierarchyNode;
-  /** Скрытые узлы в дизайне / Hidden nodes in design */
+  /** Hidden nodes in design */
   hiddenNodes?: string[];
-  /** Общее количество узлов / Total node count */
+  /** Total node count */
   totalNodes?: number;
-  /** Количество экземпляров компонентов / Instance count */
+  /** Instance count */
   instanceCount?: number;
-  /** Есть ли скриншот / Has screenshot */
+  /** Has screenshot */
   hasScreenshot: boolean;
-  /** Извлечённые токены (только для этого элемента) / Extracted tokens (element-specific) */
+  /** Extracted tokens (element-specific) */
   tokensExtracted: number;
-  /** Извлеченные интерактивности / Extracted interactions */
+  /** Extracted interactions */
   interactions?: Array<{
-    /** ID узла / Node ID */
+    /** Node ID */
     nodeId: string;
-    /** Имя узла / Node name */
+    /** Node name */
     nodeName: string;
-    /** Триггер взаимодействия / Interaction trigger */
+    /** Interaction trigger */
     trigger: string;
-    /** Действие / Action */
+    /** Action */
     action: string;
-    /** ID назначения (для навигации) / Destination ID (for navigation) */
+    /** Destination ID (for navigation) */
     destinationId?: string;
   }>;
-  /** Извлеченные прокрутки / Extracted scrolls */
+  /** Extracted scrolls */
   scrolls?: Array<{
-    /** ID узла / Node ID */
+    /** Node ID */
     nodeId: string;
-    /** Имя узла / Node name */
+    /** Node name */
     nodeName: string;
-    /** Направление прокрутки / Scroll direction */
+    /** Scroll direction */
     direction: 'HORIZONTAL' | 'VERTICAL' | 'BOTH';
   }>;
 }
 
 /**
- * Запись в манифесте (ссылка на папку) / Manifest entry (folder reference)
+ * Manifest entry (folder reference)
  */
 export interface ManifestEntry {
-  /** Имя компонента / Component name */
+  /** Component name */
   name: string;
-  /** Путь к папке относительно .figma/ / Folder path relative to .figma/ */
+  /** Folder path relative to .figma/ */
   folder: string;
-  /** Время генерации / Generation timestamp */
+  /** Generation timestamp */
   generatedAt: string;
   /** Figma node ID */
   nodeId: string;
@@ -158,46 +153,45 @@ export interface ManifestEntry {
 }
 
 /**
- * Структура манифеста / Manifest structure
+ * Manifest structure
  */
 export interface Manifest {
-  /** Версия схемы / Schema version */
+  /** Schema version */
   version: string;
-  /** Корень проекта / Project root */
+  /** Project root */
   projectRoot: string;
-  /** Конфигурация проекта / Project config */
+  /** Project config */
   config: {
     framework: string;
     stylePattern: string;
     importPrefix?: string;
     scaleFunction?: string;
   };
-  /** Экраны (nodeId → Entry) */
+  /** Screens (nodeId → Entry) */
   screens: Record<string, ManifestEntry>;
-  /** Модальные окна (nodeId → Entry) */
+  /** Modals (nodeId → Entry) */
   modals: Record<string, ManifestEntry>;
   /** Bottom sheets (nodeId → Entry) */
   sheets: Record<string, ManifestEntry>;
-  /** Компоненты (nodeId → Entry) */
+  /** Components (nodeId → Entry) */
   components: Record<string, ManifestEntry>;
-  /** Иконки (standalone) (nodeId → Entry) */
+  /** Icons (standalone) (nodeId → Entry) */
   icons: Record<string, ManifestEntry>;
 }
 
 /**
- * Конфигурация проекта для Figma генерации
  * Project configuration for Figma generation
  */
 export interface FigmaConfig {
   version: string;
   projectRoot: string;
   theme?: {
-    colorsFile?: string;      // например, "src/styles/theme/colors.ts"
-    typographyFile?: string;  // например, "src/styles/theme/typography.ts"
-    spacingFile?: string;     // например, "src/styles/theme/spacing.ts"
-    shadowsFile?: string;     // например, "src/styles/theme/shadows.ts"
-    radiiFile?: string;       // например, "src/styles/theme/radii.ts"
-    mainThemeFile?: string;   // например, "src/styles/theme/index.ts"
+    colorsFile?: string;      // e.g., "src/styles/theme/colors.ts"
+    typographyFile?: string;  // e.g., "src/styles/theme/typography.ts"
+    spacingFile?: string;     // e.g., "src/styles/theme/spacing.ts"
+    shadowsFile?: string;     // e.g., "src/styles/theme/shadows.ts"
+    radiiFile?: string;       // e.g., "src/styles/theme/radii.ts"
+    mainThemeFile?: string;   // e.g., "src/styles/theme/index.ts"
     type: 'object-export' | 'styled-components' | 'nativewind';
   };
   codeStyle: {
@@ -208,37 +202,37 @@ export interface FigmaConfig {
 }
 
 /**
- * Результат генерации / Generation result
+ * Generation result
  */
 export interface GenerationResult {
   status: 'generated' | 'replaced' | 'error';
   category: ManifestCategory;
   name: string;
-  /** Путь к папке / Folder path */
+  /** Folder path */
   folder: string;
-  /** Путь к index.tsx / Path to index.tsx */
+  /** Path to index.tsx */
   indexPath: string;
   exports: string[];
   dependencies: string[];
   patterns: ElementMeta['patterns'];
   figmaUrl: string;
   nodeId: string;
-  /** Ассеты / Assets */
+  /** Assets */
   assets: AssetInfo[];
-  /** Путь к скриншоту / Screenshot path */
+  /** Screenshot path */
   screenshotPath?: string;
-  /** Предлагаемый путь в проекте / Suggested project path */
+  /** Suggested project path */
   suggestedTarget: string;
-  /** Команда для копирования / Copy command */
+  /** Copy command */
   copyCommand: string;
-  /** Было заменено / Was replaced */
+  /** Was replaced */
   wasReplaced: boolean;
-  /** Количество извлечённых токенов / Number of extracted tokens */
+  /** Number of extracted tokens */
   tokensExtracted: number;
 }
 
 // ============================================================================
-// Константы / Constants
+// Constants
 // ============================================================================
 
 const FIGMA_DIR = '.figma';
@@ -260,11 +254,11 @@ const CATEGORY_FOLDERS: Record<ManifestCategory, string> = {
 };
 
 // ============================================================================
-// Утилиты / Utilities
+// Utilities
 // ============================================================================
 
 /**
- * Определение категории по типу элемента / Get category from element type
+ * Get category from element type
  */
 export function getManifestCategory(elementType: ElementType): ManifestCategory {
   switch (elementType) {
@@ -289,7 +283,7 @@ export function getManifestCategory(elementType: ElementType): ManifestCategory 
 }
 
 /**
- * Нормализация URL / Normalize URL
+ * Normalize URL
  */
 export function normalizeUrl(url: string): string {
   try {
@@ -302,13 +296,13 @@ export function normalizeUrl(url: string): string {
 }
 
 /**
- * Извлечение node-id / Extract node-id
+ * Extract node-id
  */
 export function extractNodeId(url: string): string {
   try {
     const parsed = new URL(url);
     const nodeId = parsed.searchParams.get('node-id') || 'unknown';
-    // Конвертируем в канонический формат с двоеточием / Convert to canonical colon format
+    // Convert to canonical colon format
     return nodeId.replace(/-/g, ':');
   } catch {
     const match = url.match(/node-id=([^&]+)/);
@@ -318,7 +312,7 @@ export function extractNodeId(url: string): string {
 }
 
 /**
- * Предлагаемый путь в проекте / Suggested target path
+ * Suggested target path
  */
 function getSuggestedTarget(category: ManifestCategory, name: string): string {
   switch (category) {
@@ -338,29 +332,29 @@ function getSuggestedTarget(category: ManifestCategory, name: string): string {
 }
 
 // ============================================================================
-// Инициализация / Initialization
+// Initialization
 // ============================================================================
 
 /**
- * Инициализация workspace / Initialize workspace
+ * Initialize workspace
  */
 export async function initWorkspace(projectRoot: string): Promise<string> {
   const figmaDir = join(projectRoot, FIGMA_DIR);
 
-  // Создаём структуру / Create structure
+  // Create structure
   await mkdir(figmaDir, { recursive: true });
   for (const folder of Object.values(CATEGORY_FOLDERS)) {
     await mkdir(join(figmaDir, folder), { recursive: true });
   }
 
-  // Добавляем в .gitignore / Add to .gitignore
+  // Add to .gitignore
   await ensureGitignore(projectRoot);
 
   return figmaDir;
 }
 
 /**
- * Добавление в .gitignore / Add to .gitignore
+ * Add to .gitignore
  */
 async function ensureGitignore(projectRoot: string): Promise<void> {
   const gitignorePath = join(projectRoot, '.gitignore');
@@ -370,7 +364,7 @@ async function ensureGitignore(projectRoot: string): Promise<void> {
     try {
       content = await readFile(gitignorePath, 'utf-8');
     } catch {
-      // Файл не существует
+      // File does not exist
     }
 
     if (!content.includes('.figma/') && !content.includes('.figma\n')) {
@@ -387,15 +381,14 @@ async function ensureGitignore(projectRoot: string): Promise<void> {
 }
 
 // ============================================================================
-// Манифест / Manifest
+// Manifest
 // ============================================================================
 
 /**
- * Миграция манифеста v1.0.0 → v2.0.0 → v3.0.0
  * Migrate manifest v1.0.0 → v2.0.0 → v3.0.0
  */
 function migrateManifest(manifest: any): Manifest {
-  // Если уже v3.0.0, ничего не делаем / If already v3.0.0, do nothing
+  // If already v3.0.0, do nothing
   if (manifest.version === MANIFEST_VERSION) {
     return manifest as Manifest;
   }
@@ -404,7 +397,7 @@ function migrateManifest(manifest: any): Manifest {
 
   const categories: ManifestCategory[] = ['screens', 'modals', 'sheets', 'components', 'icons'];
 
-  // Миграция v1.0.0 → v2.0.0 / Migration v1.0.0 → v2.0.0
+  // Migration v1.0.0 → v2.0.0
   if (manifest.version === '1.0.0') {
     for (const category of categories) {
       const entries = manifest[category] || {};
@@ -412,12 +405,12 @@ function migrateManifest(manifest: any): Manifest {
       for (const [url, entry] of Object.entries(entries)) {
         const oldEntry = entry as any;
 
-        // Конвертируем path → folder
-        // Старый формат: { path: ".figma/screens/HomeScreen.tsx" }
-        // Новый формат: { folder: ".figma/screens/HomeScreen" }
+        // Convert path → folder
+        // Old format: { path: ".figma/screens/HomeScreen.tsx" }
+        // New format: { folder: ".figma/screens/HomeScreen" }
         if (oldEntry.path && !oldEntry.folder) {
           const oldPath = oldEntry.path;
-          // Убираем расширение файла (.tsx)
+          // Remove file extension (.tsx)
           const pathWithoutExt = oldEntry.path.replace(/\.(tsx|ts|jsx|js)$/, '');
           oldEntry.folder = pathWithoutExt;
           delete oldEntry.path;
@@ -430,8 +423,7 @@ function migrateManifest(manifest: any): Manifest {
     manifest.version = '2.0.0';
   }
 
-  // Миграция v2.0.0 → v3.0.0 / Migration v2.0.0 → v3.0.0
-  // Конвертируем URL-based keys → nodeId-based keys
+  // Migration v2.0.0 → v3.0.0
   // Convert URL-based keys → nodeId-based keys
   if (manifest.version === '2.0.0') {
     console.error(`   🔄 Converting URL-based keys to nodeId-based keys...`);
@@ -443,28 +435,24 @@ function migrateManifest(manifest: any): Manifest {
       for (const [key, entry] of Object.entries(entries)) {
         const oldEntry = entry as any;
 
-        // Извлекаем nodeId из существующего поля или из URL (key)
         // Extract nodeId from existing field or from URL (key)
         let nodeId = oldEntry.nodeId;
         if (!nodeId) {
-          // Если nodeId нет, извлекаем из URL
+          // If nodeId doesn't exist, extract from URL
           nodeId = extractNodeId(key);
         }
 
-        // Добавляем figmaUrl если его нет
         // Add figmaUrl if it doesn't exist
         if (!oldEntry.figmaUrl) {
           oldEntry.figmaUrl = key;
         }
 
-        // Сохраняем под новым ключом (nodeId)
         // Save under new key (nodeId)
         newEntries[nodeId] = oldEntry;
 
         console.error(`   ✓ ${category}: ${oldEntry.name} (URL → nodeId: ${nodeId})`);
       }
 
-      // Заменяем старые записи новыми
       // Replace old entries with new ones
       manifest[category] = newEntries;
     }
@@ -477,8 +465,8 @@ function migrateManifest(manifest: any): Manifest {
 }
 
 /**
- * Загрузка манифеста / Load manifest
- * Автоматически мигрирует старые версии
+ * Load manifest
+ * Automatically migrates old versions
  */
 export async function loadManifest(projectRoot: string): Promise<Manifest | null> {
   const manifestPath = join(projectRoot, FIGMA_DIR, MANIFEST_FILE);
@@ -487,11 +475,11 @@ export async function loadManifest(projectRoot: string): Promise<Manifest | null
     const content = await readFile(manifestPath, 'utf-8');
     let manifest = JSON.parse(content);
 
-    // Проверяем версию и мигрируем если нужно
+    // Check version and migrate if needed
     if (manifest.version && manifest.version !== MANIFEST_VERSION) {
       manifest = migrateManifest(manifest);
 
-      // Сохраняем мигрированный манифест
+      // Save migrated manifest
       await saveManifest(projectRoot, manifest);
       console.error(`💾 Migrated manifest saved`);
     }
@@ -503,7 +491,7 @@ export async function loadManifest(projectRoot: string): Promise<Manifest | null
 }
 
 /**
- * Создание пустого манифеста / Create empty manifest
+ * Create empty manifest
  */
 export function createEmptyManifest(projectRoot: string, config?: Manifest['config']): Manifest {
   return {
@@ -522,7 +510,7 @@ export function createEmptyManifest(projectRoot: string, config?: Manifest['conf
 }
 
 /**
- * Сохранение манифеста / Save manifest
+ * Save manifest
  */
 export async function saveManifest(projectRoot: string, manifest: Manifest): Promise<void> {
   const manifestPath = join(projectRoot, FIGMA_DIR, MANIFEST_FILE);
@@ -531,7 +519,7 @@ export async function saveManifest(projectRoot: string, manifest: Manifest): Pro
 }
 
 /**
- * Автоопределение конфигурации / Auto-detect config
+ * Auto-detect config
  */
 async function autoDetectConfig(projectRoot: string): Promise<Manifest['config']> {
   const config: Manifest['config'] = {
@@ -540,7 +528,7 @@ async function autoDetectConfig(projectRoot: string): Promise<Manifest['config']
   };
 
   try {
-    // Framework из package.json
+    // Framework from package.json
     const packageJsonPath = join(projectRoot, 'package.json');
     try {
       const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf-8'));
@@ -552,10 +540,10 @@ async function autoDetectConfig(projectRoot: string): Promise<Manifest['config']
         config.framework = 'expo';
       }
     } catch {
-      // Не найден
+      // Not found
     }
 
-    // Import prefix из tsconfig.json
+    // Import prefix from tsconfig.json
     const tsconfigPath = join(projectRoot, 'tsconfig.json');
     try {
       const tsconfig = JSON.parse(await readFile(tsconfigPath, 'utf-8'));
@@ -570,10 +558,10 @@ async function autoDetectConfig(projectRoot: string): Promise<Manifest['config']
         }
       }
     } catch {
-      // Не найден
+      // Not found
     }
 
-    // Style pattern из исходников
+    // Style pattern from source files
     const files = await glob('**/*.{ts,tsx}', {
       cwd: projectRoot,
       ignore: ['node_modules/**', 'dist/**', 'build/**', '.figma/**'],
@@ -625,7 +613,7 @@ async function autoDetectConfig(projectRoot: string): Promise<Manifest['config']
 }
 
 /**
- * Получение или создание манифеста / Get or create manifest
+ * Get or create manifest
  */
 export async function getOrCreateManifest(projectRoot: string): Promise<Manifest> {
   let manifest = await loadManifest(projectRoot);
@@ -651,8 +639,7 @@ export async function getOrCreateManifest(projectRoot: string): Promise<Manifest
 }
 
 /**
- * Поиск записи по URL / Find entry by URL
- * Сначала ищет по nodeId, затем по URL (для обратной совместимости)
+ * Find entry by URL
  * First searches by nodeId, then by URL (for backwards compatibility)
  */
 export function findEntryByUrl(
@@ -663,7 +650,6 @@ export function findEntryByUrl(
   const nodeId = extractNodeId(figmaUrl);
   const categories: ManifestCategory[] = ['screens', 'modals', 'sheets', 'components', 'icons'];
 
-  // Сначала пытаемся найти по nodeId (новая логика)
   // First try to find by nodeId (new logic)
   for (const category of categories) {
     const entries = manifest[category];
@@ -672,7 +658,6 @@ export function findEntryByUrl(
     }
   }
 
-  // Fallback: ищем по URL (для старых манифестов)
   // Fallback: search by URL (for old manifests)
   for (const category of categories) {
     const entries = manifest[category];
@@ -685,11 +670,11 @@ export function findEntryByUrl(
 }
 
 // ============================================================================
-// Конфигурация (config.json) / Configuration (config.json)
+// Configuration (config.json)
 // ============================================================================
 
 /**
- * Загрузка конфигурации / Load configuration
+ * Load configuration
  */
 export async function loadFigmaConfig(projectRoot: string): Promise<FigmaConfig | null> {
   const configPath = join(projectRoot, FIGMA_DIR, CONFIG_FILE);
@@ -702,7 +687,7 @@ export async function loadFigmaConfig(projectRoot: string): Promise<FigmaConfig 
 }
 
 /**
- * Сохранение конфигурации / Save configuration
+ * Save configuration
  */
 export async function saveFigmaConfig(projectRoot: string, config: FigmaConfig): Promise<void> {
   const configPath = join(projectRoot, FIGMA_DIR, CONFIG_FILE);
@@ -711,7 +696,7 @@ export async function saveFigmaConfig(projectRoot: string, config: FigmaConfig):
 }
 
 /**
- * Получить или создать конфигурацию / Get or create configuration
+ * Get or create configuration
  */
 export async function getOrCreateFigmaConfig(projectRoot: string): Promise<FigmaConfig> {
   let config = await loadFigmaConfig(projectRoot);
@@ -727,7 +712,6 @@ export async function getOrCreateFigmaConfig(projectRoot: string): Promise<Figma
 }
 
 /**
- * Генерация конфигурации с автоопределением темы
  * Generate configuration with theme auto-detection
  */
 async function generateFigmaConfig(projectRoot: string): Promise<FigmaConfig> {
@@ -740,8 +724,8 @@ async function generateFigmaConfig(projectRoot: string): Promise<FigmaConfig> {
   let radiiFile: string | undefined;
   let mainThemeFile: string | undefined;
 
-  // Рекурсивно ищем файл цветов в любой подпапке / Recursively search for colors file in any subdirectory
-  // Паттерн ищет colors.ts в типичных локациях: **/styles/**/colors.ts, **/theme/**/colors.ts, etc.
+  // Recursively search for colors file in any subdirectory
+  // Pattern searches for colors.ts in typical locations: **/styles/**/colors.ts, **/theme/**/colors.ts, etc.
   const colorFiles = await glob('**/@(styles|theme|constants)/**/colors.{ts,js}', {
     cwd: projectRoot,
     ignore: ['**/node_modules/**', '**/dist/**', '**/build/**', '**/.figma/**', '**/test/**', '**/tests/**'],
@@ -750,7 +734,7 @@ async function generateFigmaConfig(projectRoot: string): Promise<FigmaConfig> {
   });
 
   if (colorFiles.length > 0) {
-    // Приоритет: предпочитаем файлы с 'theme' в пути / Priority: prefer files with 'theme' in path
+    // Priority: prefer files with 'theme' in path
     const themeColorFile = colorFiles.find(f => f.includes('/theme/'));
     colorsFile = themeColorFile || colorFiles[0];
     console.error(`   📦 Found colors: ${colorsFile}`);
@@ -759,7 +743,7 @@ async function generateFigmaConfig(projectRoot: string): Promise<FigmaConfig> {
     }
   }
 
-  // Рекурсивно ищем файл типографики / Recursively search for typography file
+  // Recursively search for typography file
   const typographyFiles = await glob('**/@(styles|theme|constants)/**/@(typography|fonts).{ts,js}', {
     cwd: projectRoot,
     ignore: ['**/node_modules/**', '**/dist/**', '**/build/**', '**/.figma/**', '**/test/**', '**/tests/**'],
@@ -776,7 +760,7 @@ async function generateFigmaConfig(projectRoot: string): Promise<FigmaConfig> {
     }
   }
 
-  // Рекурсивно ищем файл spacing / Recursively search for spacing file
+  // Recursively search for spacing file
   const spacingFiles = await glob('**/@(styles|theme|constants)/**/@(spacing|metrics|dimensions).{ts,js}', {
     cwd: projectRoot,
     ignore: ['**/node_modules/**', '**/dist/**', '**/build/**', '**/.figma/**', '**/test/**', '**/tests/**'],
@@ -793,7 +777,7 @@ async function generateFigmaConfig(projectRoot: string): Promise<FigmaConfig> {
     }
   }
 
-  // Рекурсивно ищем файл shadows / Recursively search for shadows file
+  // Recursively search for shadows file
   const shadowFiles = await glob('**/@(styles|theme|constants)/**/@(shadows|elevation).{ts,js}', {
     cwd: projectRoot,
     ignore: ['**/node_modules/**', '**/dist/**', '**/build/**', '**/.figma/**', '**/test/**', '**/tests/**'],
@@ -810,7 +794,7 @@ async function generateFigmaConfig(projectRoot: string): Promise<FigmaConfig> {
     }
   }
 
-  // Рекурсивно ищем файл radii / Recursively search for radii file
+  // Recursively search for radii file
   const radiiFiles = await glob('**/@(styles|theme|constants)/**/@(radii|borderRadius).{ts,js}', {
     cwd: projectRoot,
     ignore: ['**/node_modules/**', '**/dist/**', '**/build/**', '**/.figma/**', '**/test/**', '**/tests/**'],
@@ -827,7 +811,7 @@ async function generateFigmaConfig(projectRoot: string): Promise<FigmaConfig> {
     }
   }
 
-  // Рекурсивно ищем главный файл темы / Recursively search for main theme file
+  // Recursively search for main theme file
   const mainThemeFiles = await glob('**/@(styles|theme)/**/@(defaultTheme|theme|index).{ts,js}', {
     cwd: projectRoot,
     ignore: ['**/node_modules/**', '**/dist/**', '**/build/**', '**/.figma/**', '**/test/**', '**/tests/**'],
@@ -836,7 +820,6 @@ async function generateFigmaConfig(projectRoot: string): Promise<FigmaConfig> {
   });
 
   if (mainThemeFiles.length > 0) {
-    // Приоритет: предпочитаем файлы с 'theme' в пути и не index.ts
     // Priority: prefer files with 'theme' in path and not index.ts
     const themeMainFile = mainThemeFiles.find(f => f.includes('/theme/') && !f.endsWith('/index.ts'));
     const anyThemeFile = mainThemeFiles.find(f => f.includes('/theme/'));
@@ -847,7 +830,7 @@ async function generateFigmaConfig(projectRoot: string): Promise<FigmaConfig> {
     }
   }
 
-  // Загружаем существующий манифест для настроек / Load existing manifest for settings
+  // Load existing manifest for settings
   const manifest = await loadManifest(projectRoot);
 
   return {
@@ -871,11 +854,11 @@ async function generateFigmaConfig(projectRoot: string): Promise<FigmaConfig> {
 }
 
 // ============================================================================
-// Дизайн токены (theme.json) / Design Tokens (theme.json)
+// Design Tokens (theme.json)
 // ============================================================================
 
 /**
- * Загрузка глобальных токенов / Load global tokens
+ * Load global tokens
  */
 export async function loadTheme(projectRoot: string): Promise<DesignTokens | null> {
   const themePath = join(projectRoot, FIGMA_DIR, THEME_FILE);
@@ -889,7 +872,7 @@ export async function loadTheme(projectRoot: string): Promise<DesignTokens | nul
 }
 
 /**
- * Сохранение глобальных токенов / Save global tokens
+ * Save global tokens
  */
 export async function saveTheme(projectRoot: string, tokens: DesignTokens): Promise<void> {
   const themePath = join(projectRoot, FIGMA_DIR, THEME_FILE);
@@ -898,8 +881,8 @@ export async function saveTheme(projectRoot: string, tokens: DesignTokens): Prom
 }
 
 /**
- * Обновление глобальных токенов / Update global tokens
- * Мержит новые токены с существующими
+ * Update global tokens
+ * Merges new tokens with existing ones
  */
 export async function updateTheme(
   projectRoot: string,
@@ -917,11 +900,11 @@ export async function updateTheme(
 }
 
 // ============================================================================
-// Генерация элемента / Element Generation
+// Element Generation
 // ============================================================================
 
 /**
- * Создание папки элемента / Create element folder
+ * Create element folder
  */
 async function createElementFolder(
   projectRoot: string,
@@ -932,7 +915,7 @@ async function createElementFolder(
   const categoryFolder = CATEGORY_FOLDERS[category];
   const elementFolder = join(figmaDir, categoryFolder, name);
 
-  // Создаём папку и подпапку assets
+  // Create folder and assets subfolder
   await mkdir(elementFolder, { recursive: true });
   await mkdir(join(elementFolder, ASSETS_DIR), { recursive: true });
 
@@ -940,7 +923,7 @@ async function createElementFolder(
 }
 
 /**
- * Сохранение мета-данных элемента / Save element metadata
+ * Save element metadata
  */
 async function saveElementMeta(elementFolder: string, meta: ElementMeta): Promise<void> {
   const metaPath = join(elementFolder, META_FILE);
@@ -948,7 +931,7 @@ async function saveElementMeta(elementFolder: string, meta: ElementMeta): Promis
 }
 
 /**
- * Загрузка мета-данных элемента / Load element metadata
+ * Load element metadata
  */
 export async function loadElementMeta(elementFolder: string): Promise<ElementMeta | null> {
   const metaPath = join(elementFolder, META_FILE);
@@ -962,7 +945,7 @@ export async function loadElementMeta(elementFolder: string): Promise<ElementMet
 }
 
 /**
- * Сохранение кода компонента / Save component code
+ * Save component code
  */
 async function saveComponentCode(elementFolder: string, code: string): Promise<string> {
   const indexPath = join(elementFolder, INDEX_FILE);
@@ -971,7 +954,7 @@ async function saveComponentCode(elementFolder: string, code: string): Promise<s
 }
 
 /**
- * Сохранение скриншота / Save screenshot
+ * Save screenshot
  */
 export async function saveScreenshot(
   elementFolder: string,
@@ -983,7 +966,7 @@ export async function saveScreenshot(
 }
 
 /**
- * Сохранение ассета / Save asset
+ * Save asset
  */
 export async function saveAsset(
   elementFolder: string,
@@ -996,7 +979,7 @@ export async function saveAsset(
 }
 
 /**
- * Регистрация сгенерированного элемента / Register generated element
+ * Register generated element
  */
 export async function registerGeneration(
   projectRoot: string,
@@ -1020,38 +1003,38 @@ export async function registerGeneration(
     scrolls?: ElementMeta['scrolls'];
   } = {}
 ): Promise<GenerationResult> {
-  // Получаем манифест
+  // Get manifest
   const manifest = await getOrCreateManifest(projectRoot);
 
   const normalizedUrl = normalizeUrl(figmaUrl);
   const nodeId = extractNodeId(figmaUrl);
 
-  // Проверяем существование
+  // Check if exists
   const existing = findEntryByUrl(manifest, figmaUrl);
   const wasReplaced = existing !== null;
 
-  // Удаляем из другой категории если есть
+  // Remove from other category if exists
   if (existing && existing.category !== category) {
     delete manifest[existing.category][normalizedUrl];
   }
 
-  // Создаём папку элемента
+  // Create element folder
   const elementFolder = await createElementFolder(projectRoot, category, name);
   const relativeFolderPath = join(FIGMA_DIR, CATEGORY_FOLDERS[category], name);
 
-  // Сохраняем код
+  // Save code
   await saveComponentCode(elementFolder, code);
 
-  // Скриншот уже сохранен напрямую в локальную папку / Screenshot already saved directly to local folder
+  // Screenshot already saved directly to local folder
   let hasScreenshot = false;
   let screenshotPath: string | undefined;
   if (options.screenshotPath) {
-    // Путь уже указывает на локальную папку / Path already points to local folder
+    // Path already points to local folder
     screenshotPath = options.screenshotPath;
     hasScreenshot = true;
   }
 
-  // Сохраняем мета-данные
+  // Save metadata
   const meta: ElementMeta = {
     name,
     figmaUrl: normalizedUrl,
@@ -1076,12 +1059,12 @@ export async function registerGeneration(
 
   await saveElementMeta(elementFolder, meta);
 
-  // Обновляем глобальные токены
+  // Update global tokens
   if (options.tokens) {
     await updateTheme(projectRoot, options.tokens);
   }
 
-  // Добавляем в манифест
+  // Add to manifest
   const entry: ManifestEntry = {
     name,
     folder: relativeFolderPath,
@@ -1093,7 +1076,7 @@ export async function registerGeneration(
   manifest[category][nodeId] = entry;
   await saveManifest(projectRoot, manifest);
 
-  // Формируем результат
+  // Build result
   const suggestedTarget = getSuggestedTarget(category, name);
 
   return {
@@ -1117,7 +1100,7 @@ export async function registerGeneration(
 }
 
 /**
- * Обновление конфигурации / Update config
+ * Update config
  */
 export async function updateManifestConfig(
   projectRoot: string,
@@ -1129,7 +1112,7 @@ export async function updateManifestConfig(
 }
 
 /**
- * Получение записей категории / Get entries by category
+ * Get entries by category
  */
 export function getEntriesByCategory(
   manifest: Manifest,
@@ -1140,11 +1123,11 @@ export function getEntriesByCategory(
 }
 
 // ============================================================================
-// Форматирование для LLM / LLM Formatting
+// LLM Formatting
 // ============================================================================
 
 /**
- * Форматирование результата / Format result for LLM
+ * Format result for LLM
  */
 export function formatResultForLLM(result: GenerationResult): string {
   let response = `## ${result.wasReplaced ? '🔄 Replaced' : '✅ Generated'} ${result.name}\n\n`;
@@ -1174,7 +1157,7 @@ export function formatResultForLLM(result: GenerationResult): string {
 
   response += `\n`;
 
-  // Паттерны
+  // Patterns
   const activePatterns = Object.entries(result.patterns)
     .filter(([_, value]) => value)
     .map(([key, _]) => key);
@@ -1187,7 +1170,7 @@ export function formatResultForLLM(result: GenerationResult): string {
     response += `\n`;
   }
 
-  // Ассеты
+  // Assets
   if (result.assets.length > 0) {
     response += `### Assets\n\n`;
     const icons = result.assets.filter(a => a.type === 'icon');
@@ -1212,7 +1195,7 @@ export function formatResultForLLM(result: GenerationResult): string {
     }
   }
 
-  // Команда для копирования
+  // Copy command
   response += `### To Use\n\n`;
   response += `\`\`\`bash\n${result.copyCommand}\n\`\`\`\n\n`;
   response += `**Suggested path**: \`${result.suggestedTarget}\`\n`;
@@ -1221,12 +1204,12 @@ export function formatResultForLLM(result: GenerationResult): string {
 }
 
 /**
- * Форматирование токенов для LLM / Format tokens for LLM
+ * Format tokens for LLM
  */
 export function formatTokensForLLM(tokens: DesignTokens): string {
   let response = `## 🎨 Design Tokens\n\n`;
 
-  // Цвета
+  // Colors
   if (tokens.colors.length > 0) {
     response += `### Colors (${tokens.colors.length})\n\n`;
     response += `| Color | Type | Usage |\n`;
@@ -1247,7 +1230,7 @@ export function formatTokensForLLM(tokens: DesignTokens): string {
     response += `\n`;
   }
 
-  // Типографика
+  // Typography
   if (tokens.typography.length > 0) {
     response += `### Typography (${tokens.typography.length})\n\n`;
     response += `| Font | Size | Weight | Usage |\n`;
@@ -1264,7 +1247,7 @@ export function formatTokensForLLM(tokens: DesignTokens): string {
     response += `\n`;
   }
 
-  // Тени
+  // Shadows
   if (tokens.shadows.length > 0) {
     response += `### Shadows (${tokens.shadows.length})\n\n`;
     for (const shadow of tokens.shadows.slice(0, 3)) {

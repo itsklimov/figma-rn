@@ -1,9 +1,9 @@
 /**
- * Конвертер SVG в React Native компоненты
- * Преобразует SVG файлы в компоненты react-native-svg с поддержкой типизации
+ * SVG to React Native component converter
+ * Converts SVG files to react-native-svg components with type support
  */
 
-// Интерфейсы для конвертации
+// Conversion interfaces
 export interface SVGConversionOptions {
   componentName: string;
   defaultSize?: number;
@@ -14,7 +14,7 @@ export interface SVGConversionOptions {
 
 export interface IconSetOptions {
   icons: Array<{ name: string; svg: string }>;
-  setName?: string; // например, 'AppIcons'
+  setName?: string; // e.g., 'AppIcons'
 }
 
 export interface ConversionResult {
@@ -23,7 +23,7 @@ export interface ConversionResult {
   propsInterface: string;
 }
 
-// SVG элементы и их React Native эквиваленты
+// SVG elements and their React Native equivalents
 const SVG_ELEMENT_MAP: Record<string, string> = {
   svg: 'Svg',
   circle: 'Circle',
@@ -45,7 +45,7 @@ const SVG_ELEMENT_MAP: Record<string, string> = {
   use: 'Use',
 };
 
-// Атрибуты, которые нужно удалить при оптимизации
+// Attributes to remove during optimization
 const REMOVABLE_ATTRS = [
   'xmlns',
   'xmlns:xlink',
@@ -56,7 +56,7 @@ const REMOVABLE_ATTRS = [
   'class',
 ];
 
-// Атрибуты SVG и их React Native эквиваленты
+// SVG attributes and their React Native equivalents
 const ATTR_MAP: Record<string, string> = {
   'fill-opacity': 'fillOpacity',
   'fill-rule': 'fillRule',
@@ -85,10 +85,10 @@ interface ParsedElement {
 }
 
 /**
- * Простой парсер SVG в AST (без внешних зависимостей)
+ * Simple SVG to AST parser (without external dependencies)
  */
 function parseSvgToAst(svgContent: string): ParsedElement {
-  // Удаляем комментарии
+  // Remove comments
   const cleaned = svgContent.replace(/<!--[\s\S]*?-->/g, '');
 
   const root: ParsedElement = {
@@ -99,14 +99,14 @@ function parseSvgToAst(svgContent: string): ParsedElement {
 
   const stack: ParsedElement[] = [root];
 
-  // Регулярка для разбора тегов
+  // Regular expression for parsing tags
   const tagRegex = /<([a-zA-Z][a-zA-Z0-9]*)\s*([^>]*?)\s*(\/?)>/g;
   const closeTagRegex = /<\/([a-zA-Z][a-zA-Z0-9]*)>/g;
 
   let lastIndex = 0;
   let match;
 
-  // Объединяем открывающие и закрывающие теги
+  // Combine opening and closing tags
   const allMatches: Array<{
     type: 'open' | 'close' | 'selfClose';
     tag: string;
@@ -115,7 +115,7 @@ function parseSvgToAst(svgContent: string): ParsedElement {
     length: number;
   }> = [];
 
-  // Собираем все открывающие теги
+  // Collect all opening tags
   while ((match = tagRegex.exec(cleaned)) !== null) {
     const isSelfClosing = match[3] === '/';
     allMatches.push({
@@ -127,7 +127,7 @@ function parseSvgToAst(svgContent: string): ParsedElement {
     });
   }
 
-  // Собираем все закрывающие теги
+  // Collect all closing tags
   while ((match = closeTagRegex.exec(cleaned)) !== null) {
     allMatches.push({
       type: 'close',
@@ -137,14 +137,14 @@ function parseSvgToAst(svgContent: string): ParsedElement {
     });
   }
 
-  // Сортируем по позиции
+  // Sort by position
   allMatches.sort((a, b) => a.index - b.index);
 
-  // Обрабатываем теги по порядку
+  // Process tags in order
   allMatches.forEach((item) => {
     const current = stack[stack.length - 1];
 
-    // Извлекаем текстовый контент между тегами
+    // Extract text content between tags
     if (item.index > lastIndex) {
       const text = cleaned.substring(lastIndex, item.index).trim();
       if (text && current) {
@@ -175,7 +175,7 @@ function parseSvgToAst(svgContent: string): ParsedElement {
 }
 
 /**
- * Парсинг атрибутов из строки
+ * Parse attributes from string
  */
 function parseAttributes(attrString: string): Record<string, string> {
   const attrs: Record<string, string> = {};
@@ -190,28 +190,28 @@ function parseAttributes(attrString: string): Record<string, string> {
 }
 
 /**
- * Оптимизация SVG - удаление ненужных атрибутов
+ * SVG optimization - remove unnecessary attributes
  */
 export function optimizeSvg(svgContent: string): string {
   let optimized = svgContent;
 
-  // Удаляем ненужные атрибуты
+  // Remove unnecessary attributes
   REMOVABLE_ATTRS.forEach((attr) => {
     const regex = new RegExp(`\\s${attr}="[^"]*"`, 'g');
     optimized = optimized.replace(regex, '');
   });
 
-  // Удаляем пустые группы
+  // Remove empty groups
   optimized = optimized.replace(/<g\s*><\/g>/g, '');
 
-  // Удаляем лишние пробелы
+  // Remove extra whitespace
   optimized = optimized.replace(/\s+/g, ' ').trim();
 
   return optimized;
 }
 
 /**
- * Извлечение цветов из SVG
+ * Extract colors from SVG
  */
 export function extractSvgColors(svgContent: string): string[] {
   const colors = new Set<string>();
@@ -229,7 +229,7 @@ export function extractSvgColors(svgContent: string): string[] {
 }
 
 /**
- * Конвертация атрибутов SVG в React Native props
+ * Convert SVG attributes to React Native props
  */
 function convertAttributes(
   attributes: Record<string, string>,
@@ -239,15 +239,15 @@ function convertAttributes(
   const converted: Record<string, string> = {};
 
   Object.entries(attributes).forEach(([key, value]) => {
-    // Пропускаем ненужные атрибуты
+    // Skip unnecessary attributes
     if (REMOVABLE_ATTRS.includes(key)) {
       return;
     }
 
-    // Конвертируем названия атрибутов
+    // Convert attribute names
     const propName = ATTR_MAP[key] || key;
 
-    // Специальная обработка цветов
+    // Special color handling
     if (options.replaceColor && (key === 'fill' || key === 'stroke')) {
       if (value !== 'none' && value !== 'transparent') {
         converted[propName] = `{${options.colorPropName || 'color'}}`;
@@ -255,7 +255,7 @@ function convertAttributes(
       }
     }
 
-    // Конвертируем числовые значения
+    // Convert numeric values
     if (isNumeric(value) && key !== 'd' && key !== 'viewBox') {
       converted[propName] = value;
     } else {
@@ -267,14 +267,14 @@ function convertAttributes(
 }
 
 /**
- * Проверка, является ли строка числом
+ * Check if string is a number
  */
 function isNumeric(str: string): boolean {
   return !isNaN(parseFloat(str)) && isFinite(Number(str));
 }
 
 /**
- * Преобразование AST в JSX код
+ * Convert AST to JSX code
  */
 function astToJsx(
   element: ParsedElement,
@@ -284,18 +284,18 @@ function astToJsx(
 ): string {
   const indentStr = '  '.repeat(indent);
 
-  // Получаем React Native компонент
+  // Get React Native component
   const componentName = SVG_ELEMENT_MAP[element.tag] || element.tag;
 
-  // Конвертируем атрибуты
+  // Convert attributes
   const attrs = convertAttributes(element.attributes, isRoot, options);
 
-  // Формируем строку атрибутов
+  // Build attributes string
   const attrStrings: string[] = [];
 
   Object.entries(attrs).forEach(([key, value]) => {
     if (value.startsWith('{') && value.endsWith('}')) {
-      // Это уже выражение
+      // Already an expression
       attrStrings.push(`${key}=${value}`);
     } else if (isNumeric(value) && key !== 'd' && key !== 'viewBox') {
       attrStrings.push(`${key}={${value}}`);
@@ -306,7 +306,7 @@ function astToJsx(
 
   const attrStr = attrStrings.length > 0 ? ' ' + attrStrings.join(' ') : '';
 
-  // Обрабатываем детей
+  // Process children
   if (element.children.length === 0 && !element.text) {
     return `${indentStr}<${componentName}${attrStr} />`;
   }
@@ -328,7 +328,7 @@ function astToJsx(
 }
 
 /**
- * Генерация TypeScript интерфейса для пропсов иконки
+ * Generate TypeScript interface for icon props
  */
 function generatePropsInterface(
   componentName: string,
@@ -349,7 +349,7 @@ function generatePropsInterface(
 }
 
 /**
- * Основная функция конвертации SVG в React Native компонент
+ * Main function for converting SVG to React Native component
  */
 export function convertSvgToComponent(
   svgContent: string,
@@ -363,22 +363,22 @@ export function convertSvgToComponent(
     exportType = 'named',
   } = options;
 
-  // Оптимизируем SVG если нужно
+  // Optimize SVG if needed
   const processedSvg = shouldOptimize ? optimizeSvg(svgContent) : svgContent;
 
-  // Парсим SVG в AST
+  // Parse SVG to AST
   const ast = parseSvgToAst(processedSvg);
 
-  // Извлекаем цвета для определения, нужен ли пропс color
+  // Extract colors to determine if color prop is needed
   const colors = extractSvgColors(processedSvg);
   const hasMultipleColors = colors.length > 1;
   const hasColors = colors.length > 0;
 
-  // Извлекаем viewBox и размеры
+  // Extract viewBox and dimensions
   const viewBox = ast.attributes.viewBox || ast.attributes.viewbox || '0 0 24 24';
   const [, , vbWidth, vbHeight] = viewBox.split(' ').map(Number);
 
-  // Определяем используемые компоненты
+  // Determine used components
   const usedComponents = new Set<string>();
   function collectComponents(element: ParsedElement) {
     const comp = SVG_ELEMENT_MAP[element.tag];
@@ -387,13 +387,13 @@ export function convertSvgToComponent(
   }
   collectComponents(ast);
 
-  // Формируем импорты
+  // Build imports
   const imports = [`import React from 'react';`, `import { ${Array.from(usedComponents).join(', ')} } from 'react-native-svg';`];
 
-  // Генерируем интерфейс пропсов
+  // Generate props interface
   const propsInterface = generatePropsInterface(componentName, hasColors && !hasMultipleColors, true);
 
-  // Генерируем JSX для children
+  // Generate JSX for children
   const childrenJsx = ast.children
     .map((child) =>
       astToJsx(child, 2, false, {
@@ -403,7 +403,7 @@ export function convertSvgToComponent(
     )
     .join('\n');
 
-  // Генерируем код компонента
+  // Generate component code
   const componentCode = `${imports.join('\n')}
 
 ${propsInterface}
@@ -433,12 +433,12 @@ ${childrenJsx}
 }
 
 /**
- * Генерация набора иконок из нескольких SVG
+ * Generate icon set from multiple SVGs
  */
 export function generateIconSet(options: IconSetOptions): string {
   const { icons, setName = 'Icons' } = options;
 
-  // Конвертируем все иконки
+  // Convert all icons
   const convertedIcons = icons.map((icon) => {
     const result = convertSvgToComponent(icon.svg, {
       componentName: icon.name,
@@ -451,13 +451,13 @@ export function generateIconSet(options: IconSetOptions): string {
     };
   });
 
-  // Собираем все уникальные импорты
+  // Collect all unique imports
   const allImports = new Set<string>();
   convertedIcons.forEach((icon) => {
     icon.imports.forEach((imp) => allImports.add(imp));
   });
 
-  // Собираем все компоненты react-native-svg
+  // Collect all react-native-svg components
   const svgComponents = new Set<string>();
   convertedIcons.forEach((icon) => {
     const match = icon.imports.find((imp) => imp.includes('react-native-svg'));
@@ -471,22 +471,22 @@ export function generateIconSet(options: IconSetOptions): string {
     }
   });
 
-  // Генерируем общий интерфейс
+  // Generate common interface
   const commonInterface = `export interface IconProps {
   size?: number;
   color?: string;
   style?: any;
 }`;
 
-  // Генерируем типы для набора иконок
+  // Generate types for icon set
   const iconNames = icons.map((icon) => `'${icon.name}'`).join(' | ');
   const iconSetInterface = `export interface ${setName}Props extends IconProps {
   name: ${iconNames};
 }`;
 
-  // Генерируем отдельные компоненты
+  // Generate individual components
   const individualComponents = convertedIcons.map((icon) => {
-    // Удаляем импорты из отдельных компонентов, т.к. они будут в начале файла
+    // Remove imports from individual components as they will be at the beginning of the file
     const codeWithoutImports = icon.code
       .split('\n')
       .filter((line) => !line.startsWith('import'))
@@ -496,7 +496,7 @@ export function generateIconSet(options: IconSetOptions): string {
     return codeWithoutImports;
   }).join('\n\n');
 
-  // Генерируем основной компонент набора
+  // Generate main icon set component
   const iconSetComponent = `export function ${setName}({ name, ...props }: ${setName}Props) {
   switch (name) {
 ${icons.map((icon) => `    case '${icon.name}': return <${icon.name} {...props} />;`).join('\n')}
@@ -504,7 +504,7 @@ ${icons.map((icon) => `    case '${icon.name}': return <${icon.name} {...props} 
   }
 }`;
 
-  // Собираем итоговый код
+  // Assemble final code
   const finalCode = `import React from 'react';
 import { ${Array.from(svgComponents).join(', ')} } from 'react-native-svg';
 
@@ -516,7 +516,7 @@ ${individualComponents}
 
 ${iconSetComponent}
 
-// Экспорт констант с именами иконок
+// Export icon name constants
 export const IconNames = {
 ${icons.map((icon) => `  ${icon.name}: '${icon.name}' as const,`).join('\n')}
 };`;

@@ -2,19 +2,17 @@
 
 ## Overview
 
-Flow Generator - это модуль для генерации полных потоков приложения из множества Figma экранов **за один вызов**.
-
-Flow Generator is a module for generating complete app flows from multiple Figma screens **in ONE call**.
+Flow Generator is a module for generating complete app flows from multiple Figma screens in a single call.
 
 ## Features
 
-✅ **Parallel Generation** - Загружает все Figma узлы параллельно
-✅ **Unified Theme Mapping** - Единый маппинг темы для всех экранов
-✅ **Navigation Auto-generation** - Автоматическая генерация React Navigation типов и навигаторов
-✅ **Shared Types** - Генерация общих типов данных для всех экранов
-✅ **Data Models** - Обнаружение моделей данных и генерация TypeScript интерфейсов
-✅ **React Query Hooks** - Генерация хуков для загрузки данных
-✅ **Barrel Exports** - Генерация index.ts для удобного импорта
+✅ **Parallel Generation** - Loads all Figma nodes in parallel
+✅ **Unified Theme Mapping** - Single theme mapping for all screens
+✅ **Navigation Auto-generation** - Automatic generation of React Navigation types and navigators
+✅ **Shared Types** - Generation of shared data types for all screens
+✅ **Data Models** - Detection of data models and generation of TypeScript interfaces
+✅ **React Query Hooks** - Generation of hooks for data loading
+✅ **Barrel Exports** - Generation of index.ts for convenient imports
 
 ## Basic Usage
 
@@ -46,32 +44,32 @@ const result = await generateCompleteFlow(
   }
 );
 
-console.log(`✅ Генерировано ${result.summary.successful} экранов`);
-console.log(`❌ Ошибок: ${result.summary.failed}`);
-console.log(`⏱️ Время: ${result.summary.duration}ms`);
+console.log(`✅ Generated ${result.summary.successful} screens`);
+console.log(`❌ Errors: ${result.summary.failed}`);
+console.log(`⏱️ Time: ${result.summary.duration}ms`);
 ```
 
 ## Result Structure
 
 ```typescript
 interface FlowResult {
-  // Результаты генерации каждого экрана
+  // Generation results for each screen
   screens: FlowScreenResult[];
 
-  // Навигация
+  // Navigation
   navigation: {
-    types: string;        // TypeScript типы для React Navigation
-    navigator: string;    // Код навигатора
+    types: string;        // TypeScript types for React Navigation
+    navigator: string;    // Navigator code
     structure: NavigationStructure;
   };
 
-  // Общие типы для всех экранов
+  // Shared types for all screens
   sharedTypes: string;
 
   // Barrel export (index.ts)
   indexFile: string;
 
-  // Статистика
+  // Statistics
   summary: {
     total: number;
     successful: number;
@@ -88,31 +86,31 @@ interface FlowResult {
 interface FlowScreenResult {
   screenName: string;
 
-  // Сгенерированные файлы
+  // Generated files
   files: [
     {
       type: 'component',
       path: 'screens/HomeScreen.tsx',
-      content: '...',  // React Native компонент
+      content: '...',  // React Native component
     },
     {
       type: 'types',
       path: 'types/HomeScreen.types.ts',
-      content: '...',  // TypeScript интерфейсы
+      content: '...',  // TypeScript interfaces
     },
     {
       type: 'hooks',
       path: 'hooks/HomeScreen.hooks.ts',
-      content: '...',  // React Query хуки
+      content: '...',  // React Query hooks
     },
   ];
 
-  // Результаты обнаружения
+  // Detection results
   detections: {
-    dataModels: DataModel[];        // Обнаруженные модели данных
-    navigationElements: string[];   // Элементы навигации
+    dataModels: DataModel[];        // Detected data models
+    navigationElements: string[];   // Navigation elements
     screenType: 'list' | 'detail' | 'form' | 'profile' | 'unknown';
-    entityName: string;             // Название сущности (Product, User, etc.)
+    entityName: string;             // Entity name (Product, User, etc.)
   };
 
   status: 'success' | 'error';
@@ -144,11 +142,11 @@ const result = await generateCompleteFlow(
   figmaToken,
   screens,
   {
-    generateNavigation: false,  // Пропустить навигацию
-    generateSharedTypes: false, // Пропустить shared типы
-    generateIndex: true,        // Генерировать только index
-    generateHooks: false,       // Не генерировать React Query хуки
-    generateDataTypes: true,    // Генерировать только типы данных
+    generateNavigation: false,  // Skip navigation
+    generateSharedTypes: false, // Skip shared types
+    generateIndex: true,        // Generate only index
+    generateHooks: false,       // Don't generate React Query hooks
+    generateDataTypes: true,    // Generate only data types
   }
 );
 ```
@@ -162,34 +160,34 @@ import { writeFile } from 'fs/promises';
 import { dirname } from 'path';
 import { mkdir } from 'fs/promises';
 
-// Сохранение всех файлов экранов
+// Save all screen files
 for (const screen of result.screens) {
   if (screen.status === 'success') {
     for (const file of screen.files) {
-      // Создаем директорию если не существует
+      // Create directory if it doesn't exist
       await mkdir(dirname(file.path), { recursive: true });
 
-      // Сохраняем файл
+      // Save file
       await writeFile(file.path, file.content, 'utf-8');
-      console.log(`✅ Сохранен: ${file.path}`);
+      console.log(`✅ Saved: ${file.path}`);
     }
   } else {
-    console.error(`❌ Ошибка генерации ${screen.screenName}: ${screen.error}`);
+    console.error(`❌ Generation error ${screen.screenName}: ${screen.error}`);
   }
 }
 
-// Сохранение навигации
+// Save navigation
 if (result.navigation.types) {
   await writeFile('src/navigation/types.ts', result.navigation.types);
   await writeFile('src/navigation/Navigator.tsx', result.navigation.navigator);
 }
 
-// Сохранение shared типов
+// Save shared types
 if (result.sharedTypes) {
   await writeFile('src/types/shared.ts', result.sharedTypes);
 }
 
-// Сохранение index
+// Save index
 if (result.indexFile) {
   await writeFile('src/screens/index.ts', result.indexFile);
 }
@@ -200,83 +198,83 @@ if (result.indexFile) {
 ```typescript
 const result = await generateCompleteFlow(figmaToken, screens);
 
-// Фильтрация успешных экранов
+// Filter successful screens
 const successful = result.screens.filter(s => s.status === 'success');
 const failed = result.screens.filter(s => s.status === 'error');
 
-// Логирование ошибок
+// Log errors
 failed.forEach(screen => {
   console.error(`❌ ${screen.screenName}: ${screen.error}`);
 });
 
-// Продолжаем работу с успешными экранами
+// Continue with successful screens
 if (successful.length > 0) {
-  console.log(`✅ ${successful.length} экранов успешно сгенерировано`);
+  console.log(`✅ ${successful.length} screens generated successfully`);
   // Save files...
 }
 ```
 
 ## Generation Phases
 
-Flow Generator работает в 6 фазах:
+Flow Generator works in 6 phases:
 
 ### Phase 1: Parallel Figma Nodes Fetching
 ```
-[FLOW] Фаза 1/6: Загрузка Figma узлов...
-[FLOW] ✓ Загружен: HomeScreen
-[FLOW] ✓ Загружен: ProfileScreen
-[FLOW] ✅ Загружено узлов: 2 / 2
+[FLOW] Phase 1/6: Loading Figma nodes...
+[FLOW] ✓ Loaded: HomeScreen
+[FLOW] ✓ Loaded: ProfileScreen
+[FLOW] ✅ Nodes loaded: 2 / 2
 ```
 
 ### Phase 2: Unified Theme Mapping
 ```
-[FLOW] Фаза 2/6: Генерация единого маппинга темы...
-[FLOW] Найдено уникальных цветов: 15
-[FLOW] ✅ Создано цветовых маппингов: 15
+[FLOW] Phase 2/6: Generating unified theme mapping...
+[FLOW] Unique colors found: 15
+[FLOW] ✅ Color mappings created: 15
 ```
 
 ### Phase 3: Screen Code Generation
 ```
-[FLOW] Фаза 3/6: Генерация кода экранов...
-[FLOW] ✓ Сгенерирован: HomeScreen (3 файлов)
-[FLOW] ✓ Сгенерирован: ProfileScreen (2 файла)
-[FLOW] ✅ Успешно сгенерировано экранов: 2 / 2
+[FLOW] Phase 3/6: Generating screen code...
+[FLOW] ✓ Generated: HomeScreen (3 files)
+[FLOW] ✓ Generated: ProfileScreen (2 files)
+[FLOW] ✅ Screens generated successfully: 2 / 2
 ```
 
 ### Phase 4: Navigation Generation
 ```
-[FLOW] Фаза 4/6: Генерация навигации...
-[FLOW] ✅ Навигация сгенерирована
+[FLOW] Phase 4/6: Generating navigation...
+[FLOW] ✅ Navigation generated
 ```
 
 ### Phase 5: Shared Types Generation
 ```
-[FLOW] Фаза 5/6: Генерация shared типов...
-[FLOW] ✅ Shared типы сгенерированы
+[FLOW] Phase 5/6: Generating shared types...
+[FLOW] ✅ Shared types generated
 ```
 
 ### Phase 6: Barrel Export Generation
 ```
-[FLOW] Фаза 6/6: Генерация barrel export...
-[FLOW] ✅ Index файл сгенерирован
+[FLOW] Phase 6/6: Generating barrel export...
+[FLOW] ✅ Index file generated
 ```
 
 ## Detection Results
 
 ### Screen Types
-Flow Generator автоматически определяет тип экрана:
+Flow Generator automatically detects screen type:
 
-- **list** - списочные экраны (каталоги, ленты)
-- **detail** - экраны деталей (карточки товаров/пользователей)
-- **form** - формы (создание/редактирование)
-- **profile** - профильные экраны
-- **unknown** - неопределенный тип
+- **list** - list screens (catalogs, feeds)
+- **detail** - detail screens (product/user cards)
+- **form** - forms (create/edit)
+- **profile** - profile screens
+- **unknown** - unknown type
 
 ### Data Models
-Для каждого экрана генерируются TypeScript интерфейсы:
+TypeScript interfaces generated for each screen:
 
 ```typescript
-// Пример для списочного экрана ProductsScreen
+// Example for ProductsScreen list screen
 export interface Product {
   id: string;
   name: string;
@@ -295,7 +293,7 @@ export interface ProductListResponse {
 ```
 
 ### React Query Hooks
-Для каждой модели генерируются хуки:
+Hooks generated for each model:
 
 ```typescript
 export function useProducts() {
@@ -311,17 +309,17 @@ export function useProducts() {
 
 ## Navigation Structure
 
-Flow Generator анализирует экраны и создает навигационную структуру:
+Flow Generator analyzes screens and creates navigation structure:
 
 ```typescript
-// Сгенерированные типы
+// Generated types
 export type RootStackParamList = {
   Home: undefined;
   Profile: { userId: string };
   Settings: undefined;
 };
 
-// Сгенерированный навигатор
+// Generated navigator
 function RootStackNavigator() {
   return (
     <RootStack.Navigator>
@@ -336,33 +334,33 @@ function RootStackNavigator() {
 ## Performance
 
 ### Benchmark (3 screens)
-- **Последовательная генерация**: ~4500ms
-- **Flow Generator (параллельно)**: ~1800ms
-- **Ускорение**: **2.5x**
+- **Sequential generation**: ~4500ms
+- **Flow Generator (parallel)**: ~1800ms
+- **Speedup**: **2.5x**
 
 ### Benchmark (10 screens)
-- **Последовательная генерация**: ~15000ms
-- **Flow Generator (параллельно)**: ~3200ms
-- **Ускорение**: **4.7x**
+- **Sequential generation**: ~15000ms
+- **Flow Generator (parallel)**: ~3200ms
+- **Speedup**: **4.7x**
 
 ## Best Practices
 
-### 1. Правильное именование экранов
+### 1. Proper Screen Naming
 ```typescript
-// ✅ Хорошо
-'ProductsListScreen'   // Определится как list
-'ProductDetailScreen'  // Определится как detail
-'ProductEditForm'      // Определится как form
-'UserProfileScreen'    // Определится как profile
+// ✅ Good
+'ProductsListScreen'   // Detected as list
+'ProductDetailScreen'  // Detected as detail
+'ProductEditForm'      // Detected as form
+'UserProfileScreen'    // Detected as profile
 
-// ❌ Плохо
-'Screen1'              // Неясный тип
-'Component'            // Не экран
+// ❌ Bad
+'Screen1'              // Unclear type
+'Component'            // Not a screen
 ```
 
-### 2. Группировка связанных экранов
+### 2. Grouping Related Screens
 ```typescript
-// Генерируем связанные экраны вместе для лучшего анализа
+// Generate related screens together for better analysis
 const productFlowScreens = [
   { figmaUrl: '...', screenName: 'ProductsListScreen' },
   { figmaUrl: '...', screenName: 'ProductDetailScreen' },
@@ -376,11 +374,11 @@ const result = await generateCompleteFlow(
 );
 ```
 
-### 3. Обработка ошибок
+### 3. Error Handling
 ```typescript
 const result = await generateCompleteFlow(figmaToken, screens);
 
-// Проверяем критические экраны
+// Check critical screens
 const criticalScreens = ['HomeScreen', 'AuthScreen'];
 const criticalFailed = result.screens
   .filter(s => criticalScreens.includes(s.screenName) && s.status === 'error');
@@ -392,24 +390,24 @@ if (criticalFailed.length > 0) {
 
 ## Troubleshooting
 
-### Ошибка: "Узел не найден"
+### Error: "Node not found"
 ```
-Проверьте корректность node-id в Figma URL
-Формат: ?node-id=123-456 (с дефисом, не двоеточием)
+Check node-id correctness in Figma URL
+Format: ?node-id=123-456 (with hyphen, not colon)
 ```
 
-### Ошибка: "Invalid Figma URL"
+### Error: "Invalid Figma URL"
 ```
-URL должен быть в формате:
+URL should be in format:
 https://www.figma.com/design/FILE_ID?node-id=123-456
-или
+or
 https://www.figma.com/file/FILE_ID?node-id=123-456
 ```
 
-### Медленная генерация
+### Slow Generation
 ```
-Flow Generator загружает экраны параллельно.
-Если медленно - проверьте интернет соединение или Figma API лимиты.
+Flow Generator loads screens in parallel.
+If slow - check internet connection or Figma API limits.
 ```
 
 ## API Reference
@@ -426,25 +424,25 @@ function generateCompleteFlow(
 
 #### Parameters
 
-- **figmaToken**: Figma API токен
-- **screens**: Массив экранов для генерации
-  - `figmaUrl`: Figma URL с node-id
-  - `screenName`: Название экрана (например, HomeScreen)
-  - `outputPath`: (опционально) Путь для вывода файла
-- **options**: Опции генерации (все опциональны, по умолчанию true)
-  - `generateNavigation`: Генерировать навигацию
-  - `generateSharedTypes`: Генерировать общие типы
-  - `generateIndex`: Генерировать index.ts
-  - `generateHooks`: Генерировать React Query хуки
-  - `generateDataTypes`: Генерировать типы данных
+- **figmaToken**: Figma API token
+- **screens**: Array of screens to generate
+  - `figmaUrl`: Figma URL with node-id
+  - `screenName`: Screen name (e.g., HomeScreen)
+  - `outputPath`: (optional) File output path
+- **options**: Generation options (all optional, default true)
+  - `generateNavigation`: Generate navigation
+  - `generateSharedTypes`: Generate shared types
+  - `generateIndex`: Generate index.ts
+  - `generateHooks`: Generate React Query hooks
+  - `generateDataTypes`: Generate data types
 
 #### Returns
 
-Promise<FlowResult> с полными результатами генерации
+Promise<FlowResult> with complete generation results
 
 ## Examples
 
-См. примеры в директории `examples/flow-generator/`
+See examples in `examples/flow-generator/` directory
 
 ## License
 

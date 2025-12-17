@@ -1,8 +1,6 @@
 /**
- * Генератор полных потоков приложения (Flow Generator)
  * Complete app flow generator
  *
- * Генерирует множество экранов с навигацией, shared типами и barrel exports за один вызов
  * Generates multiple screens with navigation, shared types, and barrel exports in ONE call
  */
 
@@ -33,157 +31,135 @@ import {
 import * as prettier from 'prettier';
 
 /**
- * Интерфейс для определения экрана в потоке
  * Flow screen interface
  */
 export interface FlowScreen {
-  /** Figma URL с node-id (например, https://figma.com/design/FILE?node-id=123-456) */
   figmaUrl: string;
 
-  /** Название экрана (например, HomeScreen, ProfileScreen) */
   screenName: string;
 
-  /** Опциональный путь для вывода файла */
+  /** Optional output file path */
   outputPath?: string;
 }
 
 /**
- * Результат обнаружения паттернов на экране
  * Detection results for screen patterns
  */
 export interface DetectionResults {
-  /** Обнаруженные модели данных */
+  /** Detected data models */
   dataModels: DataModel[];
 
-  /** Обнаруженные элементы навигации */
+  /** Detected navigation elements */
   navigationElements: string[];
 
-  /** Тип экрана (list, detail, form, profile, unknown) */
   screenType: string;
 
-  /** Название сущности */
+  /** Entity name */
   entityName: string;
 }
 
 /**
- * Результат генерации одного файла
  * Single file generation result
  */
 export interface GeneratedFile {
-  /** Тип файла (component, types, hooks) */
   type: 'component' | 'types' | 'hooks';
 
-  /** Путь к файлу */
+  /** File path */
   path: string;
 
-  /** Содержимое файла */
+  /** File content */
   content: string;
 }
 
 /**
- * Результат генерации одного экрана в потоке
  * Single screen result in flow
  */
 export interface FlowScreenResult {
-  /** Название экрана */
+  /** Screen name */
   screenName: string;
 
-  /** Сгенерированные файлы для этого экрана */
+  /** Generated files for this screen */
   files: GeneratedFile[];
 
-  /** Результаты обнаружения */
+  /** Detection results */
   detections: DetectionResults;
 
-  /** Статус генерации */
+  /** Generation status */
   status: 'success' | 'error';
 
-  /** Сообщение об ошибке (если status === 'error') */
   error?: string;
 }
 
 /**
- * Структура навигации приложения
  * App navigation structure
  */
 export interface FlowNavigationResult {
-  /** TypeScript типы для навигации */
+  /** TypeScript types for navigation */
   types: string;
 
-  /** Код навигатора */
+  /** Navigator code */
   navigator: string;
 
-  /** Структура навигации */
+  /** Navigation structure */
   structure: NavigationStructure;
 }
 
 /**
- * Полный результат генерации потока
  * Complete flow generation result
  */
 export interface FlowResult {
-  /** Результаты генерации экранов */
+  /** Screen generation results */
   screens: FlowScreenResult[];
 
-  /** Результаты навигации */
+  /** Navigation results */
   navigation: FlowNavigationResult;
 
-  /** Shared типы для всех экранов */
+  /** Shared types for all screens */
   sharedTypes: string;
 
   /** Index barrel export */
   indexFile: string;
 
-  /** Сводная статистика */
+  /** Summary statistics */
   summary: {
-    /** Общее количество экранов */
+    /** Total screens */
     total: number;
 
-    /** Успешно сгенерировано */
+    /** Successfully generated */
     successful: number;
 
-    /** Ошибки генерации */
+    /** Generation errors */
     failed: number;
 
-    /** Типы экранов и их количество */
+    /** Screen types and counts */
     screenTypes: Record<string, number>;
 
-    /** Время выполнения (мс) */
     duration: number;
   };
 }
 
 /**
- * Опции генерации потока
  * Flow generation options
  */
 export interface FlowGenerationOptions {
-  /** Генерировать навигацию (по умолчанию true) */
   generateNavigation?: boolean;
 
-  /** Генерировать shared типы (по умолчанию true) */
   generateSharedTypes?: boolean;
 
-  /** Генерировать index.ts (по умолчанию true) */
   generateIndex?: boolean;
 
-  /** Генерировать React Query хуки (по умолчанию true) */
   generateHooks?: boolean;
 
-  /** Генерировать типы данных (по умолчанию true) */
   generateDataTypes?: boolean;
 }
 
 /**
- * Главная функция генерации полного потока приложения
  * Main function for complete app flow generation
  *
- * Генерирует множество экранов параллельно с навигацией, shared типами и всей инфраструктурой
  * Generates multiple screens in parallel with navigation, shared types, and all infrastructure
  *
- * @param figmaToken - Figma API токен
- * @param screens - Массив экранов для генерации
- * @param options - Опции генерации
- * @returns Полный результат генерации потока
+ * @param options - Generation options
+ * @returns Complete flow generation result
  */
 export async function generateCompleteFlow(
   figmaToken: string,
@@ -192,7 +168,6 @@ export async function generateCompleteFlow(
 ): Promise<FlowResult> {
   const startTime = Date.now();
 
-  // Установка значений по умолчанию для опций
   // Set default values for options
   const {
     generateNavigation = true,
@@ -203,17 +178,12 @@ export async function generateCompleteFlow(
   } = options;
 
   console.error('[FLOW] ═══════════════════════════════════════');
-  console.error('[FLOW] Начало генерации полного потока...');
-  console.error(`[FLOW] Экранов для генерации: ${screens.length}`);
   console.error('[FLOW] ═══════════════════════════════════════');
 
-  // Загружаем конфигурацию проекта один раз для всех экранов
   // Load project config once for all screens
   const config = (await loadProjectConfig()) || getDefaultConfig();
 
-  // ФАЗА 1: Параллельная загрузка всех Figma узлов
   // PHASE 1: Parallel Figma nodes fetching
-  console.error('[FLOW] Фаза 1/6: Загрузка Figma узлов...');
 
   const fetchResults = await fetchAllFigmaNodes(figmaToken, screens);
 
@@ -226,18 +196,14 @@ export async function generateCompleteFlow(
   );
 
   console.error(
-    `[FLOW] ✅ Загружено узлов: ${successfulFetches.length} / ${screens.length}`
   );
   if (failedFetches.length > 0) {
-    console.error(`[FLOW] ❌ Ошибки загрузки: ${failedFetches.length}`);
     failedFetches.forEach((f) => {
       console.error(`[FLOW]   - ${f.screen.screenName}: ${f.error}`);
     });
   }
 
-  // ФАЗА 2: Генерация единого маппинга темы для всех экранов
   // PHASE 2: Generate unified theme mapping for all screens
-  console.error('[FLOW] Фаза 2/6: Генерация единого маппинга темы...');
 
   const allFigmaColors = new Set<string>();
   successfulFetches.forEach((result) => {
@@ -247,7 +213,6 @@ export async function generateCompleteFlow(
     }
   });
 
-  console.error(`[FLOW] Найдено уникальных цветов: ${allFigmaColors.size}`);
 
   if (allFigmaColors.size > 0 && config.theme?.location) {
     const colorMappings = await autoGenerateColorMappings(
@@ -261,13 +226,10 @@ export async function generateCompleteFlow(
     await updateConfigMappings({ colors: colorMappings });
 
     console.error(
-      `[FLOW] ✅ Создано цветовых маппингов: ${Object.keys(colorMappings).length}`
     );
   }
 
-  // ФАЗА 3: Параллельная генерация кода экранов с обнаружением паттернов
   // PHASE 3: Parallel screen code generation with pattern detection
-  console.error('[FLOW] Фаза 3/6: Генерация кода экранов и обнаружение паттернов...');
 
   const screenResults = await generateAllScreens(
     successfulFetches,
@@ -278,18 +240,14 @@ export async function generateCompleteFlow(
 
   const successfulScreens = screenResults.filter((r) => r.status === 'success');
   console.error(
-    `[FLOW] ✅ Успешно сгенерировано экранов: ${successfulScreens.length} / ${screens.length}`
   );
 
-  // ФАЗА 4: Генерация навигации на основе анализа экранов
   // PHASE 4: Navigation generation based on screen analysis
-  console.error('[FLOW] Фаза 4/6: Генерация навигации...');
 
   let navigationResult: FlowNavigationResult;
 
   if (generateNavigation && successfulFetches.length > 0) {
     navigationResult = await generateFlowNavigation(successfulFetches);
-    console.error('[FLOW] ✅ Навигация сгенерирована');
   } else {
     navigationResult = {
       types: '',
@@ -300,12 +258,9 @@ export async function generateCompleteFlow(
         nestedNavigators: [],
       },
     };
-    console.error('[FLOW] ⊘ Генерация навигации пропущена');
   }
 
-  // ФАЗА 5: Генерация shared типов из всех моделей данных
   // PHASE 5: Generate shared types from all data models
-  console.error('[FLOW] Фаза 5/6: Генерация shared типов...');
 
   let sharedTypesCode = '';
 
@@ -317,7 +272,6 @@ export async function generateCompleteFlow(
       allDataModels.push(...screen.detections.dataModels);
     });
 
-    // Преобразуем модели данных в ExtractedType формат
     // Convert data models to ExtractedType format
     allDataModels.forEach((model) => {
       const definition = generateSingleTypeDefinition(model);
@@ -341,26 +295,19 @@ export async function generateCompleteFlow(
       allExtractedTypes
     );
 
-    console.error('[FLOW] ✅ Shared типы сгенерированы');
   } else {
-    console.error('[FLOW] ⊘ Генерация shared типов пропущена');
   }
 
-  // ФАЗА 6: Генерация index.ts barrel export
   // PHASE 6: Generate index.ts barrel export
-  console.error('[FLOW] Фаза 6/6: Генерация barrel export...');
 
   let indexFileCode = '';
 
   if (generateIndex) {
     const successfulScreenNames = successfulScreens.map((s) => s.screenName);
     indexFileCode = generateBarrelExport(successfulScreenNames);
-    console.error('[FLOW] ✅ Index файл сгенерирован');
   } else {
-    console.error('[FLOW] ⊘ Генерация index файла пропущена');
   }
 
-  // Подсчет статистики
   // Calculate statistics
   const screenTypeCounts: Record<string, number> = {};
   successfulScreens.forEach((screen) => {
@@ -371,9 +318,6 @@ export async function generateCompleteFlow(
   const duration = Date.now() - startTime;
 
   console.error('[FLOW] ═══════════════════════════════════════');
-  console.error(`[FLOW] ✅ Генерация потока завершена за ${duration}ms`);
-  console.error(`[FLOW] 📊 Успешно: ${successfulScreens.length} | Ошибки: ${screenResults.length - successfulScreens.length}`);
-  console.error('[FLOW] Типы экранов:');
   Object.entries(screenTypeCounts).forEach(([type, count]) => {
     console.error(`[FLOW]   - ${type}: ${count}`);
   });
@@ -395,7 +339,6 @@ export async function generateCompleteFlow(
 }
 
 /**
- * Параллельная загрузка всех Figma узлов
  * Parallel fetching of all Figma nodes
  */
 async function fetchAllFigmaNodes(
@@ -417,16 +360,13 @@ async function fetchAllFigmaNodes(
       const node = response.nodes[nodeId]?.document;
 
       if (!node) {
-        throw new Error(`Узел ${nodeId} не найден в Figma файле`);
       }
 
-      console.error(`[FLOW] ✓ Загружен: ${screen.screenName}`);
 
       return { screen, node, fileKey, nodeId };
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
-      console.error(`[FLOW] ✗ Ошибка загрузки ${screen.screenName}:`, errorMessage);
       return { screen, error: errorMessage };
     }
   });
@@ -435,7 +375,6 @@ async function fetchAllFigmaNodes(
 }
 
 /**
- * Параллельная генерация всех экранов
  * Parallel generation of all screens
  */
 async function generateAllScreens(
@@ -451,13 +390,11 @@ async function generateAllScreens(
 ): Promise<FlowScreenResult[]> {
   const results: FlowScreenResult[] = [];
 
-  // Обработка успешно загруженных экранов
   // Process successfully fetched screens
   const generatePromises = successfulFetches.map(async (data) => {
     const { screen, node } = data;
 
     try {
-      // Генерируем код компонента
       // Generate component code
       const componentCode = await generateReactNativeComponent(
         node,
@@ -465,7 +402,6 @@ async function generateAllScreens(
         config
       );
 
-      // Обнаруживаем паттерны и модели данных
       // Detect patterns and data models
       const dataModels = inferDataModels(node, screen.screenName);
       const screenType = detectScreenTypeFromName(screen.screenName);
@@ -479,7 +415,6 @@ async function generateAllScreens(
         },
       ];
 
-      // Генерируем типы данных если запрошено
       // Generate data types if requested
       if (options.generateDataTypes && dataModels.length > 0) {
         const typesCode = generateTypeDefinitions(dataModels);
@@ -490,7 +425,6 @@ async function generateAllScreens(
         });
       }
 
-      // Генерируем React Query хуки если запрошено
       // Generate React Query hooks if requested
       if (options.generateHooks && dataModels.length > 0) {
         const hooksCode = generateReactQueryHooks(dataModels, screen.screenName);
@@ -501,7 +435,6 @@ async function generateAllScreens(
         });
       }
 
-      console.error(`[FLOW] ✓ Сгенерирован: ${screen.screenName} (${files.length} файлов)`);
 
       return {
         screenName: screen.screenName,
@@ -517,7 +450,6 @@ async function generateAllScreens(
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
-      console.error(`[FLOW] ✗ Ошибка генерации ${screen.screenName}:`, errorMessage);
 
       return {
         screenName: screen.screenName,
@@ -537,7 +469,6 @@ async function generateAllScreens(
   const successResults = await Promise.all(generatePromises);
   results.push(...successResults);
 
-  // Обработка неудачных загрузок
   // Process failed fetches
   failedFetches.forEach((data) => {
     results.push({
@@ -558,7 +489,6 @@ async function generateAllScreens(
 }
 
 /**
- * Генерация навигационной структуры для потока
  * Generate navigation structure for flow
  */
 async function generateFlowNavigation(
@@ -569,22 +499,18 @@ async function generateFlowNavigation(
     nodeId: string;
   }>
 ): Promise<FlowNavigationResult> {
-  // Подготовка данных для анализа навигации
   // Prepare data for navigation analysis
   const navScreens: NavFigmaScreen[] = fetchedScreens.map((data) => ({
     name: data.screen.screenName,
     node: data.node,
   }));
 
-  // Анализируем структуру навигации
   // Analyze navigation structure
   const structure = analyzeNavigationStructure(navScreens);
 
-  // Генерируем типы навигации
   // Generate navigation types
   const typesCode = generateNavigationTypes(structure);
 
-  // Генерируем код навигатора
   // Generate navigator code
   const navigatorCode = generateNavigatorCode(structure);
 
@@ -596,7 +522,6 @@ async function generateFlowNavigation(
 }
 
 /**
- * Генерирует определение одного типа из модели данных
  * Generates single type definition from data model
  */
 function generateSingleTypeDefinition(model: DataModel): string {
@@ -628,7 +553,6 @@ function generateSingleTypeDefinition(model: DataModel): string {
 }
 
 /**
- * Определяет тип экрана из его названия
  * Determines screen type from its name
  */
 function detectScreenTypeFromName(
@@ -639,8 +563,8 @@ function detectScreenTypeFromName(
   if (
     normalized.includes('list') ||
     normalized.includes('catalog') ||
-    normalized.includes('каталог') ||
-    normalized.includes('список')
+    normalized.includes('catalog') ||
+    normalized.includes('list')
   ) {
     return 'list';
   }
@@ -648,7 +572,7 @@ function detectScreenTypeFromName(
   if (
     normalized.includes('detail') ||
     normalized.includes('card') ||
-    normalized.includes('карточка')
+    normalized.includes('card')
   ) {
     return 'detail';
   }
@@ -657,14 +581,14 @@ function detectScreenTypeFromName(
     normalized.includes('form') ||
     normalized.includes('edit') ||
     normalized.includes('create') ||
-    normalized.includes('форма')
+    normalized.includes('form')
   ) {
     return 'form';
   }
 
   if (
     normalized.includes('profile') ||
-    normalized.includes('профиль') ||
+    normalized.includes('profile') ||
     normalized.includes('account')
   ) {
     return 'profile';
@@ -674,14 +598,11 @@ function detectScreenTypeFromName(
 }
 
 /**
- * Извлекает название сущности из имени экрана
  * Extracts entity name from screen name
  */
 function extractEntityNameFromScreen(screenName: string): string {
   const normalized = screenName
-    .replace(/Screen|Page|View|Экран|Страница/gi, '')
     .replace(/List|Catalog|Details?|Form|Card/gi, '')
-    .replace(/Список|Каталог|Карточка|Форма/gi, '')
     .trim();
 
   const words = normalized.split(/[\s_-]+/);
@@ -697,19 +618,17 @@ function extractEntityNameFromScreen(screenName: string): string {
 }
 
 /**
- * Парсит Figma URL и извлекает file key и node ID
  * Parses Figma URL and extracts file key and node ID
  */
 function parseFigmaUrl(figmaUrl: string): { fileKey: string; nodeId: string } {
   const urlMatch = figmaUrl.match(/figma\.com\/(?:file|design)\/([^/?]+)/);
   if (!urlMatch) {
-    throw new Error(`Невалидный Figma URL: ${figmaUrl}`);
+    throw new Error(`Invalid Figma URL: ${figmaUrl}`);
   }
   const fileKey = urlMatch[1];
 
   const nodeMatch = figmaUrl.match(/node-id=([^&]+)/);
   if (!nodeMatch) {
-    throw new Error(`node-id не найден в URL: ${figmaUrl}`);
   }
   const nodeId = nodeMatch[1].replace(/-/g, ':');
 
@@ -717,7 +636,6 @@ function parseFigmaUrl(figmaUrl: string): { fileKey: string; nodeId: string } {
 }
 
 /**
- * Возвращает конфигурацию по умолчанию
  * Returns default configuration
  */
 function getDefaultConfig(): ProjectConfig {

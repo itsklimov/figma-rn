@@ -1,39 +1,39 @@
 /**
- * Обнаружение вариантов и состояний компонентов Figma
- * Анализ компонентных наборов, определение интерактивных состояний и генерация TypeScript типов
+ * Detection of Figma component variants and states
+ * Analysis of component sets, detection of interactive states and generation of TypeScript types
  */
 
 /**
- * Свойство варианта компонента
+ * Component variant property
  */
 export interface VariantProperty {
-  name: string; // например, "size", "type", "state"
-  values: string[]; // например, ["small", "medium", "large"]
+  name: string; // e.g., "size", "type", "state"
+  values: string[]; // e.g., ["small", "medium", "large"]
   defaultValue: string;
 }
 
 /**
- * Стилевое переопределение для состояния
+ * Style override for state
  */
 export interface StateStyle {
   state: 'default' | 'pressed' | 'disabled' | 'loading' | 'error' | 'hover' | 'focused';
   styleOverrides: Record<string, any>;
-  hasIndicator: boolean; // индикатор загрузки, иконка ошибки и т.д.
+  hasIndicator: boolean; // loading indicator, error icon, etc.
 }
 
 /**
- * Результат обнаружения вариантов
+ * Variant detection result
  */
 export interface VariantDetection {
   isComponentSet: boolean;
   variants: VariantProperty[];
   states: StateStyle[];
-  suggestedPropsInterface: string; // TypeScript интерфейс
-  suggestedStyleVariants: string; // код вариантов createStyles
+  suggestedPropsInterface: string; // TypeScript interface
+  suggestedStyleVariants: string; // createStyles variant code
 }
 
 /**
- * Интерфейс узла Figma с поддержкой компонентных наборов
+ * Figma node interface with component set support
  */
 interface FigmaNode {
   id: string;
@@ -41,7 +41,7 @@ interface FigmaNode {
   type: string;
   children?: FigmaNode[];
 
-  // Свойства компонентов
+  // Component properties
   componentPropertyDefinitions?: {
     [propertyName: string]: {
       type: 'VARIANT' | 'TEXT' | 'BOOLEAN' | 'INSTANCE_SWAP';
@@ -50,7 +50,7 @@ interface FigmaNode {
     };
   };
 
-  // Визуальные свойства для обнаружения состояний
+  // Visual properties for state detection
   opacity?: number;
   visible?: boolean;
   fills?: Array<{
@@ -68,12 +68,12 @@ interface FigmaNode {
     visible?: boolean;
   }>;
 
-  // Переопределения свойств для экземпляров
+  // Property overrides for instances
   variantProperties?: Record<string, string>;
 }
 
 /**
- * Нормализация строки для сравнения (lowercase, без спецсимволов)
+ * Normalize string for comparison (lowercase, without special characters)
  */
 function normalizeString(str: string): string {
   return str
@@ -83,7 +83,7 @@ function normalizeString(str: string): string {
 }
 
 /**
- * Преобразование строки в camelCase
+ * Convert string to camelCase
  */
 function toCamelCase(str: string): string {
   return str
@@ -92,7 +92,7 @@ function toCamelCase(str: string): string {
 }
 
 /**
- * Преобразование строки в PascalCase
+ * Convert string to PascalCase
  */
 function toPascalCase(str: string): string {
   const camel = toCamelCase(str);
@@ -100,24 +100,24 @@ function toPascalCase(str: string): string {
 }
 
 /**
- * Проверка, является ли узел компонентным набором
+ * Check if node is a component set
  */
 function isComponentSet(node: FigmaNode): boolean {
   return node.type === 'COMPONENT_SET';
 }
 
 /**
- * Парсинг имени варианта компонента для извлечения свойств
- * Примеры: "State=Pressed", "Type=Primary, Size=Large"
+ * Parse component variant name to extract properties
+ * Examples: "State=Pressed", "Type=Primary, Size=Large"
  */
 function parseVariantName(name: string): Record<string, string> {
   const properties: Record<string, string> = {};
 
-  // Разделение по запятой для множественных свойств
+  // Split by comma for multiple properties
   const parts = name.split(',').map(p => p.trim());
 
   for (const part of parts) {
-    // Поиск паттерна "Property=Value"
+    // Look for "Property=Value" pattern
     const match = part.match(/^([^=]+)=(.+)$/);
     if (match) {
       const propName = match[1].trim();
@@ -130,17 +130,17 @@ function parseVariantName(name: string): Record<string, string> {
 }
 
 /**
- * Извлечение свойств вариантов из дочерних компонентов набора
+ * Extract variant properties from set child components
  */
 function extractVariantPropertiesFromChildren(children: FigmaNode[]): VariantProperty[] {
   const propertyMap = new Map<string, Set<string>>();
 
-  // Обход всех дочерних компонентов
+  // Iterate through all child components
   for (const child of children) {
     if (child.type === 'COMPONENT') {
       const properties = parseVariantName(child.name);
 
-      // Сбор всех значений для каждого свойства
+      // Collect all values for each property
       for (const [propName, propValue] of Object.entries(properties)) {
         if (!propertyMap.has(propName)) {
           propertyMap.set(propName, new Set());
@@ -150,14 +150,14 @@ function extractVariantPropertiesFromChildren(children: FigmaNode[]): VariantPro
     }
   }
 
-  // Преобразование в массив VariantProperty
+  // Convert to VariantProperty array
   const variants: VariantProperty[] = [];
   for (const [name, valuesSet] of propertyMap.entries()) {
     const values = Array.from(valuesSet).sort();
     variants.push({
       name,
       values,
-      defaultValue: values[0], // первое значение по умолчанию
+      defaultValue: values[0], // first value as default
     });
   }
 
@@ -165,7 +165,7 @@ function extractVariantPropertiesFromChildren(children: FigmaNode[]): VariantPro
 }
 
 /**
- * Извлечение свойств вариантов из API определений компонента
+ * Extract variant properties from component API definitions
  */
 function extractVariantPropertiesFromDefinitions(
   definitions: FigmaNode['componentPropertyDefinitions']
@@ -190,15 +190,15 @@ function extractVariantPropertiesFromDefinitions(
 }
 
 /**
- * Определение типа состояния по имени свойства или значения
+ * Detect state type by property name or value
  */
 function detectStateType(propName: string, propValue: string): StateStyle['state'] | null {
   const normalizedProp = normalizeString(propName);
   const normalizedValue = normalizeString(propValue);
 
-  // Проверка по имени свойства
+  // Check by property name
   if (normalizedProp === 'state' || normalizedProp === 'variant' || normalizedProp === 'status') {
-    // Проверка значения
+    // Check value
     if (normalizedValue.includes('press') || normalizedValue === 'active') {
       return 'pressed';
     }
@@ -226,27 +226,27 @@ function detectStateType(propName: string, propValue: string): StateStyle['state
 }
 
 /**
- * Анализ визуальных характеристик узла для определения состояния
+ * Analyze node visual characteristics for state detection
  */
 function analyzeVisualState(node: FigmaNode): Partial<StateStyle> {
   const styleOverrides: Record<string, any> = {};
   let hasIndicator = false;
 
-  // Проверка прозрачности (disabled часто имеет opacity: 0.5)
+  // Check transparency (disabled often has opacity: 0.5)
   if (node.opacity !== undefined && node.opacity < 1) {
     styleOverrides.opacity = node.opacity;
     if (node.opacity <= 0.6) {
-      // Вероятно disabled состояние
+      // Likely disabled state
       hasIndicator = true;
     }
   }
 
-  // Проверка видимости
+  // Check visibility
   if (node.visible === false) {
     styleOverrides.display = 'none';
   }
 
-  // Анализ заливок для изменений цвета
+  // Analyze fills for color changes
   if (node.fills && node.fills.length > 0) {
     const primaryFill = node.fills[0];
     if (primaryFill.type === 'SOLID' && primaryFill.color) {
@@ -255,22 +255,22 @@ function analyzeVisualState(node: FigmaNode): Partial<StateStyle> {
     }
   }
 
-  // Поиск индикаторов (спиннеры загрузки, иконки ошибок)
+  // Look for indicators (loading spinners, error icons)
   if (node.children) {
     for (const child of node.children) {
       const childName = normalizeString(child.name);
 
-      // Индикаторы загрузки
+      // Loading indicators
       if (childName.includes('spinner') || childName.includes('loader') || childName.includes('loading')) {
         hasIndicator = true;
       }
 
-      // Индикаторы ошибок
+      // Error indicators
       if (childName.includes('error') || childName.includes('alert') || childName.includes('warning')) {
         hasIndicator = true;
       }
 
-      // Индикаторы успеха
+      // Success indicators
       if (childName.includes('check') || childName.includes('success')) {
         hasIndicator = true;
       }
@@ -281,20 +281,20 @@ function analyzeVisualState(node: FigmaNode): Partial<StateStyle> {
 }
 
 /**
- * Обнаружение состояний из вариантов и дочерних узлов
+ * Detect states from variants and child nodes
  */
 function detectStates(node: FigmaNode, variants: VariantProperty[]): StateStyle[] {
   const states: StateStyle[] = [];
   const stateMap = new Map<StateStyle['state'], Partial<StateStyle>>();
 
-  // Инициализация default состояния
+  // Initialize default state
   stateMap.set('default', {
     state: 'default',
     styleOverrides: {},
     hasIndicator: false,
   });
 
-  // Анализ вариантов для поиска состояний
+  // Analyze variants to find states
   for (const variant of variants) {
     for (const value of variant.values) {
       const stateType = detectStateType(variant.name, value);
@@ -308,13 +308,13 @@ function detectStates(node: FigmaNode, variants: VariantProperty[]): StateStyle[
     }
   }
 
-  // Анализ дочерних компонентов для извлечения стилевых переопределений
+  // Analyze child components to extract style overrides
   if (node.children) {
     for (const child of node.children) {
       if (child.type === 'COMPONENT') {
         const properties = parseVariantName(child.name);
 
-        // Определение состояния этого варианта
+        // Detect state of this variant
         let detectedState: StateStyle['state'] | null = null;
         for (const [propName, propValue] of Object.entries(properties)) {
           const state = detectStateType(propName, propValue);
@@ -325,7 +325,7 @@ function detectStates(node: FigmaNode, variants: VariantProperty[]): StateStyle[
         }
 
         if (detectedState) {
-          // Анализ визуальных характеристик
+          // Analyze visual characteristics
           const visual = analyzeVisualState(child);
           const existing = stateMap.get(detectedState);
 
@@ -339,7 +339,7 @@ function detectStates(node: FigmaNode, variants: VariantProperty[]): StateStyle[
     }
   }
 
-  // Преобразование Map в массив
+  // Convert Map to array
   for (const stateData of stateMap.values()) {
     states.push(stateData as StateStyle);
   }
@@ -348,7 +348,7 @@ function detectStates(node: FigmaNode, variants: VariantProperty[]): StateStyle[
 }
 
 /**
- * Генерация TypeScript интерфейса для пропсов вариантов
+ * Generate TypeScript interface for variant props
  */
 function generatePropsInterface(componentName: string, variants: VariantProperty[]): string {
   const interfaceName = `${toPascalCase(componentName)}Props`;
@@ -359,7 +359,7 @@ function generatePropsInterface(componentName: string, variants: VariantProperty
     const propName = toCamelCase(variant.name);
     const propType = variant.values.map(v => `'${v}'`).join(' | ');
 
-    code += `  /** Вариант ${variant.name} */\n`;
+    code += `  /** ${variant.name} variant */\n`;
     code += `  ${propName}?: ${propType};\n`;
   }
 
@@ -369,17 +369,17 @@ function generatePropsInterface(componentName: string, variants: VariantProperty
 }
 
 /**
- * Генерация кода стилевых вариантов для createStyles
+ * Generate style variants code for createStyles
  */
 function generateStyleVariantsCode(states: StateStyle[]): string {
   let code = `const styles = StyleSheet.create({\n`;
   code += `  container: {\n`;
-  code += `    // базовые стили\n`;
+  code += `    // base styles\n`;
   code += `  },\n`;
 
   for (const state of states) {
     if (state.state === 'default') {
-      continue; // default уже включен в container
+      continue; // default already included in container
     }
 
     const stateName = state.state;
@@ -404,36 +404,36 @@ function generateStyleVariantsCode(states: StateStyle[]): string {
 }
 
 /**
- * Основная функция обнаружения вариантов и состояний
+ * Main function for detecting variants and states
  *
- * @param node - узел Figma для анализа
- * @returns результат обнаружения вариантов и состояний
+ * @param node - Figma node to analyze
+ * @returns variant and state detection result
  */
 export function detectVariantsAndStates(node: any): VariantDetection {
   const figmaNode = node as FigmaNode;
 
-  // Проверка, является ли узел компонентным набором
+  // Check if node is a component set
   const isSet = isComponentSet(figmaNode);
 
   let variants: VariantProperty[] = [];
 
   if (isSet && figmaNode.children) {
-    // Извлечение вариантов из дочерних компонентов
+    // Extract variants from child components
     variants = extractVariantPropertiesFromChildren(figmaNode.children);
   } else if (figmaNode.componentPropertyDefinitions) {
-    // Извлечение вариантов из API определений
+    // Extract variants from API definitions
     variants = extractVariantPropertiesFromDefinitions(figmaNode.componentPropertyDefinitions);
   }
 
-  // Обнаружение состояний
+  // Detect states
   const states = detectStates(figmaNode, variants);
 
-  // Генерация TypeScript интерфейса
+  // Generate TypeScript interface
   const suggestedPropsInterface = variants.length > 0
     ? generatePropsInterface(figmaNode.name, variants)
     : '';
 
-  // Генерация кода стилевых вариантов
+  // Generate style variants code
   const suggestedStyleVariants = states.length > 0
     ? generateStyleVariantsCode(states)
     : '';
@@ -448,39 +448,39 @@ export function detectVariantsAndStates(node: any): VariantDetection {
 }
 
 /**
- * Генерация пропсов вариантов для компонента
+ * Generate variant props for component
  *
- * @param detection - результат обнаружения вариантов
- * @param componentName - имя компонента
- * @returns TypeScript код интерфейса пропсов
+ * @param detection - variant detection result
+ * @param componentName - component name
+ * @returns TypeScript props interface code
  */
 export function generateVariantProps(detection: VariantDetection, componentName: string): string {
   if (detection.variants.length === 0) {
-    return `// Вариантов не обнаружено для ${componentName}`;
+    return `// No variants detected for ${componentName}`;
   }
 
   return generatePropsInterface(componentName, detection.variants);
 }
 
 /**
- * Генерация стилевых вариантов
+ * Generate style variants
  *
- * @param detection - результат обнаружения вариантов
- * @returns код React Native стилей с вариантами
+ * @param detection - variant detection result
+ * @returns React Native styles code with variants
  */
 export function generateStyleVariants(detection: VariantDetection): string {
   if (detection.states.length === 0) {
-    return `// Состояний не обнаружено`;
+    return `// No states detected`;
   }
 
-  let code = `// Обнаруженные состояния: ${detection.states.map(s => s.state).join(', ')}\n\n`;
+  let code = `// Detected states: ${detection.states.map(s => s.state).join(', ')}\n\n`;
   code += detection.suggestedStyleVariants;
 
-  // Дополнительная информация об индикаторах
+  // Additional information about indicators
   const statesWithIndicators = detection.states.filter(s => s.hasIndicator);
   if (statesWithIndicators.length > 0) {
-    code += `\n// Состояния с индикаторами: ${statesWithIndicators.map(s => s.state).join(', ')}\n`;
-    code += `// Рекомендуется добавить условный рендеринг для индикаторов загрузки/ошибок\n`;
+    code += `\n// States with indicators: ${statesWithIndicators.map(s => s.state).join(', ')}\n`;
+    code += `// Recommended to add conditional rendering for loading/error indicators\n`;
   }
 
   return code;

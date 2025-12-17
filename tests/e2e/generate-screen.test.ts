@@ -1,10 +1,10 @@
 /**
- * E2E тесты для generate_screen
+ * E2E tests for generate_screen
  *
- * Тестирует полный цикл генерации React Native компонента из Figma URL:
- * 1. Вызов MCP инструмента generate_screen
- * 2. Создание файловой структуры в .figma/
- * 3. Валидация TypeScript кода
+ * Tests complete React Native component generation cycle from Figma URL:
+ * 1. Call generate_screen MCP tool
+ * 2. Create file structure in .figma/
+ * 3. Validate TypeScript code
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
@@ -19,60 +19,60 @@ describe('generate_screen', () => {
   let workspace: TempWorkspace;
 
   beforeAll(async () => {
-    // Проверяем наличие токена
+    // Check token availability
     figmaToken = requireFigmaToken();
 
-    // Запускаем MCP сервер
+    // Start MCP server
     client = await createMCPClient(figmaToken);
   });
 
   afterAll(async () => {
-    // Останавливаем MCP сервер
+    // Stop MCP server
     await client.stop();
   });
 
   beforeEach(async () => {
-    // Создаём временный workspace для каждого теста
+    // Create temporary workspace for each test
     workspace = await createTempWorkspace();
   });
 
   afterEach(async () => {
-    // Очищаем workspace после теста
+    // Clean up workspace after test
     await workspace.cleanup();
   });
 
-  describe('Базовая генерация', () => {
-    it('должен генерировать компонент из валидного Figma URL', async () => {
+  describe('Basic generation', () => {
+    it('should generate component from valid Figma URL', async () => {
       const result = await client.generateScreen({
         figmaUrl: TEST_URLS.mainScreen,
         screenName: 'TestScreen',
         projectRoot: workspace.root,
       });
 
-      // Проверяем, что результат не содержит ошибок
+      // Check that result contains no errors
       expect(result.isError).toBeFalsy();
       expect(result.content).toHaveLength(1);
       expect(result.content[0].type).toBe('text');
 
-      // Проверяем, что ответ содержит информацию о генерации
+      // Check that response contains generation info
       const responseText = result.content[0].text;
       expect(responseText).toContain('Generated:');
       expect(responseText).toContain('TestScreen');
     });
 
-    it('должен создать правильную файловую структуру', async () => {
+    it('should create correct file structure', async () => {
       await client.generateScreen({
         figmaUrl: TEST_URLS.mainScreen,
         screenName: 'StructureTest',
         projectRoot: workspace.root,
       });
 
-      // Проверяем структуру workspace
+      // Check workspace structure
       const structure = await workspace.checkStructure();
       expect(structure.manifest).toBe(true);
       expect(structure.config).toBe(true);
 
-      // Должен быть создан хотя бы один компонент
+      // At least one component should be created
       const totalComponents = [
         ...structure.screens,
         ...structure.modals,
@@ -82,14 +82,14 @@ describe('generate_screen', () => {
       expect(totalComponents).toBeGreaterThan(0);
     });
 
-    it('должен создать валидные файлы компонента', async () => {
+    it('should create valid component files', async () => {
       await client.generateScreen({
         figmaUrl: TEST_URLS.mainScreen,
         screenName: 'FileTest',
         projectRoot: workspace.root,
       });
 
-      // Находим категорию, куда был сохранён компонент
+      // Find category where component was saved
       const structure = await workspace.checkStructure();
       let category: 'screens' | 'modals' | 'sheets' | 'components' = 'screens';
       let componentName = 'FileTest';
@@ -104,7 +104,7 @@ describe('generate_screen', () => {
         category = 'components';
       }
 
-      // Валидируем структуру компонента
+      // Validate component structure
       const validation = await validateGeneratedComponent(workspace, category, componentName);
       expect(validation.valid).toBe(true);
       expect(validation.errors).toHaveLength(0);
@@ -113,15 +113,15 @@ describe('generate_screen', () => {
     });
   });
 
-  describe('TypeScript компиляция', () => {
-    it('сгенерированный код должен компилироваться без ошибок', async () => {
+  describe('TypeScript compilation', () => {
+    it('generated code should compile without errors', async () => {
       await client.generateScreen({
         figmaUrl: TEST_URLS.mainScreen,
         screenName: 'CompileTest',
         projectRoot: workspace.root,
       });
 
-      // Находим сгенерированный файл
+      // Find generated file
       const structure = await workspace.checkStructure();
       const allComponents = [
         ...structure.screens.map(s => ({ name: s, category: 'screens' })),
@@ -136,10 +136,10 @@ describe('generate_screen', () => {
       const indexPath = `.figma/${component.category}/${component.name}/index.tsx`;
       const code = await workspace.readFile(indexPath);
 
-      // Компилируем TypeScript
+      // Compile TypeScript
       const compilation = compileTypeScript(code, 'CompileTest.tsx');
 
-      // Выводим ошибки для отладки
+      // Output errors for debugging
       if (!compilation.success) {
         console.error('Compilation errors:', compilation.errors);
       }
@@ -148,14 +148,14 @@ describe('generate_screen', () => {
       expect(compilation.errors).toHaveLength(0);
     });
 
-    it('сгенерированный код должен содержать валидный React Native компонент', async () => {
+    it('generated code should contain valid React Native component', async () => {
       await client.generateScreen({
         figmaUrl: TEST_URLS.mainScreen,
         screenName: 'ValidateTest',
         projectRoot: workspace.root,
       });
 
-      // Находим сгенерированный файл
+      // Find generated file
       const structure = await workspace.checkStructure();
       const allComponents = [
         ...structure.screens.map(s => ({ name: s, category: 'screens' })),
@@ -168,10 +168,10 @@ describe('generate_screen', () => {
       const indexPath = `.figma/${component.category}/${component.name}/index.tsx`;
       const code = await workspace.readFile(indexPath);
 
-      // Валидируем React Native компонент
+      // Validate React Native component
       const validation = validateReactNativeComponent(code);
 
-      // Выводим проблемы для отладки
+      // Output issues for debugging
       if (!validation.valid) {
         console.error('Validation issues:', validation.issues);
       }
@@ -181,18 +181,18 @@ describe('generate_screen', () => {
     });
   });
 
-  describe('Уникальность имён', () => {
-    it('должен генерировать уникальные имена при дублировании', async () => {
-      // Первая генерация
+  describe('Name uniqueness', () => {
+    it('should generate unique names on duplication', async () => {
+      // First generation
       await client.generateScreen({
         figmaUrl: TEST_URLS.mainScreen,
         screenName: 'DuplicateTest',
         projectRoot: workspace.root,
       });
 
-      // Вторая генерация с тем же именем но с другим nodeId (симулируем)
-      // В реальности это будет работать только если изменить URL
-      // Для теста используем тот же URL - должен перезаписать
+      // Second generation with same name but different nodeId (simulate)
+      // In reality this will only work if URL changes
+      // For test use same URL - should overwrite
 
       const result = await client.generateScreen({
         figmaUrl: TEST_URLS.mainScreen,
@@ -202,7 +202,7 @@ describe('generate_screen', () => {
 
       expect(result.isError).toBeFalsy();
 
-      // Проверяем manifest
+      // Check manifest
       const manifest = await workspace.readJson<{
         screens: Record<string, { name: string }>;
         modals: Record<string, { name: string }>;
@@ -210,7 +210,7 @@ describe('generate_screen', () => {
         components: Record<string, { name: string }>;
       }>('.figma/manifest.json');
 
-      // Должен быть только один компонент с именем DuplicateTest
+      // Should be only one component with name DuplicateTest
       const nodeId = extractNodeId(TEST_URLS.mainScreen);
       const allEntries = [
         ...Object.entries(manifest.screens || {}),
@@ -224,8 +224,8 @@ describe('generate_screen', () => {
     });
   });
 
-  describe('Опции генерации', () => {
-    it('должен генерировать типы когда generateTypes: true', async () => {
+  describe('Generation options', () => {
+    it('should generate types when generateTypes: true', async () => {
       await client.generateScreen({
         figmaUrl: TEST_URLS.mainScreen,
         screenName: 'TypesTest',
@@ -235,7 +235,7 @@ describe('generate_screen', () => {
         },
       });
 
-      // Находим сгенерированный файл
+      // Find generated file
       const structure = await workspace.checkStructure();
       const allComponents = [
         ...structure.screens.map(s => ({ name: s, category: 'screens' })),
@@ -248,11 +248,11 @@ describe('generate_screen', () => {
       const indexPath = `.figma/${component.category}/${component.name}/index.tsx`;
       const code = await workspace.readFile(indexPath);
 
-      // Проверяем наличие типов
+      // Check for types presence
       expect(code).toMatch(/interface|type\s+\w+\s*=/);
     });
 
-    it('должен генерировать хуки когда generateHooks: true', async () => {
+    it('should generate hooks when generateHooks: true', async () => {
       await client.generateScreen({
         figmaUrl: TEST_URLS.mainScreen,
         screenName: 'HooksTest',
@@ -262,7 +262,7 @@ describe('generate_screen', () => {
         },
       });
 
-      // Находим сгенерированный файл
+      // Find generated file
       const structure = await workspace.checkStructure();
       const allComponents = [
         ...structure.screens.map(s => ({ name: s, category: 'screens' })),
@@ -275,22 +275,22 @@ describe('generate_screen', () => {
       const indexPath = `.figma/${component.category}/${component.name}/index.tsx`;
       const code = await workspace.readFile(indexPath);
 
-      // Проверяем наличие секции Hooks (если есть данные для генерации)
-      // Хуки могут не генерироваться если нет подходящих данных
-      // Это нормальное поведение
+      // Check for Hooks section (if data available for generation)
+      // Hooks may not be generated if no suitable data
+      // This is normal behavior
       expect(code).toBeDefined();
     });
   });
 
-  describe('Метаданные', () => {
-    it('meta.json должен содержать корректную информацию', async () => {
+  describe('Metadata', () => {
+    it('meta.json should contain correct information', async () => {
       await client.generateScreen({
         figmaUrl: TEST_URLS.mainScreen,
         screenName: 'MetaTest',
         projectRoot: workspace.root,
       });
 
-      // Находим сгенерированный компонент
+      // Find generated component
       const structure = await workspace.checkStructure();
       const allComponents = [
         ...structure.screens.map(s => ({ name: s, category: 'screens' })),
@@ -309,7 +309,7 @@ describe('generate_screen', () => {
         exports: string[];
       }>(metaPath);
 
-      // Проверяем обязательные поля
+      // Check required fields
       expect(meta.name).toBe('MetaTest');
       expect(meta.figmaUrl).toBe(TEST_URLS.mainScreen);
       expect(meta.nodeId).toBeDefined();
@@ -317,11 +317,11 @@ describe('generate_screen', () => {
       expect(meta.exports).toBeInstanceOf(Array);
       expect(meta.exports.length).toBeGreaterThan(0);
 
-      // Проверяем формат даты
+      // Check date format
       expect(new Date(meta.generatedAt).toString()).not.toBe('Invalid Date');
     });
 
-    it('manifest.json должен отслеживать все генерации', async () => {
+    it('manifest.json should track all generations', async () => {
       await client.generateScreen({
         figmaUrl: TEST_URLS.mainScreen,
         screenName: 'ManifestTest',
@@ -336,10 +336,10 @@ describe('generate_screen', () => {
         components: Record<string, unknown>;
       }>('.figma/manifest.json');
 
-      // Проверяем структуру manifest
+      // Check manifest structure
       expect(manifest.version).toBeDefined();
 
-      // Должен быть хотя бы один entry
+      // Should have at least one entry
       const totalEntries =
         Object.keys(manifest.screens || {}).length +
         Object.keys(manifest.modals || {}).length +
@@ -350,8 +350,8 @@ describe('generate_screen', () => {
     });
   });
 
-  describe('Дизайн токены', () => {
-    it('результат должен содержать информацию о токенах', async () => {
+  describe('Design tokens', () => {
+    it('result should contain token information', async () => {
       const result = await client.generateScreen({
         figmaUrl: TEST_URLS.mainScreen,
         screenName: 'TokensTest',
@@ -360,8 +360,8 @@ describe('generate_screen', () => {
 
       const responseText = result.content[0].text;
 
-      // Проверяем наличие секции с токенами
-      // Может содержать цвета или типографику
+      // Check for tokens section
+      // May contain colors or typography
       expect(
         responseText.includes('Colors') ||
         responseText.includes('Typography') ||

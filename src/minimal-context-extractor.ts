@@ -1,6 +1,6 @@
 /**
- * Извлечение минимального контекста из Figma для снижения использования токенов
- * Возвращает ~5KB вместо 50-100KB
+ * Extract minimal context from Figma to reduce token usage
+ * Returns ~5KB instead of 50-100KB
  */
 
 import https from 'https';
@@ -28,7 +28,7 @@ interface MinimalNode {
 }
 
 /**
- * Парсинг Figma URL
+ * Parse Figma URL
  */
 function parseFigmaUrl(url: string): { fileKey: string; nodeId?: string } | null {
   const match = url.match(/figma\.com\/(?:file|design)\/([^/?]+)/);
@@ -72,7 +72,7 @@ interface FigmaApiNode {
 }
 
 /**
- * Получение данных узла из Figma API
+ * Fetch node data from Figma API
  */
 async function fetchFigmaNode(token: string, fileKey: string, nodeId: string): Promise<FigmaApiNode> {
   return new Promise((resolve, reject) => {
@@ -101,7 +101,7 @@ async function fetchFigmaNode(token: string, fileKey: string, nodeId: string): P
 }
 
 /**
- * Упрощение отступов до минимального формата
+ * Simplify padding to minimal format
  */
 function simplifyPadding(top?: number, right?: number, bottom?: number, left?: number): string | undefined {
   if (top === undefined && right === undefined && bottom === undefined && left === undefined) {
@@ -123,7 +123,7 @@ function simplifyPadding(top?: number, right?: number, bottom?: number, left?: n
 }
 
 /**
- * Извлечение минимальных данных из узла
+ * Extract minimal data from node
  */
 function extractMinimalNode(node: FigmaApiNode, visited: Set<string> = new Set()): MinimalNode | null {
   if (!node || visited.has(node.id)) return null;
@@ -134,12 +134,12 @@ function extractMinimalNode(node: FigmaApiNode, visited: Set<string> = new Set()
     type: node.type,
   };
 
-  // Размеры только для корневого узла
+  // Dimensions only for root node
   if (node.absoluteBoundingBox && visited.size === 1) {
     minimal.size = `${Math.round(node.absoluteBoundingBox.width)}x${Math.round(node.absoluteBoundingBox.height)}`;
   }
 
-  // Layout свойства
+  // Layout properties
   if (node.layoutMode && node.layoutMode !== 'NONE') {
     minimal.layout = {
       direction: node.layoutMode === 'HORIZONTAL' ? 'row' : 'column',
@@ -163,7 +163,7 @@ function extractMinimalNode(node: FigmaApiNode, visited: Set<string> = new Set()
     }
   }
 
-  // Типографика для текстовых узлов
+  // Typography for text nodes
   if (node.type === 'TEXT' && node.style) {
     minimal.style = {
       font: node.style.fontFamily,
@@ -171,18 +171,18 @@ function extractMinimalNode(node: FigmaApiNode, visited: Set<string> = new Set()
       weight: node.style.fontWeight,
     };
 
-    // Цвет текста из fills
+    // Text color from fills
     if (node.fills?.[0]?.color) {
       minimal.style.color = rgbaToHex(node.fills[0].color);
     }
   }
 
-  // Цвет заливки для не-текстовых узлов
+  // Fill color for non-text nodes
   if (node.type !== 'TEXT' && node.fills?.[0]?.type === 'SOLID' && node.fills[0].color) {
     minimal.fill = rgbaToHex(node.fills[0].color);
   }
 
-  // Рекурсивная обработка детей
+  // Recursive processing of children
   if (node.children && node.children.length > 0) {
     const children = node.children
       .map((child) => extractMinimalNode(child, visited))
@@ -197,7 +197,7 @@ function extractMinimalNode(node: FigmaApiNode, visited: Set<string> = new Set()
 }
 
 /**
- * Форматирование в YAML
+ * Format as YAML
  */
 function formatAsYAML(node: MinimalNode, indent: number = 0): string {
   const pad = '  '.repeat(indent);
@@ -242,7 +242,7 @@ function formatAsYAML(node: MinimalNode, indent: number = 0): string {
 }
 
 /**
- * Главная функция: извлечение минимального контекста
+ * Main function: extract minimal context
  */
 export async function extractMinimalContext(token: string, figmaUrl: string): Promise<string> {
   const parsed = parseFigmaUrl(figmaUrl);

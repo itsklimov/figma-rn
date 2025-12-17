@@ -1,23 +1,23 @@
 /**
- * Детектор модалов, bottom sheets и action sheets в Figma
- * Анализирует структуру узла для определения типа оверлея и генерации кода
+ * Detector for modals, bottom sheets and action sheets in Figma
+ * Analyzes node structure to determine overlay type and generate code
  */
 
 /**
- * Результат определения типа sheet/modal
+ * Sheet/modal type detection result
  */
 export interface SheetDetection {
   type: 'bottom-sheet' | 'modal' | 'action-sheet' | 'none';
   confidence: number; // 0-1
-  snapPoints: string[]; // например, ['25%', '50%', '90%']
+  snapPoints: string[]; // e.g., ['25%', '50%', '90%']
   hasOverlay: boolean;
   hasDragHandle: boolean;
   hasCloseButton: boolean;
-  contentNode: any; // Внутренний узел контента
+  contentNode: any; // Internal content node
 }
 
 /**
- * Действие в action sheet
+ * Action in action sheet
  */
 export interface ActionSheetAction {
   label: string;
@@ -26,16 +26,16 @@ export interface ActionSheetAction {
 }
 
 /**
- * Проверка наличия полупрозрачного оверлея
+ * Check for semi-transparent overlay
  */
 function hasOverlayBackground(node: any): boolean {
   if (!node.children || node.children.length === 0) {
     return false;
   }
 
-  // Ищем фоновый слой с черным цветом и прозрачностью
+  // Look for background layer with black color and transparency
   for (const child of node.children) {
-    // Проверка на имя (часто overlay, background, backdrop)
+    // Check name (often overlay, background, backdrop)
     const nameLower = (child.name || '').toLowerCase();
     if (
       nameLower.includes('overlay') ||
@@ -43,14 +43,14 @@ function hasOverlayBackground(node: any): boolean {
       nameLower.includes('background') ||
       nameLower.includes('bg')
     ) {
-      // Проверка цвета и прозрачности
+      // Check color and transparency
       if (child.fills && Array.isArray(child.fills)) {
         for (const fill of child.fills) {
           if (fill.type === 'SOLID' && fill.color) {
             const { r, g, b } = fill.color;
             const opacity = fill.opacity ?? 1.0;
 
-            // Темный цвет с прозрачностью (черный/темно-серый + opacity < 0.8)
+            // Dark color with transparency (black/dark gray + opacity < 0.8)
             if (r <= 0.2 && g <= 0.2 && b <= 0.2 && opacity > 0.1 && opacity < 0.9) {
               return true;
             }
@@ -58,7 +58,7 @@ function hasOverlayBackground(node: any): boolean {
         }
       }
 
-      // Проверка opacity самого узла
+      // Check opacity of the node itself
       if (child.opacity !== undefined && child.opacity > 0.1 && child.opacity < 0.9) {
         return true;
       }
@@ -69,7 +69,7 @@ function hasOverlayBackground(node: any): boolean {
 }
 
 /**
- * Проверка наличия drag handle (индикатор перетаскивания)
+ * Check for drag handle (drag indicator)
  */
 function hasDragHandleIndicator(node: any): boolean {
   if (!node.children) {
@@ -77,7 +77,7 @@ function hasDragHandleIndicator(node: any): boolean {
   }
 
   function searchForHandle(n: any, depth: number = 0): boolean {
-    // Ограничиваем глубину поиска
+    // Limit search depth
     if (depth > 3) {
       return false;
     }
@@ -89,18 +89,18 @@ function hasDragHandleIndicator(node: any): boolean {
       nameLower.includes('indicator') ||
       nameLower.includes('grip')
     ) {
-      // Проверяем размеры: маленький горизонтальный элемент
+      // Check dimensions: small horizontal element
       if (n.absoluteBoundingBox) {
         const { width, height } = n.absoluteBoundingBox;
-        // Типичный handle: width 30-60px, height 4-6px
+        // Typical handle: width 30-60px, height 4-6px
         if (width > 20 && width < 100 && height > 2 && height < 10) {
           return true;
         }
       }
-      return true; // Если имя подходит, считаем что это handle
+      return true; // If name matches, consider it a handle
     }
 
-    // Рекурсивный поиск
+    // Recursive search
     if (n.children) {
       for (const child of n.children) {
         if (searchForHandle(child, depth + 1)) {
@@ -116,7 +116,7 @@ function hasDragHandleIndicator(node: any): boolean {
 }
 
 /**
- * Проверка наличия кнопки закрытия (X icon)
+ * Check for close button (X icon)
  */
 function hasCloseButtonIcon(node: any): boolean {
   if (!node.children) {
@@ -139,7 +139,7 @@ function hasCloseButtonIcon(node: any): boolean {
       return true;
     }
 
-    // Рекурсивный поиск
+    // Recursive search
     if (n.children) {
       for (const child of n.children) {
         if (searchForCloseButton(child, depth + 1)) {
@@ -155,7 +155,7 @@ function hasCloseButtonIcon(node: any): boolean {
 }
 
 /**
- * Проверка выравнивания контейнера (снизу, по центру)
+ * Check container alignment (bottom, center)
  */
 function detectAlignment(node: any): 'bottom' | 'center' | 'unknown' {
   if (!node.absoluteBoundingBox || !node.parent) {
@@ -164,13 +164,13 @@ function detectAlignment(node: any): 'bottom' | 'center' | 'unknown' {
 
   const { y, height } = node.absoluteBoundingBox;
 
-  // Если есть родитель, пытаемся определить относительное положение
+  // If there's a parent, try to determine relative position
   let parentHeight = 0;
   if (node.parent && node.parent.absoluteBoundingBox) {
     parentHeight = node.parent.absoluteBoundingBox.height;
   }
 
-  // Если узел находится в нижней части (y + height близко к высоте родителя)
+  // If node is in bottom part (y + height close to parent height)
   if (parentHeight > 0) {
     const bottomPosition = y + height;
     const relativePosition = bottomPosition / parentHeight;
@@ -184,7 +184,7 @@ function detectAlignment(node: any): 'bottom' | 'center' | 'unknown' {
     }
   }
 
-  // Проверка auto layout constraints
+  // Check auto layout constraints
   if (node.constraints) {
     if (node.constraints.vertical === 'BOTTOM') {
       return 'bottom';
@@ -198,24 +198,24 @@ function detectAlignment(node: any): 'bottom' | 'center' | 'unknown' {
 }
 
 /**
- * Проверка округлых верхних углов (типично для bottom sheets)
+ * Check for rounded top corners (typical for bottom sheets)
  */
 function hasRoundedTopCorners(node: any): boolean {
   if (!node.cornerRadius && !node.rectangleCornerRadii) {
     return false;
   }
 
-  // Проверка отдельных радиусов углов
+  // Check individual corner radii
   if (node.rectangleCornerRadii && Array.isArray(node.rectangleCornerRadii)) {
     const [topLeft, topRight, bottomRight, bottomLeft] = node.rectangleCornerRadii;
 
-    // Верхние углы округлены, нижние нет (или меньше)
+    // Top corners rounded, bottom corners not (or smaller)
     if (topLeft > 8 && topRight > 8 && bottomLeft <= topLeft / 2 && bottomRight <= topRight / 2) {
       return true;
     }
   }
 
-  // Общий cornerRadius больше 8
+  // General cornerRadius greater than 8
   if (typeof node.cornerRadius === 'number' && node.cornerRadius > 8) {
     return true;
   }
@@ -224,18 +224,18 @@ function hasRoundedTopCorners(node: any): boolean {
 }
 
 /**
- * Поиск узла контента (главный контейнер внутри sheet/modal)
+ * Find content node (main container inside sheet/modal)
  */
 function findContentNode(node: any): any {
   if (!node.children || node.children.length === 0) {
     return node;
   }
 
-  // Пропускаем overlay/backdrop узлы
+  // Skip overlay/backdrop nodes
   for (const child of node.children) {
     const nameLower = (child.name || '').toLowerCase();
 
-    // Пропускаем известные оверлеи
+    // Skip known overlays
     if (
       nameLower.includes('overlay') ||
       nameLower.includes('backdrop') ||
@@ -244,7 +244,7 @@ function findContentNode(node: any): any {
       continue;
     }
 
-    // Ищем контейнер контента
+    // Look for content container
     if (
       nameLower.includes('content') ||
       nameLower.includes('sheet') ||
@@ -257,7 +257,7 @@ function findContentNode(node: any): any {
     }
   }
 
-  // Возвращаем первый не-overlay узел
+  // Return first non-overlay node
   return node.children.find((child: any) => {
     const nameLower = (child.name || '').toLowerCase();
     return !nameLower.includes('overlay') && !nameLower.includes('backdrop');
@@ -265,33 +265,33 @@ function findContentNode(node: any): any {
 }
 
 /**
- * Вычисление snap points на основе высоты и вариантов
+ * Calculate snap points based on height and variants
  */
 function calculateSnapPoints(node: any): string[] {
   const snapPoints: string[] = [];
 
-  // Дефолтные snap points
+  // Default snap points
   if (!node.absoluteBoundingBox) {
     return ['25%', '50%', '90%'];
   }
 
   const { height } = node.absoluteBoundingBox;
 
-  // Получаем высоту экрана (примерная)
-  let screenHeight = 812; // iPhone X height по умолчанию
+  // Get screen height (approximate)
+  let screenHeight = 812; // iPhone X height by default
 
   if (node.parent && node.parent.absoluteBoundingBox) {
     screenHeight = node.parent.absoluteBoundingBox.height;
   }
 
-  // Вычисляем процент от экрана
+  // Calculate percentage of screen
   const heightPercent = Math.round((height / screenHeight) * 100);
 
-  // Если есть варианты (variants), они могут указывать на разные состояния
+  // If there are variants, they may indicate different states
   if (node.componentPropertyDefinitions) {
     const props = Object.keys(node.componentPropertyDefinitions);
 
-    // Ищем варианты высоты (height, state, size)
+    // Look for height variants (height, state, size)
     const heightVariants = props.filter(
       (p) => p.toLowerCase().includes('height') ||
              p.toLowerCase().includes('state') ||
@@ -299,14 +299,14 @@ function calculateSnapPoints(node: any): string[] {
     );
 
     if (heightVariants.length > 0) {
-      // Есть варианты, используем их
+      // Have variants, use them
       snapPoints.push('25%', '50%', `${heightPercent}%`);
     } else {
-      // Нет вариантов, используем только текущую высоту
+      // No variants, use only current height
       snapPoints.push(`${heightPercent}%`);
     }
   } else {
-    // Для статического узла предлагаем стандартные snap points
+    // For static node, suggest standard snap points
     if (heightPercent < 40) {
       snapPoints.push(`${heightPercent}%`);
     } else if (heightPercent < 70) {
@@ -320,7 +320,7 @@ function calculateSnapPoints(node: any): string[] {
 }
 
 /**
- * Основная функция детектирования sheet/modal
+ * Main function for detecting sheet/modal
  */
 export function detectSheetOrModal(node: any): SheetDetection {
   const detection: SheetDetection = {
@@ -333,7 +333,7 @@ export function detectSheetOrModal(node: any): SheetDetection {
     contentNode: node,
   };
 
-  // Проверяем признаки
+  // Check characteristics
   const hasOverlay = hasOverlayBackground(node);
   const hasDragHandle = hasDragHandleIndicator(node);
   const hasCloseButton = hasCloseButtonIcon(node);
@@ -344,14 +344,14 @@ export function detectSheetOrModal(node: any): SheetDetection {
   detection.hasDragHandle = hasDragHandle;
   detection.hasCloseButton = hasCloseButton;
 
-  // Поиск контента
+  // Find content
   detection.contentNode = findContentNode(node);
 
-  // Логика определения типа
+  // Type detection logic
   let confidencePoints = 0;
   let detectedType: 'bottom-sheet' | 'modal' | 'action-sheet' | 'none' = 'none';
 
-  // Проверка на Bottom Sheet
+  // Check for Bottom Sheet
   if (alignment === 'bottom' || hasRoundedTop) {
     confidencePoints += 30;
     detectedType = 'bottom-sheet';
@@ -362,7 +362,7 @@ export function detectSheetOrModal(node: any): SheetDetection {
     detectedType = 'bottom-sheet';
   }
 
-  // Проверка на Modal (центрированный)
+  // Check for Modal (centered)
   if (alignment === 'center' && hasOverlay) {
     confidencePoints += 30;
     if (detectedType === 'none') {
@@ -370,7 +370,7 @@ export function detectSheetOrModal(node: any): SheetDetection {
     }
   }
 
-  // Проверка на Action Sheet (список действий)
+  // Check for Action Sheet (list of actions)
   const actions = extractActionSheetActions(detection.contentNode);
   if (actions.length >= 2) {
     confidencePoints += 30;
@@ -379,17 +379,17 @@ export function detectSheetOrModal(node: any): SheetDetection {
     }
   }
 
-  // Overlay добавляет уверенности любому типу
+  // Overlay adds confidence to any type
   if (hasOverlay) {
     confidencePoints += 10;
   }
 
-  // Close button добавляет уверенности
+  // Close button adds confidence
   if (hasCloseButton) {
     confidencePoints += 10;
   }
 
-  // Проверка имени узла
+  // Check node name
   const nameLower = (node.name || '').toLowerCase();
   if (nameLower.includes('sheet') || nameLower.includes('bottom')) {
     confidencePoints += 20;
@@ -412,11 +412,11 @@ export function detectSheetOrModal(node: any): SheetDetection {
     }
   }
 
-  // Финальная уверенность
+  // Final confidence
   detection.confidence = Math.min(confidencePoints / 100, 1.0);
   detection.type = detection.confidence > 0.3 ? detectedType : 'none';
 
-  // Вычисляем snap points для bottom sheet
+  // Calculate snap points for bottom sheet
   if (detection.type === 'bottom-sheet' || detection.type === 'action-sheet') {
     detection.snapPoints = calculateSnapPoints(detection.contentNode);
   }
@@ -425,7 +425,7 @@ export function detectSheetOrModal(node: any): SheetDetection {
 }
 
 /**
- * Извлечение действий из action sheet
+ * Extract actions from action sheet
  */
 export function extractActionSheetActions(node: any): ActionSheetAction[] {
   const actions: ActionSheetAction[] = [];
@@ -439,11 +439,11 @@ export function extractActionSheetActions(node: any): ActionSheetAction[] {
       return;
     }
 
-    // Ищем элементы списка (кнопки, items)
+    // Look for list items (buttons, items)
     if (n.type === 'FRAME' || n.type === 'COMPONENT' || n.type === 'INSTANCE') {
       const nameLower = (n.name || '').toLowerCase();
 
-      // Признаки action item
+      // Action item indicators
       const isActionItem =
         nameLower.includes('action') ||
         nameLower.includes('button') ||
@@ -451,7 +451,7 @@ export function extractActionSheetActions(node: any): ActionSheetAction[] {
         nameLower.includes('option');
 
       if (isActionItem) {
-        // Извлекаем текст
+        // Extract text
         let label = '';
         let icon = '';
         let destructive = false;
@@ -460,24 +460,22 @@ export function extractActionSheetActions(node: any): ActionSheetAction[] {
           if (node.type === 'TEXT' && node.characters) {
             label = node.characters;
 
-            // Проверка на destructive action
+            // Check for destructive action
             const textLower = label.toLowerCase();
             if (
               textLower.includes('delete') ||
               textLower.includes('remove') ||
-              textLower.includes('cancel') ||
-              textLower.includes('удалить') ||
-              textLower.includes('отменить')
+              textLower.includes('cancel')
             ) {
               destructive = true;
             }
 
-            // Проверка цвета текста (красный = destructive)
+            // Check text color (red = destructive)
             if (node.fills && Array.isArray(node.fills)) {
               for (const fill of node.fills) {
                 if (fill.type === 'SOLID' && fill.color) {
                   const { r, g, b } = fill.color;
-                  // Красный цвет
+                  // Red color
                   if (r > 0.7 && g < 0.3 && b < 0.3) {
                     destructive = true;
                   }
@@ -486,7 +484,7 @@ export function extractActionSheetActions(node: any): ActionSheetAction[] {
             }
           }
 
-          // Поиск иконок
+          // Find icons
           if ((node.name || '').toLowerCase().includes('icon')) {
             icon = node.name;
           }
@@ -504,7 +502,7 @@ export function extractActionSheetActions(node: any): ActionSheetAction[] {
       }
     }
 
-    // Рекурсивный поиск
+    // Recursive search
     if (n.children) {
       n.children.forEach((child: any) => searchForActions(child, depth + 1));
     }
@@ -516,7 +514,7 @@ export function extractActionSheetActions(node: any): ActionSheetAction[] {
 }
 
 /**
- * Генерация кода для @gorhom/bottom-sheet
+ * Generate code for @gorhom/bottom-sheet
  */
 export function generateBottomSheetCode(
   detection: SheetDetection,
@@ -541,7 +539,7 @@ interface ${name}Props {
 export const ${name}: React.FC<${name}Props> = ({ isVisible, onClose }) => {
   const bottomSheetRef = useRef<BottomSheet>(null);
 
-  // Snap points для разных состояний sheet
+  // Snap points for different sheet states
   const snapPoints = useMemo(() => [${snapPoints}], []);
 
   // Render backdrop component
@@ -603,7 +601,7 @@ const styles = StyleSheet.create({
 }
 
 /**
- * Генерация кода для react-native-modal
+ * Generate code for react-native-modal
  */
 export function generateModalCode(
   detection: SheetDetection,
@@ -676,7 +674,7 @@ const styles = StyleSheet.create({
 }
 
 /**
- * Генерация кода для action sheet
+ * Generate code for action sheet
  */
 export function generateActionSheetCode(
   actions: ActionSheetAction[],
@@ -740,7 +738,7 @@ export const ${name}: React.FC<${name}Props> = ({ isVisible, onClose, onAction }
         ))}
 
         <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
-          <Text style={styles.cancelText}>Отмена</Text>
+          <Text style={styles.cancelText}>Cancel</Text>
         </TouchableOpacity>
       </View>
     </BottomSheet>

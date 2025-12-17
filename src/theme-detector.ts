@@ -4,25 +4,23 @@ import * as path from 'path';
 import { glob } from 'glob';
 
 /**
- * Структура темы проекта
  * Project theme structure
  */
 export interface ThemeStructure {
   type: 'object-export' | 'styled-components' | 'nativewind' | 'unknown';
   paths: {
-    colors?: string;      // Путь к объекту colors
-    fonts?: string;       // Путь к объекту fonts/typography
-    spacing?: string;     // Путь к объекту spacing
+    colors?: string;      // Path to colors object
+    fonts?: string;       // Path to fonts/typography object
+    spacing?: string;     // Path to spacing object
   };
-  scaleFunction?: string; // Название функции масштабирования (scale, RFValue и т.д.)
+  scaleFunction?: string; // Scale function name (scale, RFValue, etc.)
 }
 
 /**
- * Определяет структуру темы по исходному файлу
  * Detects theme structure from source file
  *
- * @param sourceFile - Файл темы для анализа
- * @returns Структура темы
+ * @param sourceFile - Theme file to analyze
+ * @returns Theme structure
  */
 export function detectThemeStructure(sourceFile: SourceFile): ThemeStructure {
   const text = sourceFile.getText();
@@ -31,7 +29,7 @@ export function detectThemeStructure(sourceFile: SourceFile): ThemeStructure {
     paths: {},
   };
 
-  // Определяем тип темы по импортам и ключевым словам
+  // Determine theme type by imports and keywords
   if (text.includes('styled-components') || text.includes('styled(')) {
     structure.type = 'styled-components';
   } else if (text.includes('nativewind') || text.includes('tailwind')) {
@@ -42,26 +40,25 @@ export function detectThemeStructure(sourceFile: SourceFile): ThemeStructure {
     structure.type = 'unknown';
   }
 
-  // Ищем пути к объектам colors, fonts, spacing
+  // Find paths to colors, fonts, spacing objects
   structure.paths = detectObjectPaths(sourceFile);
 
   return structure;
 }
 
 /**
- * Определяет пути к различным объектам темы
  * Detects paths to various theme objects
  */
 function detectObjectPaths(sourceFile: SourceFile): ThemeStructure['paths'] {
   const paths: ThemeStructure['paths'] = {};
 
-  // Получаем все объектные литералы
+  // Get all object literals
   const objects = sourceFile.getDescendantsOfKind(SyntaxKind.ObjectLiteralExpression);
 
   for (const obj of objects) {
     const parent = obj.getParent();
 
-    // Получаем имя переменной или свойства
+    // Get variable or property name
     let name = '';
     if (parent && parent.getKind() === SyntaxKind.PropertyAssignment) {
       name = (parent as any).getName();
@@ -71,17 +68,17 @@ function detectObjectPaths(sourceFile: SourceFile): ThemeStructure['paths'] {
 
     const nameLower = name.toLowerCase();
 
-    // Проверяем на colors/palette
+    // Check for colors/palette
     if (nameLower.includes('color') || nameLower.includes('palette')) {
       paths.colors = name;
     }
 
-    // Проверяем на fonts/typography
+    // Check for fonts/typography
     if (nameLower.includes('font') || nameLower.includes('typography')) {
       paths.fonts = name;
     }
 
-    // Проверяем на spacing
+    // Check for spacing
     if (nameLower.includes('spacing') || nameLower.includes('space')) {
       paths.spacing = name;
     }
@@ -91,22 +88,21 @@ function detectObjectPaths(sourceFile: SourceFile): ThemeStructure['paths'] {
 }
 
 /**
- * Определяет функцию масштабирования в проекте
  * Detects scale function in the project
  *
- * Ищет распространенные функции масштабирования:
+ * Looks for common scaling functions:
  * - scale() - react-native-size-matters
  * - RFValue() - react-native-responsive-fontsize
  * - moderateScale() - react-native-size-matters
  * - wp(), hp() - react-native-responsive-screen
  * - scaleFont() - custom
  *
- * @param projectRoot - Корневая директория проекта
- * @returns Название функции или undefined
+ * @param projectRoot - Project root directory
+ * @returns Function name or undefined
  */
 export async function detectScaleFunction(projectRoot: string): Promise<string | undefined> {
   try {
-    // Ищем файлы с возможными импортами
+    // Look for files with possible imports
     const patterns = [
       path.join(projectRoot, 'src', '**', '*.{ts,tsx,js,jsx}'),
       path.join(projectRoot, '**', '*.{ts,tsx,js,jsx}'),
@@ -132,14 +128,14 @@ export async function detectScaleFunction(projectRoot: string): Promise<string |
         absolute: true,
       });
 
-      // Ограничиваем поиск первыми 50 файлами для производительности
+      // Limit search to first 50 files for performance
       const filesToCheck = files.slice(0, 50);
 
       for (const file of filesToCheck) {
         try {
           const content = fs.readFileSync(file, 'utf-8');
 
-          // Ищем использование функций масштабирования
+          // Look for scaling function usage
           for (const func of scaleFunctions) {
             const regex = new RegExp(`\\b${func}\\s*\\(`, 'g');
             const matches = content.match(regex);
@@ -149,13 +145,13 @@ export async function detectScaleFunction(projectRoot: string): Promise<string |
             }
           }
         } catch (error) {
-          // Пропускаем файлы с ошибками чтения
+          // Skip files with read errors
           continue;
         }
       }
     }
 
-    // Возвращаем наиболее часто используемую функцию
+    // Return most frequently used function
     if (functionCounts.size > 0) {
       const sorted = Array.from(functionCounts.entries()).sort((a, b) => b[1] - a[1]);
       return sorted[0][0];
@@ -169,11 +165,10 @@ export async function detectScaleFunction(projectRoot: string): Promise<string |
 }
 
 /**
- * Определяет паттерн стилизации в проекте
  * Detects style pattern in the project
  *
- * @param projectRoot - Корневая директория проекта
- * @returns Обнаруженный паттерн
+ * @param projectRoot - Project root directory
+ * @returns Detected pattern
  */
 export async function detectStylePattern(projectRoot: string): Promise<string> {
   try {
@@ -195,29 +190,29 @@ export async function detectStylePattern(projectRoot: string): Promise<string> {
         absolute: true,
       });
 
-      // Ограничиваем поиск первыми 30 файлами
+      // Limit search to first 30 files
       const filesToCheck = files.slice(0, 30);
 
       for (const file of filesToCheck) {
         try {
           const content = fs.readFileSync(file, 'utf-8');
 
-          // Ищем useTheme hook
+          // Look for useTheme hook
           if (/\buseTheme\s*\(/.test(content)) {
             patternCounts.useTheme++;
           }
 
-          // Ищем StyleSheet.create
+          // Look for StyleSheet.create
           if (/StyleSheet\.create/.test(content)) {
             patternCounts.StyleSheet++;
           }
 
-          // Ищем styled-components
+          // Look for styled-components
           if (/styled\(/.test(content) || /import.*styled.*from.*styled-components/.test(content)) {
             patternCounts['styled-components']++;
           }
 
-          // Ищем className (nativewind/tailwind)
+          // Look for className (nativewind/tailwind)
           if (/className=/.test(content)) {
             patternCounts.nativewind++;
           }
@@ -227,15 +222,15 @@ export async function detectStylePattern(projectRoot: string): Promise<string> {
       }
     }
 
-    // Определяем наиболее популярный паттерн
+    // Determine most popular pattern
     const entries = Object.entries(patternCounts).sort((a, b) => b[1] - a[1]);
 
-    // Если есть явный лидер (>= 3 использований), возвращаем его
+    // If there's a clear leader (>= 3 uses), return it
     if (entries[0][1] >= 3) {
       return entries[0][0];
     }
 
-    // По умолчанию возвращаем StyleSheet (стандарт React Native)
+    // Default to StyleSheet (React Native standard)
     return 'StyleSheet';
   } catch (error) {
     console.error('Error detecting style pattern:', error);
@@ -244,11 +239,10 @@ export async function detectStylePattern(projectRoot: string): Promise<string> {
 }
 
 /**
- * Ищет файл с темой в проекте
  * Searches for theme file in the project
  *
- * @param projectRoot - Корневая директория проекта
- * @returns Путь к файлу темы или undefined
+ * @param projectRoot - Project root directory
+ * @returns Path to theme file or undefined
  */
 export async function findThemeFile(projectRoot: string): Promise<string | undefined> {
   const possibleNames = [
@@ -271,7 +265,7 @@ export async function findThemeFile(projectRoot: string): Promise<string | undef
     path.join(projectRoot),
   ];
 
-  // Сначала проверяем стандартные места
+  // First check standard locations
   for (const dir of possibleDirs) {
     for (const name of possibleNames) {
       const fullPath = path.join(dir, name);
@@ -281,7 +275,7 @@ export async function findThemeFile(projectRoot: string): Promise<string | undef
     }
   }
 
-  // Если не нашли, ищем через glob
+  // If not found, search using glob
   try {
     const files = await glob('**/theme*.{ts,tsx,js,jsx}', {
       cwd: projectRoot,
@@ -290,7 +284,7 @@ export async function findThemeFile(projectRoot: string): Promise<string | undef
     });
 
     if (files.length > 0) {
-      // Возвращаем первый найденный файл
+      // Return first found file
       return files[0];
     }
   } catch (error) {
@@ -301,7 +295,6 @@ export async function findThemeFile(projectRoot: string): Promise<string | undef
 }
 
 /**
- * Определяет используемую библиотеку UI компонентов
  * Detects used UI component library
  */
 export async function detectUILibrary(projectRoot: string): Promise<string | undefined> {
@@ -318,7 +311,7 @@ export async function detectUILibrary(projectRoot: string): Promise<string | und
       ...packageJson.devDependencies,
     };
 
-    // Проверяем популярные библиотеки
+    // Check popular libraries
     const libraries = [
       'react-native-paper',
       'native-base',
@@ -343,15 +336,14 @@ export async function detectUILibrary(projectRoot: string): Promise<string | und
 }
 
 /**
- * Полный анализ темы проекта
  * Complete project theme analysis
  */
 export interface ThemeAnalysis {
-  themeFile?: string;               // Путь к файлу темы
-  structure?: ThemeStructure;       // Структура темы
-  scaleFunction?: string;           // Функция масштабирования
-  stylePattern: string;             // Паттерн стилизации
-  uiLibrary?: string;              // UI библиотека
+  themeFile?: string;               // Path to theme file
+  structure?: ThemeStructure;       // Theme structure
+  scaleFunction?: string;           // Scale function
+  stylePattern: string;             // Style pattern
+  uiLibrary?: string;              // UI library
 }
 
 export async function analyzeProjectTheme(projectRoot: string): Promise<ThemeAnalysis> {
@@ -359,23 +351,22 @@ export async function analyzeProjectTheme(projectRoot: string): Promise<ThemeAna
     stylePattern: 'StyleSheet', // default
   };
 
-  // 1. Ищем файл темы
+  // 1. Find theme file
   analysis.themeFile = await findThemeFile(projectRoot);
 
-  // 2. Определяем функцию масштабирования
+  // 2. Detect scale function
   analysis.scaleFunction = await detectScaleFunction(projectRoot);
 
-  // 3. Определяем паттерн стилизации
+  // 3. Detect style pattern
   analysis.stylePattern = await detectStylePattern(projectRoot);
 
-  // 4. Определяем UI библиотеку
+  // 4. Detect UI library
   analysis.uiLibrary = await detectUILibrary(projectRoot);
 
   return analysis;
 }
 
 /**
- * Форматирует результаты анализа для вывода
  * Formats analysis results for output
  */
 export function formatThemeAnalysis(analysis: ThemeAnalysis): string {

@@ -5,17 +5,17 @@
 
 The ONE-SHOT generator combines all pattern detection and code generation steps into a single function call.
 
-## Основные возможности
+## Core Features
 
-- ✅ **Один вызов API Figma** - все данные загружаются один раз
-- ✅ **Параллельное обнаружение** - все детекторы работают одновременно
-- ✅ **Автоматическое определение типа экрана** - форма, список, sheet, modal или обычный экран
-- ✅ **Полный набор файлов** - компоненты, типы, хуки, схемы, анимации
-- ✅ **Поддержка русских комментариев** - все комментарии на русском языке
+- ✅ **Single Figma API call** - all data loaded once
+- ✅ **Parallel detection** - all detectors run simultaneously
+- ✅ **Automatic screen type detection** - form, list, sheet, modal, or regular screen
+- ✅ **Complete file set** - components, types, hooks, schemas, animations
+- ✅ **Professional code comments** - all comments in English
 
-## Быстрый старт
+## Quick Start
 
-### Базовое использование
+### Basic Usage
 
 ```typescript
 import { generateCompleteScreen } from './one-shot-generator.js';
@@ -26,12 +26,12 @@ const result = await generateCompleteScreen(
   'ProductListScreen'
 );
 
-console.log(`Сгенерировано файлов: ${result.files.length}`);
-console.log(`Тип экрана: ${result.summary.screenType}`);
-console.log(`Уверенность: ${result.summary.metadata.confidence}`);
+console.log(`Generated files: ${result.files.length}`);
+console.log(`Screen type: ${result.summary.screenType}`);
+console.log(`Confidence: ${result.summary.metadata.confidence}`);
 ```
 
-### С расширенными опциями
+### With Advanced Options
 
 ```typescript
 const result = await generateCompleteScreen(
@@ -39,30 +39,30 @@ const result = await generateCompleteScreen(
   figmaUrl,
   'CheckoutFormScreen',
   {
-    generateTypes: true,       // Генерировать TypeScript типы
-    generateHooks: true,        // Генерировать React Query хуки
-    detectAnimations: true,     // Обнаруживать анимации (медленнее)
-    generateExtras: true,       // Генерировать дополнительные файлы
-    config: customConfig,       // Пользовательская конфигурация
+    generateTypes: true,       // Generate TypeScript types
+    generateHooks: true,        // Generate React Query hooks
+    detectAnimations: true,     // Detect animations (slower)
+    generateExtras: true,       // Generate additional files
+    config: customConfig,       // Custom configuration
   }
 );
 ```
 
-### Сохранение файлов на диск
+### Saving Files to Disk
 
 ```typescript
 import { generateCompleteScreen, saveGeneratedFiles } from './one-shot-generator.js';
 
 const result = await generateCompleteScreen(token, url, 'MyScreen');
 
-// Сохраняем все файлы в текущую директорию
+// Save all files to current directory
 await saveGeneratedFiles(result);
 
-// Или в конкретную директорию
+// Or to a specific directory
 await saveGeneratedFiles(result, '/path/to/project');
 ```
 
-### Пакетная генерация нескольких экранов
+### Batch Generation of Multiple Screens
 
 ```typescript
 import { generateMultipleScreens, saveGeneratedFiles } from './one-shot-generator.js';
@@ -78,22 +78,22 @@ const results = await generateMultipleScreens(token, screens, {
   generateHooks: true,
 });
 
-// Сохраняем файлы всех экранов
+// Save files for all screens
 for (const result of results) {
   await saveGeneratedFiles(result);
 }
 ```
 
-## Структура результата
+## Result Structure
 
 ### OneShotResult
 
 ```typescript
 interface OneShotResult {
-  screenName: string;              // Название экрана
-  files: GeneratedFile[];          // Сгенерированные файлы
-  detections: DetectionResults;    // Результаты обнаружения
-  summary: GenerationSummary;      // Резюме генерации
+  screenName: string;              // Screen name
+  files: GeneratedFile[];          // Generated files
+  detections: DetectionResults;    // Detection results
+  summary: GenerationSummary;      // Generation summary
 }
 ```
 
@@ -101,8 +101,8 @@ interface OneShotResult {
 
 ```typescript
 interface GeneratedFile {
-  path: string;     // Путь к файлу (например, 'src/screens/HomeScreen.tsx')
-  content: string;  // Содержимое файла
+  path: string;     // File path (e.g., 'src/screens/HomeScreen.tsx')
+  content: string;  // File content
   type: 'screen' | 'types' | 'hooks' | 'form' | 'styles' | 'animations' | 'gestures';
 }
 ```
@@ -111,12 +111,12 @@ interface GeneratedFile {
 
 ```typescript
 interface DetectionResults {
-  list: ListPatternDetection | null;      // Обнаружение списка
-  form: FormDetection | null;              // Обнаружение формы
-  sheet: SheetDetection | null;            // Обнаружение sheet/modal
-  variants: VariantDetection | null;       // Обнаружение вариантов
-  animations: AnimationHint | null;        // Подсказки по анимациям
-  dataModels: DataModel[];                 // Модели данных
+  list: ListPatternDetection | null;      // List detection
+  form: FormDetection | null;              // Form detection
+  sheet: SheetDetection | null;            // Sheet/modal detection
+  variants: VariantDetection | null;       // Variant detection
+  animations: AnimationHint | null;        // Animation hints
+  dataModels: DataModel[];                 // Data models
 }
 ```
 
@@ -136,9 +136,9 @@ interface GenerationSummary {
 }
 ```
 
-## Примеры использования по типам экранов
+## Usage Examples by Screen Type
 
-### Списочный экран (List)
+### List Screen
 
 ```typescript
 const result = await generateCompleteScreen(
@@ -147,17 +147,17 @@ const result = await generateCompleteScreen(
   'ProductListScreen'
 );
 
-// Сгенерированные файлы:
-// - src/screens/ProductListScreen.tsx (FlatList компонент)
-// - src/types/ProductListScreenTypes.ts (Product интерфейс)
-// - src/hooks/useProductListScreenData.ts (useProducts хук)
+// Generated files:
+// - src/screens/ProductListScreen.tsx (FlatList component)
+// - src/types/ProductListScreenTypes.ts (Product interface)
+// - src/hooks/useProductListScreenData.ts (useProducts hook)
 
 console.log(result.summary.screenType);  // 'list'
-console.log(result.detections.list?.itemCount);  // количество элементов
+console.log(result.detections.list?.itemCount);  // number of items
 console.log(result.detections.list?.orientation);  // 'vertical' | 'horizontal'
 ```
 
-### Экран формы (Form)
+### Form Screen
 
 ```typescript
 const result = await generateCompleteScreen(
@@ -166,14 +166,14 @@ const result = await generateCompleteScreen(
   'CheckoutFormScreen'
 );
 
-// Сгенерированные файлы:
-// - src/screens/CheckoutFormScreen.tsx (форма с react-hook-form)
-// - src/schemas/CheckoutFormScreenSchema.ts (Zod схема валидации)
-// - src/hooks/useCheckoutFormScreen.ts (хук управления формой)
-// - src/types/CheckoutFormScreenTypes.ts (типы данных)
+// Generated files:
+// - src/screens/CheckoutFormScreen.tsx (form with react-hook-form)
+// - src/schemas/CheckoutFormScreenSchema.ts (Zod validation schema)
+// - src/hooks/useCheckoutFormScreen.ts (form management hook)
+// - src/types/CheckoutFormScreenTypes.ts (data types)
 
 console.log(result.summary.screenType);  // 'form'
-console.log(result.detections.form?.fields.length);  // количество полей
+console.log(result.detections.form?.fields.length);  // number of fields
 console.log(result.detections.form?.hasSubmitButton);  // true/false
 ```
 
@@ -186,7 +186,7 @@ const result = await generateCompleteScreen(
   'FilterBottomSheet'
 );
 
-// Сгенерированные файлы:
+// Generated files:
 // - src/components/FilterBottomSheet.tsx (@gorhom/bottom-sheet)
 
 console.log(result.summary.screenType);  // 'sheet' | 'modal'
@@ -203,15 +203,15 @@ const result = await generateCompleteScreen(
   'ActionsMenu'
 );
 
-// Сгенерированные файлы:
-// - src/components/ActionsMenu.tsx (action sheet с кнопками)
+// Generated files:
+// - src/components/ActionsMenu.tsx (action sheet with buttons)
 
 console.log(result.summary.screenType);  // 'action-sheet'
 ```
 
-## Интеграция с существующим кодом
+## Integration with Existing Code
 
-### Использование в MCP Server
+### Usage in MCP Server
 
 ```typescript
 import { generateCompleteScreen } from './one-shot-generator.js';
@@ -227,7 +227,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       {
         generateTypes: true,
         generateHooks: true,
-        detectAnimations: false,  // отключаем для скорости
+        detectAnimations: false,  // disable for speed
       }
     );
 
@@ -235,7 +235,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       content: [
         {
           type: 'text',
-          text: `Сгенерировано ${result.files.length} файлов для ${screenName}`,
+          text: `Generated ${result.files.length} files for ${screenName}`,
         },
         {
           type: 'resource',
@@ -250,7 +250,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 ```
 
-### CLI скрипт
+### CLI Script
 
 ```typescript
 #!/usr/bin/env node
@@ -270,20 +270,20 @@ if (!token) {
   process.exit(1);
 }
 
-console.log(`Генерация ${screenName}...`);
+console.log(`Generating ${screenName}...`);
 
 const result = await generateCompleteScreen(token, figmaUrl, screenName);
 
 await saveGeneratedFiles(result);
 
-console.log(`✓ Сгенерировано ${result.files.length} файлов`);
-console.log(`✓ Тип экрана: ${result.summary.screenType}`);
-console.log(`✓ Уверенность: ${(result.summary.metadata.confidence * 100).toFixed(0)}%`);
+console.log(`✓ Generated ${result.files.length} files`);
+console.log(`✓ Screen type: ${result.summary.screenType}`);
+console.log(`✓ Confidence: ${(result.summary.metadata.confidence * 100).toFixed(0)}%`);
 ```
 
-## Расширенные возможности
+## Advanced Features
 
-### Кастомная конфигурация
+### Custom Configuration
 
 ```typescript
 import { ProjectConfig } from './config-schema.js';
@@ -317,62 +317,62 @@ const result = await generateCompleteScreen(
 );
 ```
 
-### Фильтрация файлов
+### File Filtering
 
 ```typescript
 const result = await generateCompleteScreen(token, figmaUrl, screenName);
 
-// Только экранные компоненты
+// Only screen components
 const screenFiles = result.files.filter(f => f.type === 'screen');
 
-// Только хуки
+// Only hooks
 const hookFiles = result.files.filter(f => f.type === 'hooks');
 
-// Сохранить только типы
+// Save only types
 const typeFiles = result.files.filter(f => f.type === 'types');
 for (const file of typeFiles) {
   await fs.writeFile(file.path, file.content);
 }
 ```
 
-### Проверка обнаружений перед генерацией
+### Checking Detections Before Generation
 
 ```typescript
 const result = await generateCompleteScreen(token, figmaUrl, screenName);
 
-// Проверяем уверенность
+// Check confidence
 if (result.summary.metadata.confidence < 0.5) {
-  console.warn('Низкая уверенность обнаружения. Проверьте результат вручную.');
+  console.warn('Low detection confidence. Manual review recommended.');
 }
 
-// Проверяем наличие специфичных паттернов
+// Check for specific patterns
 if (result.detections.form) {
-  console.log(`Обнаружена форма с ${result.detections.form.fields.length} полями`);
+  console.log(`Form detected with ${result.detections.form.fields.length} fields`);
   result.detections.form.fields.forEach(field => {
     console.log(`  - ${field.name}: ${field.type} (required: ${field.required})`);
   });
 }
 
 if (result.detections.list) {
-  console.log(`Обнаружен список: ${result.detections.list.type}`);
-  console.log(`  Элементов: ${result.detections.list.itemCount}`);
-  console.log(`  Ориентация: ${result.detections.list.orientation}`);
+  console.log(`List detected: ${result.detections.list.type}`);
+  console.log(`  Items: ${result.detections.list.itemCount}`);
+  console.log(`  Orientation: ${result.detections.list.orientation}`);
 }
 ```
 
-## Производительность
+## Performance
 
-- **Без анимаций**: ~2-5 секунд на экран
-- **С анимациями**: ~5-10 секунд на экран
-- **Пакетная генерация**: параллельная обработка всех экранов
+- **Without animations**: ~2-5 seconds per screen
+- **With animations**: ~5-10 seconds per screen
+- **Batch generation**: parallel processing of all screens
 
 ```typescript
-// Быстрая генерация (без анимаций)
+// Quick generation (without animations)
 const quickResult = await generateCompleteScreen(token, url, name, {
   detectAnimations: false,
 });
 
-// Полная генерация (с анимациями)
+// Full generation (with animations)
 const fullResult = await generateCompleteScreen(token, url, name, {
   detectAnimations: true,
   generateExtras: true,
@@ -381,40 +381,40 @@ const fullResult = await generateCompleteScreen(token, url, name, {
 
 ## Troubleshooting
 
-### Ошибка: "Узел не найден"
+### Error: "Node not found"
 
-Проверьте формат URL. Поддерживаемые форматы:
+Check URL format. Supported formats:
 - `https://www.figma.com/file/{fileKey}/...?node-id={nodeId}`
 - `https://www.figma.com/design/{fileKey}/...?node-id={nodeId}`
 
-### Низкая уверенность обнаружения
+### Low Detection Confidence
 
-- Убедитесь, что дизайн в Figma использует Auto Layout
-- Проверьте, что элементы имеют понятные имена
-- Используйте компонентные наборы (Component Sets) для вариантов
+- Ensure Figma design uses Auto Layout
+- Check that elements have clear names
+- Use Component Sets for variants
 
-### Отсутствуют некоторые файлы
+### Some Files Are Missing
 
-Проверьте опции генерации:
+Check generation options:
 ```typescript
 {
-  generateTypes: true,      // для types файлов
-  generateHooks: true,       // для hooks файлов
-  generateExtras: true,      // для form/animation файлов
+  generateTypes: true,      // for types files
+  generateHooks: true,       // for hooks files
+  generateExtras: true,      // for form/animation files
 }
 ```
 
-## Лучшие практики
+## Best Practices
 
-1. **Именование в Figma**: Используйте понятные имена для узлов (например, "Email Input", "Submit Button")
-2. **Структура**: Используйте Auto Layout для списков и форм
-3. **Компоненты**: Используйте Component Sets для вариантов состояний
-4. **Аннотации**: Добавляйте Dev Mode аннотации для дополнительной информации
-5. **Проверка результата**: Всегда проверяйте `summary.metadata.confidence` перед использованием кода
+1. **Figma Naming**: Use clear names for nodes (e.g., "Email Input", "Submit Button")
+2. **Structure**: Use Auto Layout for lists and forms
+3. **Components**: Use Component Sets for state variants
+4. **Annotations**: Add Dev Mode annotations for additional information
+5. **Result Verification**: Always check `summary.metadata.confidence` before using code
 
-## Ограничения
+## Limitations
 
-- Анимации обнаруживаются только если есть прототипные связи в Figma
-- Формы требуют явных элементов input/button
-- Списки требуют минимум 3 повторяющихся элемента
-- Детекторы работают на основе эвристик, результат может требовать ручной доработки
+- Animations detected only if there are prototype connections in Figma
+- Forms require explicit input/button elements
+- Lists require minimum 3 repeating elements
+- Detectors work based on heuristics, results may require manual refinement

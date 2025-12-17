@@ -1,14 +1,14 @@
 import { compareTwoStrings } from 'string-similarity';
 
 /**
- * Интерфейс для результата сопоставления компонента
+ * Interface for component matching result
  */
 export interface ComponentMatch {
   figmaNode: {
     id: string;
     name: string;
     type: string;
-    properties: string[];  // извлеченные имена дочерних элементов, текстовое содержимое
+    properties: string[];  // extracted child element names, text content
   };
   existingComponent: {
     name: string;
@@ -23,9 +23,9 @@ export interface ComponentMatch {
 }
 
 /**
- * Нормализация строки для сравнения
- * @param str - исходная строка
- * @returns нормализованная строка (lowercase, без спецсимволов)
+ * Normalize string for comparison
+ * @param str - source string
+ * @returns normalized string (lowercase, without special characters)
  */
 function normalizeString(str: string): string {
   return str
@@ -35,20 +35,20 @@ function normalizeString(str: string): string {
 }
 
 /**
- * Извлечение свойств из Figma узла
- * @param node - узел Figma
- * @returns массив свойств (имена детей, токены из имени узла)
+ * Extract properties from Figma node
+ * @param node - Figma node
+ * @returns array of properties (child names, tokens from node name)
  */
 function extractProperties(node: any): string[] {
   const properties = new Set<string>();
 
-  // Токенизация имени узла
+  // Tokenize node name
   const nameTokens = normalizeString(node.name || '')
     .split(/\s+/)
     .filter(token => token.length > 2);
   nameTokens.forEach(token => properties.add(token));
 
-  // Рекурсивное извлечение имен дочерних элементов
+  // Recursively extract child element names
   function extractChildNames(n: any) {
     if (n.children && Array.isArray(n.children)) {
       n.children.forEach((child: any) => {
@@ -65,7 +65,7 @@ function extractProperties(node: any): string[] {
 
   extractChildNames(node);
 
-  // Извлечение текстового содержимого
+  // Extract text content
   if (node.characters) {
     const textTokens = normalizeString(node.characters)
       .split(/\s+/)
@@ -77,10 +77,10 @@ function extractProperties(node: any): string[] {
 }
 
 /**
- * Вычисление сходства имен с использованием алгоритма string-similarity
- * @param figmaName - имя Figma узла
- * @param compName - имя существующего компонента
- * @returns оценка сходства (0-1)
+ * Calculate name similarity using string-similarity algorithm
+ * @param figmaName - Figma node name
+ * @param compName - existing component name
+ * @returns similarity score (0-1)
  */
 function calculateNameSimilarity(figmaName: string, compName: string): number {
   const normalizedFigma = normalizeString(figmaName);
@@ -90,10 +90,10 @@ function calculateNameSimilarity(figmaName: string, compName: string): number {
 }
 
 /**
- * Вычисление структурного сходства с использованием индекса Жаккара
- * @param figmaProps - свойства Figma узла
- * @param compProps - свойства существующего компонента
- * @returns индекс Жаккара (0-1)
+ * Calculate structural similarity using Jaccard index
+ * @param figmaProps - Figma node properties
+ * @param compProps - existing component properties
+ * @returns Jaccard index (0-1)
  */
 function calculateStructureSimilarity(figmaProps: string[], compProps: string[]): number {
   if (figmaProps.length === 0 && compProps.length === 0) {
@@ -114,13 +114,13 @@ function calculateStructureSimilarity(figmaProps: string[], compProps: string[])
 }
 
 /**
- * Вычисление семантического сходства через простое сопоставление ключевых слов
- * @param figmaNode - узел Figma
- * @param compName - имя существующего компонента
- * @returns оценка семантического сходства (0-1)
+ * Calculate semantic similarity through simple keyword matching
+ * @param figmaNode - Figma node
+ * @param compName - existing component name
+ * @returns semantic similarity score (0-1)
  */
 function calculateSemanticSimilarity(figmaNode: any, compName: string): number {
-  // Ключевые слова для общих компонентов
+  // Keywords for common components
   const componentKeywords: Record<string, string[]> = {
     button: ['button', 'btn', 'action', 'submit', 'click'],
     card: ['card', 'item', 'tile', 'panel'],
@@ -139,7 +139,7 @@ function calculateSemanticSimilarity(figmaNode: any, compName: string): number {
 
   let maxScore = 0;
 
-  // Проверка совпадений ключевых слов
+  // Check keyword matches
   for (const [category, keywords] of Object.entries(componentKeywords)) {
     const compContainsCategory = keywords.some(kw => normalizedCompName.includes(kw));
     const nodeContainsCategory = keywords.some(kw => normalizedNodeName.includes(kw));
@@ -147,7 +147,7 @@ function calculateSemanticSimilarity(figmaNode: any, compName: string): number {
     if (compContainsCategory && nodeContainsCategory) {
       maxScore = Math.max(maxScore, 0.8);
     } else if (compContainsCategory || nodeContainsCategory) {
-      // Частичное совпадение
+      // Partial match
       const partialScore = keywords.some(kw =>
         normalizedCompName.includes(kw) && normalizedNodeName.includes(kw)
       ) ? 0.5 : 0.2;
@@ -155,7 +155,7 @@ function calculateSemanticSimilarity(figmaNode: any, compName: string): number {
     }
   }
 
-  // Дополнительная проверка: прямое вхождение имени компонента в имя узла или наоборот
+  // Additional check: direct inclusion of component name in node name or vice versa
   if (normalizedNodeName.includes(normalizedCompName) ||
       normalizedCompName.includes(normalizedNodeName)) {
     maxScore = Math.max(maxScore, 0.6);
@@ -165,12 +165,12 @@ function calculateSemanticSimilarity(figmaNode: any, compName: string): number {
 }
 
 /**
- * Распознавание паттернов компонентов с использованием мультиалгоритмического
- * сопоставления сходства
+ * Recognize component patterns using multi-algorithm
+ * similarity matching
  *
- * @param figmaNode - узел Figma для анализа
- * @param existingComponents - массив имен существующих компонентов
- * @returns массив совпадений, отсортированных по уверенности (по убыванию)
+ * @param figmaNode - Figma node to analyze
+ * @param existingComponents - array of existing component names
+ * @returns array of matches sorted by confidence (descending)
  */
 export function recognizeComponentPatterns(
   figmaNode: any,
@@ -179,27 +179,27 @@ export function recognizeComponentPatterns(
   const figmaProperties = extractProperties(figmaNode);
   const matches: ComponentMatch[] = [];
 
-  // Для каждого существующего компонента вычисляем сходство
+  // Calculate similarity for each existing component
   for (const existingComp of existingComponents) {
-    // Извлечение свойств из имени существующего компонента
-    // (в реальном сценарии можно было бы парсить сам компонент, но пока используем только имя)
+    // Extract properties from existing component name
+    // (in real scenario we could parse the component itself, but for now use only the name)
     const compProperties = normalizeString(existingComp)
       .split(/\s+/)
       .filter(token => token.length > 2);
 
-    // a. Сходство имен
+    // a. Name similarity
     const nameSimilarity = calculateNameSimilarity(figmaNode.name || '', existingComp);
 
-    // b. Структурное сходство
+    // b. Structural similarity
     const structureSimilarity = calculateStructureSimilarity(figmaProperties, compProperties);
 
-    // c. Семантическое сходство
+    // c. Semantic similarity
     const semanticSimilarity = calculateSemanticSimilarity(figmaNode, existingComp);
 
-    // Комбинированная уверенность: взвешенная сумма
+    // Combined confidence: weighted sum
     const confidence = (nameSimilarity * 0.4) + (structureSimilarity * 0.4) + (semanticSimilarity * 0.2);
 
-    // Определение рекомендации на основе уверенности
+    // Determine recommendation based on confidence
     let recommendation: 'USE_EXISTING' | 'CREATE_NEW' | 'EXTEND_EXISTING';
     if (confidence > 0.85 && structureSimilarity > 0.7) {
       recommendation = 'USE_EXISTING';
@@ -229,10 +229,10 @@ export function recognizeComponentPatterns(
     });
   }
 
-  // Фильтрация совпадений с уверенностью > 0.5
+  // Filter matches with confidence > 0.5
   const filteredMatches = matches.filter(match => match.existingComponent.confidence > 0.5);
 
-  // Сортировка по уверенности (по убыванию)
+  // Sort by confidence (descending)
   filteredMatches.sort((a, b) => b.existingComponent.confidence - a.existingComponent.confidence);
 
   return filteredMatches;

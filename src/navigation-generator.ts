@@ -1,21 +1,21 @@
 /**
- * Генератор типов навигации и структуры навигаторов для React Navigation
- * Анализирует экраны из Figma и создает типобезопасную навигационную структуру
+ * Navigation types and navigator structure generator for React Navigation
+ * Analyzes screens from Figma and creates type-safe navigation structure
  */
 
 import { compareTwoStrings } from 'string-similarity';
 
 /**
- * Интерфейс для определения экрана навигации
+ * Interface for navigation screen definition
  */
 export interface NavigationScreen {
   name: string;
-  params?: Record<string, string>; // например, { userId: 'string', productId: 'string' }
+  params?: Record<string, string>; // e.g., { userId: 'string', productId: 'string' }
   navigatorType: 'stack' | 'tab' | 'drawer' | 'root';
 }
 
 /**
- * Интерфейс для вложенных навигаторов
+ * Interface for nested navigators
  */
 export interface NestedNavigator {
   name: string;
@@ -24,7 +24,7 @@ export interface NestedNavigator {
 }
 
 /**
- * Интерфейс для структуры навигации приложения
+ * Interface for application navigation structure
  */
 export interface NavigationStructure {
   screens: NavigationScreen[];
@@ -33,7 +33,7 @@ export interface NavigationStructure {
 }
 
 /**
- * Интерфейс для входных данных экрана из Figma
+ * Interface for Figma screen input data
  */
 export interface FigmaScreen {
   name: string;
@@ -41,7 +41,7 @@ export interface FigmaScreen {
 }
 
 /**
- * Тип элемента навигации, обнаруженного в дизайне
+ * Navigation element type detected in design
  */
 interface NavigationElement {
   type: 'back_button' | 'tab_bar' | 'drawer_menu' | 'hamburger_icon' | 'bottom_nav';
@@ -50,8 +50,8 @@ interface NavigationElement {
 }
 
 /**
- * Нормализация имени экрана
- * Убирает суффиксы "Screen", "Page", "View" и другие вариации
+ * Screen name normalization
+ * Removes suffixes "Screen", "Page", "View" and other variations
  */
 function normalizeScreenName(name: string): string {
   return name
@@ -64,13 +64,13 @@ function normalizeScreenName(name: string): string {
 }
 
 /**
- * Определение параметров навигации из содержимого экрана
- * Анализирует узлы Figma для поиска динамических данных
+ * Infer navigation parameters from screen content
+ * Analyzes Figma nodes to find dynamic data
  */
 function inferNavigationParams(node: any): Record<string, string> | undefined {
   const params: Record<string, string> = {};
 
-  // Паттерны для определения типов параметров
+  // Patterns for parameter type detection
   const paramPatterns = {
     id: /\b(id|ID|Id)\b/,
     userId: /\b(user[-_]?id|userId)\b/i,
@@ -82,11 +82,11 @@ function inferNavigationParams(node: any): Record<string, string> | undefined {
     visitId: /\b(visit[-_]?id|visitId|appointment[-_]?id)\b/i,
   };
 
-  // Рекурсивный поиск параметров в структуре узла
+  // Recursive parameter search in node structure
   function searchForParams(n: any) {
     if (!n) return;
 
-    // Проверка имени узла
+    // Check node name
     if (n.name) {
       for (const [paramName, pattern] of Object.entries(paramPatterns)) {
         if (pattern.test(n.name)) {
@@ -95,10 +95,10 @@ function inferNavigationParams(node: any): Record<string, string> | undefined {
       }
     }
 
-    // Проверка текстового содержимого на наличие плейсхолдеров
+    // Check text content for placeholders
     if (n.characters) {
       const text = n.characters;
-      // Поиск плейсхолдеров типа {userId}, :userId, $userId
+      // Find placeholders like {userId}, :userId, $userId
       const placeholderMatches = text.matchAll(/[{:$](\w+)[}]?/g);
       for (const match of placeholderMatches) {
         const paramName = match[1];
@@ -106,7 +106,7 @@ function inferNavigationParams(node: any): Record<string, string> | undefined {
       }
     }
 
-    // Рекурсивный поиск в дочерних элементах
+    // Recursive search in child elements
     if (n.children && Array.isArray(n.children)) {
       n.children.forEach((child: any) => searchForParams(child));
     }
@@ -118,7 +118,7 @@ function inferNavigationParams(node: any): Record<string, string> | undefined {
 }
 
 /**
- * Определение элементов навигации в узле Figma
+ * Detect navigation elements in Figma node
  */
 function detectNavigationElements(node: any): NavigationElement[] {
   const elements: NavigationElement[] = [];
@@ -129,36 +129,35 @@ function detectNavigationElements(node: any): NavigationElement[] {
     const nodeName = (n.name || '').toLowerCase();
     const nodeType = n.type || '';
 
-    // Определение кнопки "Назад"
+    // Detect back button
     if (nodeName.includes('back') ||
-        nodeName.includes('назад') ||
         nodeName.includes('arrow') && nodeName.includes('left')) {
       elements.push({
         type: 'back_button',
         confidence: 0.9,
-        reason: `Обнаружена кнопка назад: "${n.name}"`
+        reason: `Back button detected: "${n.name}"`
       });
     }
 
-    // Определение Tab Bar (нижняя навигация)
+    // Detect Tab Bar (bottom navigation)
     if (nodeName.includes('tab') && (nodeName.includes('bar') || nodeName.includes('navigation'))) {
       elements.push({
         type: 'tab_bar',
         confidence: 0.95,
-        reason: `Обнаружена tab bar: "${n.name}"`
+        reason: `Tab bar detected: "${n.name}"`
       });
     }
 
-    // Определение Bottom Navigation
+    // Detect Bottom Navigation
     if (nodeName.includes('bottom') && nodeName.includes('nav')) {
       elements.push({
         type: 'bottom_nav',
         confidence: 0.95,
-        reason: `Обнаружена нижняя навигация: "${n.name}"`
+        reason: `Bottom navigation detected: "${n.name}"`
       });
     }
 
-    // Определение иконки гамбургера (drawer menu)
+    // Detect hamburger icon (drawer menu)
     if (nodeName.includes('hamburger') ||
         nodeName.includes('menu') && nodeName.includes('icon') ||
         nodeName.includes('drawer') ||
@@ -166,21 +165,21 @@ function detectNavigationElements(node: any): NavigationElement[] {
       elements.push({
         type: 'hamburger_icon',
         confidence: 0.85,
-        reason: `Обнаружено меню drawer: "${n.name}"`
+        reason: `Drawer menu detected: "${n.name}"`
       });
     }
 
-    // Определение drawer menu по структуре
+    // Detect drawer menu by structure
     if (nodeName.includes('drawer') ||
         nodeName.includes('side') && nodeName.includes('menu')) {
       elements.push({
         type: 'drawer_menu',
         confidence: 0.9,
-        reason: `Обнаружено боковое меню: "${n.name}"`
+        reason: `Side menu detected: "${n.name}"`
       });
     }
 
-    // Анализ дочерних элементов
+    // Analyze child elements
     if (n.children && Array.isArray(n.children)) {
       n.children.forEach((child: any) => searchNode(child, depth + 1));
     }
@@ -191,50 +190,50 @@ function detectNavigationElements(node: any): NavigationElement[] {
 }
 
 /**
- * Определение типа навигатора на основе обнаруженных элементов
+ * Determine navigator type based on detected elements
  */
 function determineNavigatorType(
   elements: NavigationElement[],
   screenName: string
 ): 'stack' | 'tab' | 'drawer' | 'root' {
 
-  // Приоритеты: tab > drawer > stack
+  // Priorities: tab > drawer > stack
   const hasTabBar = elements.some(e => e.type === 'tab_bar' || e.type === 'bottom_nav');
   const hasDrawer = elements.some(e => e.type === 'drawer_menu' || e.type === 'hamburger_icon');
   const hasBackButton = elements.some(e => e.type === 'back_button');
 
-  // Tab навигация имеет наивысший приоритет
+  // Tab navigation has highest priority
   if (hasTabBar) {
     return 'tab';
   }
 
-  // Drawer навигация
+  // Drawer navigation
   if (hasDrawer) {
     return 'drawer';
   }
 
-  // Stack навигация (если есть кнопка назад)
+  // Stack navigation (if back button exists)
   if (hasBackButton) {
     return 'stack';
   }
 
-  // Определение по имени экрана
+  // Determine by screen name
   const lowerName = screenName.toLowerCase();
   if (lowerName.includes('home') || lowerName.includes('main') || lowerName === 'index') {
     return 'root';
   }
 
-  // По умолчанию stack
+  // Default to stack
   return 'stack';
 }
 
 /**
- * Группировка экранов по типу навигатора для создания вложенной структуры
+ * Group screens by navigator type to create nested structure
  */
 function groupScreensByNavigator(screens: NavigationScreen[]): NestedNavigator[] {
   const navigators: NestedNavigator[] = [];
 
-  // Группируем tab экраны
+  // Group tab screens
   const tabScreens = screens.filter(s => s.navigatorType === 'tab');
   if (tabScreens.length > 0) {
     navigators.push({
@@ -244,7 +243,7 @@ function groupScreensByNavigator(screens: NavigationScreen[]): NestedNavigator[]
     });
   }
 
-  // Группируем drawer экраны
+  // Group drawer screens
   const drawerScreens = screens.filter(s => s.navigatorType === 'drawer');
   if (drawerScreens.length > 0) {
     navigators.push({
@@ -254,7 +253,7 @@ function groupScreensByNavigator(screens: NavigationScreen[]): NestedNavigator[]
     });
   }
 
-  // Остальные экраны идут в основной stack
+  // Remaining screens go to main stack
   const stackScreens = screens.filter(
     s => s.navigatorType === 'stack' || s.navigatorType === 'root'
   );
@@ -270,7 +269,7 @@ function groupScreensByNavigator(screens: NavigationScreen[]): NestedNavigator[]
 }
 
 /**
- * Определение корневого типа навигатора
+ * Determine root navigator type
  */
 function determineRootNavigator(screens: NavigationScreen[]): 'stack' | 'tab' | 'drawer' {
   const navigatorCounts = {
@@ -279,26 +278,26 @@ function determineRootNavigator(screens: NavigationScreen[]): 'stack' | 'tab' | 
     drawer: screens.filter(s => s.navigatorType === 'drawer').length,
   };
 
-  // Если есть tab экраны, корневой навигатор обычно tab
+  // If tab screens exist, root navigator is usually tab
   if (navigatorCounts.tab > 0 && navigatorCounts.tab >= navigatorCounts.stack * 0.3) {
     return 'tab';
   }
 
-  // Если есть drawer экраны, корневой навигатор может быть drawer
+  // If drawer screens exist, root navigator can be drawer
   if (navigatorCounts.drawer > 0 && navigatorCounts.drawer >= navigatorCounts.stack * 0.3) {
     return 'drawer';
   }
 
-  // По умолчанию stack
+  // Default to stack
   return 'stack';
 }
 
 /**
- * Анализ структуры навигации из экранов Figma
- * Главная функция для определения типов навигаторов и их структуры
+ * Analyze navigation structure from Figma screens
+ * Main function for determining navigator types and their structure
  *
- * @param screens - массив экранов из Figma с их узлами
- * @returns структура навигации с типами навигаторов и экранами
+ * @param screens - array of screens from Figma with their nodes
+ * @returns navigation structure with navigator types and screens
  */
 export function analyzeNavigationStructure(screens: FigmaScreen[]): NavigationStructure {
   const analyzedScreens: NavigationScreen[] = [];
@@ -327,23 +326,23 @@ export function analyzeNavigationStructure(screens: FigmaScreen[]): NavigationSt
 }
 
 /**
- * Генерация TypeScript типов для React Navigation
- * Создает типобезопасные типы для навигации в стиле React Navigation v6+
+ * Generate TypeScript types for React Navigation
+ * Creates type-safe navigation types in React Navigation v6+ style
  *
- * @param structure - проанализированная структура навигации
- * @returns строка с TypeScript кодом определений типов
+ * @param structure - analyzed navigation structure
+ * @returns string with TypeScript type definitions code
  */
 export function generateNavigationTypes(structure: NavigationStructure): string {
   let code = `/**
- * Типы навигации для React Navigation
- * Автоматически сгенерировано из Figma дизайна
+ * Navigation types for React Navigation
+ * Auto-generated from Figma design
  */
 
 import type { NavigatorScreenParams } from '@react-navigation/native';
 
 `;
 
-  // Генерация типов для каждого навигатора
+  // Generate types for each navigator
   for (const navigator of structure.nestedNavigators) {
     const paramList = navigator.name.replace('Navigator', 'ParamList');
 
@@ -354,13 +353,13 @@ import type { NavigatorScreenParams } from '@react-navigation/native';
       if (!screen) continue;
 
       if (screen.params && Object.keys(screen.params).length > 0) {
-        // Экран с параметрами
+        // Screen with parameters
         const paramsType = `{\n${Object.entries(screen.params)
           .map(([key, type]) => `    ${key}: ${type};`)
           .join('\n')}\n  }`;
         code += `  ${screen.name}: ${paramsType};\n`;
       } else {
-        // Экран без параметров
+        // Screen without parameters
         code += `  ${screen.name}: undefined;\n`;
       }
     }
@@ -368,7 +367,7 @@ import type { NavigatorScreenParams } from '@react-navigation/native';
     code += `};\n\n`;
   }
 
-  // Генерация корневого типа, если есть вложенные навигаторы
+  // Generate root type if there are nested navigators
   if (structure.nestedNavigators.length > 1) {
     const rootParamList = `RootParamList`;
     code += `export type ${rootParamList} = {\n`;
@@ -381,7 +380,7 @@ import type { NavigatorScreenParams } from '@react-navigation/native';
     code += `};\n\n`;
   }
 
-  // Добавление declare global для типобезопасности
+  // Add declare global for type safety
   const mainParamList = structure.nestedNavigators.length > 1
     ? 'RootParamList'
     : structure.nestedNavigators[0]?.name.replace('Navigator', 'ParamList') || 'RootStackParamList';
@@ -396,23 +395,23 @@ import type { NavigatorScreenParams } from '@react-navigation/native';
 }
 
 /**
- * Генерация кода навигаторов для React Navigation
- * Создает готовый к использованию код с навигаторами
+ * Generate navigator code for React Navigation
+ * Creates ready-to-use code with navigators
  *
- * @param structure - проанализированная структура навигации
- * @returns строка с React компонентом навигации
+ * @param structure - analyzed navigation structure
+ * @returns string with React navigation component
  */
 export function generateNavigatorCode(structure: NavigationStructure): string {
   let code = `/**
- * Конфигурация навигации
- * Автоматически сгенерировано из Figma дизайна
+ * Navigation configuration
+ * Auto-generated from Figma design
  */
 
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 `;
 
-  // Импорты навигаторов
+  // Navigator imports
   const navigatorTypes = new Set(structure.nestedNavigators.map(n => n.type));
 
   if (navigatorTypes.has('stack')) {
@@ -425,19 +424,19 @@ import { NavigationContainer } from '@react-navigation/native';
     code += `import { createDrawerNavigator } from '@react-navigation/drawer';\n`;
   }
 
-  code += `\n// Импорты экранов\n`;
+  code += `\n// Screen imports\n`;
   for (const screen of structure.screens) {
     code += `import ${screen.name}Screen from './screens/${screen.name}Screen';\n`;
   }
 
-  code += `\n// Импорты типов\nimport type {\n`;
+  code += `\n// Type imports\nimport type {\n`;
   for (const navigator of structure.nestedNavigators) {
     const paramList = navigator.name.replace('Navigator', 'ParamList');
     code += `  ${paramList},\n`;
   }
   code += `} from './navigation.types';\n\n`;
 
-  // Создание навигаторов
+  // Create navigators
   for (const navigator of structure.nestedNavigators) {
     const paramList = navigator.name.replace('Navigator', 'ParamList');
 
@@ -452,7 +451,7 @@ import { NavigationContainer } from '@react-navigation/native';
 
   code += `\n`;
 
-  // Генерация компонентов навигаторов
+  // Generate navigator components
   for (const navigator of structure.nestedNavigators) {
     const navName = navigator.name.replace('Navigator', '');
     const NavigatorComponent = `${navName}.Navigator`;
@@ -470,7 +469,7 @@ import { NavigationContainer } from '@react-navigation/native';
       code += `        name="${screen.name}"\n`;
       code += `        component={${screen.name}Screen}\n`;
 
-      // Добавление опций для экрана
+      // Add screen options
       if (navigator.type === 'stack') {
         code += `        options={{ title: '${screen.name}' }}\n`;
       } else if (navigator.type === 'tab') {
@@ -488,7 +487,7 @@ import { NavigationContainer } from '@react-navigation/native';
     code += `}\n\n`;
   }
 
-  // Генерация корневого компонента навигации
+  // Generate root navigation component
   code += `export default function Navigation() {\n`;
   code += `  return (\n`;
   code += `    <NavigationContainer>\n`;
@@ -506,25 +505,25 @@ import { NavigationContainer } from '@react-navigation/native';
 }
 
 /**
- * Генерация примера использования навигации
- * Создает документацию с примерами навигации между экранами
+ * Generate navigation usage examples
+ * Creates documentation with screen navigation examples
  *
- * @param structure - проанализированная структура навигации
- * @returns строка с Markdown документацией
+ * @param structure - analyzed navigation structure
+ * @returns string with Markdown documentation
  */
 export function generateNavigationDocumentation(structure: NavigationStructure): string {
-  let doc = `# Документация навигации\n\n`;
-  doc += `Автоматически сгенерировано из Figma дизайна.\n\n`;
+  let doc = `# Navigation Documentation\n\n`;
+  doc += `Auto-generated from Figma design.\n\n`;
 
-  doc += `## Структура навигации\n\n`;
-  doc += `- **Корневой навигатор**: ${structure.rootNavigator}\n`;
-  doc += `- **Количество экранов**: ${structure.screens.length}\n`;
-  doc += `- **Вложенных навигаторов**: ${structure.nestedNavigators.length}\n\n`;
+  doc += `## Navigation Structure\n\n`;
+  doc += `- **Root navigator**: ${structure.rootNavigator}\n`;
+  doc += `- **Screen count**: ${structure.screens.length}\n`;
+  doc += `- **Nested navigators**: ${structure.nestedNavigators.length}\n\n`;
 
   for (const navigator of structure.nestedNavigators) {
     doc += `### ${navigator.name}\n\n`;
-    doc += `Тип: \`${navigator.type}\`\n\n`;
-    doc += `Экраны:\n`;
+    doc += `Type: \`${navigator.type}\`\n\n`;
+    doc += `Screens:\n`;
 
     for (const screenName of navigator.screens) {
       const screen = structure.screens.find(s => s.name === screenName);
@@ -532,22 +531,22 @@ export function generateNavigationDocumentation(structure: NavigationStructure):
 
       doc += `- **${screen.name}**`;
       if (screen.params) {
-        doc += ` - параметры: \`${JSON.stringify(screen.params)}\``;
+        doc += ` - params: \`${JSON.stringify(screen.params)}\``;
       }
       doc += `\n`;
     }
     doc += `\n`;
   }
 
-  doc += `## Примеры использования\n\n`;
-  doc += `### Навигация без параметров\n\n`;
+  doc += `## Usage Examples\n\n`;
+  doc += `### Navigation without parameters\n\n`;
   doc += `\`\`\`typescript\n`;
   doc += `navigation.navigate('${structure.screens[0]?.name || 'Home'}');\n`;
   doc += `\`\`\`\n\n`;
 
   const screenWithParams = structure.screens.find(s => s.params);
   if (screenWithParams) {
-    doc += `### Навигация с параметрами\n\n`;
+    doc += `### Navigation with parameters\n\n`;
     doc += `\`\`\`typescript\n`;
     doc += `navigation.navigate('${screenWithParams.name}', {\n`;
     if (screenWithParams.params) {
@@ -559,7 +558,7 @@ export function generateNavigationDocumentation(structure: NavigationStructure):
     doc += `\`\`\`\n\n`;
   }
 
-  doc += `### Получение параметров в экране\n\n`;
+  doc += `### Getting parameters in screen\n\n`;
   doc += `\`\`\`typescript\n`;
   if (screenWithParams) {
     doc += `import { useRoute } from '@react-navigation/native';\n`;

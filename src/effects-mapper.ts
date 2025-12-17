@@ -1,6 +1,6 @@
 /**
- * Маппинг эффектов Figma на стили теней React Native
- * Обрабатывает DROP_SHADOW, INNER_SHADOW, LAYER_BLUR, BACKGROUND_BLUR
+ * Map Figma effects to React Native shadow styles
+ * Handles DROP_SHADOW, INNER_SHADOW, LAYER_BLUR, BACKGROUND_BLUR
  */
 
 import { rgbaToHex } from './color-utils.js';
@@ -23,7 +23,7 @@ interface FigmaEffect {
 }
 
 export interface RNShadowStyles {
-  // iOS свойства тени
+  // iOS shadow properties
   shadowColor?: string;
   shadowOffset?: { width: number; height: number };
   shadowOpacity?: number;
@@ -32,7 +32,7 @@ export interface RNShadowStyles {
   // Android elevation
   elevation?: number;
 
-  // Дополнительная информация
+  // Additional information
   hasInnerShadow?: boolean;
   innerShadowNote?: string;
 
@@ -42,13 +42,13 @@ export interface RNShadowStyles {
 }
 
 /**
- * Максимальное значение Android elevation согласно Material Design
+ * Maximum Android elevation value according to Material Design
  */
 const MAX_ANDROID_ELEVATION = 24;
 
 /**
- * Вычисление Android elevation на основе свойств тени
- * Elevation примерно: (shadowRadius * 2 + shadowOffset.y) / 3
+ * Calculate Android elevation based on shadow properties
+ * Elevation approximately: (shadowRadius * 2 + shadowOffset.y) / 3
  */
 function calculateElevation(radius: number, offsetY: number): number {
   const rawElevation = (radius * 2 + Math.abs(offsetY)) / 3;
@@ -56,7 +56,7 @@ function calculateElevation(radius: number, offsetY: number): number {
 }
 
 /**
- * Маппинг массива эффектов Figma на стили тени React Native
+ * Map Figma effects array to React Native shadow styles
  */
 export function mapEffectsToRNStyles(effects: FigmaEffect[]): RNShadowStyles {
   const result: RNShadowStyles = {};
@@ -65,13 +65,13 @@ export function mapEffectsToRNStyles(effects: FigmaEffect[]): RNShadowStyles {
     return result;
   }
 
-  // Фильтрация видимых эффектов
+  // Filter visible effects
   const visibleEffects = effects.filter((e) => e.visible !== false);
 
-  // Обработка DROP_SHADOW (основная тень для RN)
+  // Process DROP_SHADOW (main shadow for RN)
   const dropShadow = visibleEffects.find((e) => e.type === 'DROP_SHADOW');
   if (dropShadow) {
-    // iOS свойства тени
+    // iOS shadow properties
     if (dropShadow.color) {
       result.shadowColor = rgbaToHex(dropShadow.color);
       result.shadowOpacity = dropShadow.color.a;
@@ -85,17 +85,17 @@ export function mapEffectsToRNStyles(effects: FigmaEffect[]): RNShadowStyles {
     }
 
     if (dropShadow.radius !== undefined) {
-      // Figma radius соответствует iOS shadowRadius (примерно 1:1)
+      // Figma radius corresponds to iOS shadowRadius (approximately 1:1)
       result.shadowRadius = dropShadow.radius;
     }
 
-    // Вычисление Android elevation
+    // Calculate Android elevation
     const offsetY = dropShadow.offset?.y || 0;
     const radius = dropShadow.radius || 0;
     result.elevation = calculateElevation(radius, offsetY);
   }
 
-  // Обработка INNER_SHADOW (не поддерживается нативно в RN)
+  // Process INNER_SHADOW (not natively supported in RN)
   const innerShadow = visibleEffects.find((e) => e.type === 'INNER_SHADOW');
   if (innerShadow) {
     result.hasInnerShadow = true;
@@ -103,7 +103,7 @@ export function mapEffectsToRNStyles(effects: FigmaEffect[]): RNShadowStyles {
       'Inner shadows require custom implementation (gradient overlay or SVG)';
   }
 
-  // Обработка LAYER_BLUR и BACKGROUND_BLUR
+  // Process LAYER_BLUR and BACKGROUND_BLUR
   const blur = visibleEffects.find(
     (e) => e.type === 'LAYER_BLUR' || e.type === 'BACKGROUND_BLUR'
   );
@@ -120,7 +120,7 @@ export function mapEffectsToRNStyles(effects: FigmaEffect[]): RNShadowStyles {
 }
 
 /**
- * Форматирование стилей тени как кода React Native
+ * Format shadow styles as React Native code
  */
 export function formatShadowStylesAsCode(styles: RNShadowStyles): string {
   const lines: string[] = [];
@@ -151,13 +151,13 @@ export function formatShadowStylesAsCode(styles: RNShadowStyles): string {
 }
 
 /**
- * Форматирование стилей тени для документации LLM
+ * Format shadow styles for LLM documentation
  */
 export function formatShadowStylesForLLM(styles: RNShadowStyles): string {
   let output = '';
 
   if (!styles.shadowColor && !styles.hasInnerShadow && !styles.hasBlur) {
-    return ''; // Нет эффектов
+    return ''; // No effects
   }
 
   output += '## Shadow Effects\n\n';
@@ -184,7 +184,7 @@ export function formatShadowStylesForLLM(styles: RNShadowStyles): string {
 }
 
 /**
- * Рекурсивное извлечение эффектов из узла и сбор всех стилей тени
+ * Recursively extract effects from node and collect all shadow styles
  */
 export function extractAllEffects(node: any): Map<string, RNShadowStyles> {
   const effectsMap = new Map<string, RNShadowStyles>();

@@ -1,7 +1,4 @@
 /**
- * ONE-SHOT ORCHESTRATOR для Figma MCP Server
- * Комбинирует все обнаружения и генерации в один вызов функции
- *
  * ONE-SHOT ORCHESTRATOR for Figma MCP Server
  * Combines all detection and generation into a single function call
  */
@@ -22,7 +19,6 @@ import { loadProjectConfig } from './config-loader.js';
 import type { ProjectConfig } from './config-schema.js';
 
 /**
- * Паттерны системных компонентов, которые не нужно извлекать как изображения
  * System component patterns that should not be extracted as images
  */
 const SYSTEM_COMPONENT_PATTERNS = [
@@ -42,11 +38,10 @@ const SYSTEM_COMPONENT_PATTERNS = [
 ];
 
 /**
- * Проверяет, является ли узел системным компонентом
  * Checks if node is a system component
  *
- * @param name - Имя узла
- * @returns true если это системный компонент
+ * @param name - Node name
+ * @returns true if it's a system component
  */
 function isSystemComponent(name: string): boolean {
   const lowerName = name.toLowerCase();
@@ -54,35 +49,33 @@ function isSystemComponent(name: string): boolean {
 }
 
 /**
- * Сигналы для категоризации элемента
  * Signals for element categorization
  */
 export interface CategorizationSignals {
-  // Размеры / Dimensions
+  // Dimensions
   width: number;
   height: number;
   isFullWidth: boolean;   // 350-430px (iPhone widths)
   isFullHeight: boolean;  // 700-950px (iPhone heights)
 
-  // Навигация / Navigation
+  // Navigation
   hasNavigationBar: boolean;  // Top bar 44-56px with title
   hasBackButton: boolean;     // Arrow back icon in top area
   hasCloseButton: boolean;    // X close icon
   hasStatusBar: boolean;      // Device status bar
 
-  // Модальные сигналы / Modal signals
+  // Modal signals
   hasOverlay: boolean;        // Semi-transparent background (opacity 0.3-0.7)
   hasDragHandle: boolean;     // Pill shape at top (~36x5px)
   isCentered: boolean;        // Centered in parent, not full size
   isBottomAligned: boolean;   // Positioned at bottom of parent
 
-  // Контент / Content
+  // Content
   hasActionList: boolean;     // Vertical stack of tappable items
-  hasCancelButton: boolean;   // "Cancel" or "Отмена" text
+  hasCancelButton: boolean;   // "Cancel" text
 }
 
 /**
- * Извлекает сигналы категоризации из Figma узла
  * Extracts categorization signals from Figma node
  */
 export function extractCategorizationSignals(node: any, parentNode?: any): CategorizationSignals {
@@ -106,22 +99,20 @@ export function extractCategorizationSignals(node: any, parentNode?: any): Categ
     hasCancelButton: false,
   };
 
-  // Рекурсивно анализируем детей / Recursively analyze children
+  // Recursively analyze children
   if (node.children && Array.isArray(node.children)) {
     analyzeChildren(node.children, signals, node);
   }
 
-  // Проверяем позицию относительно родителя / Check position relative to parent
+  // Check position relative to parent
   if (parentNode?.absoluteBoundingBox && node.absoluteBoundingBox) {
     const parentHeight = parentNode.absoluteBoundingBox.height;
     const nodeY = node.absoluteBoundingBox.y - parentNode.absoluteBoundingBox.y;
     const nodeBottom = nodeY + height;
 
-    // Выровнен по низу если нижний край близок к низу родителя
     // Bottom aligned if bottom edge is close to parent bottom
     signals.isBottomAligned = Math.abs(nodeBottom - parentHeight) < 20;
 
-    // Центрирован если не полноразмерный и примерно по центру
     // Centered if not full size and approximately centered
     const parentWidth = parentNode.absoluteBoundingBox.width;
     const nodeX = node.absoluteBoundingBox.x - parentNode.absoluteBoundingBox.x;
@@ -134,11 +125,10 @@ export function extractCategorizationSignals(node: any, parentNode?: any): Categ
 }
 
 /**
- * Анализирует дочерние элементы для извлечения сигналов
  * Analyzes children to extract signals
  */
 function analyzeChildren(children: any[], signals: CategorizationSignals, rootNode: any, depth = 0): void {
-  if (depth > 5) return; // Ограничиваем глубину / Limit depth
+  if (depth > 5) return; // Limit depth
 
   for (const child of children) {
     const name = (child.name || '').toLowerCase();
@@ -146,7 +136,7 @@ function analyzeChildren(children: any[], signals: CategorizationSignals, rootNo
     const childWidth = child.absoluteBoundingBox?.width || 0;
     const childHeight = child.absoluteBoundingBox?.height || 0;
 
-    // Позиция ребенка относительно корня / Child position relative to root
+    // Child position relative to root
     const rootBox = rootNode.absoluteBoundingBox;
     const childBox = child.absoluteBoundingBox;
     let relativeY = 0;
@@ -155,40 +145,40 @@ function analyzeChildren(children: any[], signals: CategorizationSignals, rootNo
       relativeY = childBox.y - rootBox.y;
       relativeX = childBox.x - rootBox.x;
     }
-    const isAtTop = relativeY < 100; // В верхних 100px / In top 100px
-    const isAtLeft = relativeX < 60;  // В левых 60px / In left 60px
+    const isAtTop = relativeY < 100; // In top 100px
+    const isAtLeft = relativeX < 60;  // In left 60px
     const isAtRight = rootBox && (relativeX + childWidth > rootBox.width - 60);
 
-    // Проверка StatusBar / StatusBar check
+    // StatusBar check
     if (name.includes('status') || name.includes('statusbar') || name.includes('status bar')) {
       signals.hasStatusBar = true;
     }
 
-    // Проверка Navigation Bar / Navigation bar check
-    // Обычно 44-56px высотой, в верхней части / Usually 44-56px tall, at top
+    // Navigation bar check
+    // Usually 44-56px tall, at top
     if (isAtTop && childHeight >= 40 && childHeight <= 60 && childWidth > 300) {
       if (name.includes('nav') || name.includes('header') || name.includes('toolbar') || name.includes('appbar')) {
         signals.hasNavigationBar = true;
       }
-      // Также проверяем по структуре - если есть title текст / Also check by structure - if has title text
+      // Also check by structure - if has title text
       if (child.children?.some((c: any) => c.type === 'TEXT' && c.style?.fontSize >= 16)) {
         signals.hasNavigationBar = true;
       }
     }
 
-    // Проверка Back Button / Back button check
+    // Back button check
     if (isAtTop && isAtLeft) {
-      if (name.includes('back') || name.includes('arrow') || name.includes('chevron') || name.includes('назад')) {
+      if (name.includes('back') || name.includes('arrow') || name.includes('chevron') || name.includes('')) {
         signals.hasBackButton = true;
       }
     }
 
-    // Проверка Close Button / Close button check
+    // Close button check
     if (isAtTop && (isAtLeft || isAtRight)) {
-      if (name.includes('close') || name.includes('x') || name.includes('dismiss') || name.includes('закрыть')) {
+      if (name.includes('close') || name.includes('x') || name.includes('dismiss') || name.includes('')) {
         signals.hasCloseButton = true;
       }
-      // Также проверяем по форме - маленький квадрат с X / Also check by shape - small square with X
+      // Also check by shape - small square with X
       if (childWidth >= 20 && childWidth <= 50 && childHeight >= 20 && childHeight <= 50) {
         if (name === 'x' || name === 'close' || name.includes('icon') && name.includes('close')) {
           signals.hasCloseButton = true;
@@ -196,8 +186,8 @@ function analyzeChildren(children: any[], signals: CategorizationSignals, rootNo
       }
     }
 
-    // Проверка Drag Handle / Drag handle check
-    // Обычно маленький pill в верхней части / Usually small pill at top
+    // Drag handle check
+    // Usually small pill at top
     if (isAtTop && relativeY < 30) {
       if (childWidth >= 30 && childWidth <= 50 && childHeight >= 3 && childHeight <= 8) {
         signals.hasDragHandle = true;
@@ -207,13 +197,13 @@ function analyzeChildren(children: any[], signals: CategorizationSignals, rootNo
       }
     }
 
-    // Проверка Overlay / Overlay check
-    // Полупрозрачный фон / Semi-transparent background
+    // Overlay check
+    // Semi-transparent background
     if (child.fills && Array.isArray(child.fills)) {
       for (const fill of child.fills) {
         if (fill.type === 'SOLID' && fill.opacity !== undefined) {
           if (fill.opacity >= 0.2 && fill.opacity <= 0.8) {
-            // Если покрывает большую часть и темный цвет / If covers most area and dark color
+            // If covers most area and dark color
             if (childWidth > 300 && childHeight > 500) {
               const color = fill.color;
               if (color && (color.r < 0.3 && color.g < 0.3 && color.b < 0.3)) {
@@ -225,16 +215,16 @@ function analyzeChildren(children: any[], signals: CategorizationSignals, rootNo
       }
     }
 
-    // Проверка Cancel Button / Cancel button check
+    // Cancel button check
     if (type === 'TEXT') {
       const textContent = child.characters || '';
-      if (textContent.toLowerCase().includes('cancel') || textContent.toLowerCase().includes('отмена')) {
+      if (textContent.toLowerCase().includes('cancel') || textContent.toLowerCase().includes('')) {
         signals.hasCancelButton = true;
       }
     }
 
-    // Проверка Action List / Action list check
-    // Вертикальный список текстовых элементов / Vertical list of text elements
+    // Action list check
+    // Vertical list of text elements
     if (child.children && child.children.length >= 2) {
       const textChildren = child.children.filter((c: any) => c.type === 'TEXT' ||
         (c.children && c.children.some((gc: any) => gc.type === 'TEXT')));
@@ -243,7 +233,7 @@ function analyzeChildren(children: any[], signals: CategorizationSignals, rootNo
       }
     }
 
-    // Рекурсия / Recurse
+    // Recurse
     if (child.children && Array.isArray(child.children)) {
       analyzeChildren(child.children, signals, rootNode, depth + 1);
     }
@@ -251,13 +241,11 @@ function analyzeChildren(children: any[], signals: CategorizationSignals, rootNo
 }
 
 /**
- * Определяет категорию на основе сигналов
  * Determines category based on signals
  */
 export function categorizeBySignals(signals: CategorizationSignals): 'screens' | 'modals' | 'sheets' | 'components' {
   const isFullScreen = signals.isFullWidth && signals.isFullHeight;
 
-  // 1. Sheets: drag handle или bottom-aligned action sheet
   // 1. Sheets: drag handle or bottom-aligned action sheet
   if (signals.hasDragHandle) {
     return 'sheets';
@@ -267,7 +255,6 @@ export function categorizeBySignals(signals: CategorizationSignals): 'screens' |
     return 'sheets';
   }
 
-  // 2. Modals: overlay или close button без nav bar
   // 2. Modals: overlay or close button without nav bar
   if (signals.hasOverlay) {
     return 'modals';
@@ -277,206 +264,188 @@ export function categorizeBySignals(signals: CategorizationSignals): 'screens' |
     return 'modals';
   }
 
-  // 3. Screens: полноразмерный с навигацией
   // 3. Screens: full size with navigation
   if (isFullScreen && (signals.hasNavigationBar || signals.hasBackButton || signals.hasStatusBar)) {
     return 'screens';
   }
 
-  // 4. Modals: центрированный, не полноразмерный
   // 4. Modals: centered, not full size
   if (signals.isCentered && !isFullScreen) {
     return 'modals';
   }
 
-  // 5. Components: не полноразмерный
   // 5. Components: not full size
   if (!isFullScreen) {
     return 'components';
   }
 
-  // 6. Default: полноразмерный без явных сигналов = screen
   // 6. Default: full size without clear signals = screen
   return 'screens';
 }
 
 /**
- * Интерфейс для генерируемого файла
  * Interface for generated file
  */
 export interface GeneratedFile {
-  /** Путь к файлу относительно корня проекта */
+  /** File path relative to project root */
   path: string;
-  /** Содержимое файла */
+  /** File content */
   content: string;
-  /** Тип файла */
+  /** File type */
   type: 'screen' | 'types' | 'hooks' | 'form' | 'styles' | 'animations' | 'gestures' | 'image';
 }
 
 /**
- * Интерфейс для извлеченного изображения
  * Interface for extracted image
  */
 export interface ExtractedImage {
-  /** ID узла в Figma */
+  /** Figma node ID */
   nodeId: string;
-  /** ID компонента (используется для экспорта) / Component ID (used for export) */
+  /** Component ID (used for export) */
   componentId?: string;
-  /** Имя узла */
+  /** Node name */
   nodeName: string;
-  /** Тип: изображение или иконка */
+  /** Type: image or icon */
   category: 'image' | 'icon';
-  /** Путь к скачанному файлу (временный) */
+  /** Downloaded file path (temporary) */
   downloadedPath?: string;
-  /** URL для скачивания из Figma */
+  /** Figma download URL */
   figmaUrl?: string;
-  /** Рекомендуемый путь для импорта */
+  /** Suggested import path */
   suggestedPath: string;
-  /** Рекомендуемое имя файла */
+  /** Suggested filename */
   suggestedFilename: string;
-  /** Формат файла */
+  /** File format */
   format: 'png' | 'svg' | 'jpg';
-  /** Размеры (если известны) */
+  /** Dimensions (if known) */
   dimensions?: { width: number; height: number };
 }
 
 /**
- * Результаты обнаружения всех паттернов
  * Detection results for all patterns
  */
 export interface DetectionResults {
-  /** Обнаружение списочного паттерна */
+  /** List pattern detection */
   list: ListPatternDetection | null;
-  /** Обнаружение формы */
+  /** Form detection */
   form: FormDetection | null;
-  /** Обнаружение sheet/modal */
+  /** Sheet/modal detection */
   sheet: SheetDetection | null;
-  /** Обнаружение вариантов */
+  /** Variants detection */
   variants: VariantDetection | null;
-  /** Подсказки по анимациям */
+  /** Animation hints */
   animations: AnimationHint | null;
-  /** Модели данных */
+  /** Data models */
   dataModels: DataModel[];
 }
 
 /**
- * Резюме результата генерации
  * Generation result summary
  */
 export interface GenerationSummary {
-  /** Тип экрана */
   screenType: 'list' | 'form' | 'sheet' | 'modal' | 'action-sheet' | 'regular';
-  /** Есть ли анимации */
+  /** Has animations */
   hasAnimations: boolean;
-  /** Есть ли модели данных */
+  /** Has data models */
   hasDataModels: boolean;
-  /** Совпадения компонентов */
+  /** Component matches */
   componentMatches: string[];
-  /** Дополнительная информация */
   metadata: {
-    /** Количество обнаруженных полей формы */
+    /** Form fields count */
     formFieldsCount?: number;
-    /** Количество элементов списка */
+    /** List items count */
     listItemsCount?: number;
-    /** Уверенность обнаружения (0-1) */
+    /** Detection confidence (0-1) */
     confidence: number;
   };
 }
 
 /**
- * Узел иерархии для meta.json
  * Hierarchy node for meta.json
  */
 export interface HierarchyNode {
-  /** ID узла / Node ID */
+  /** Node ID */
   id: string;
-  /** Имя узла / Node name */
+  /** Node name */
   name: string;
-  /** Тип узла / Node type */
+  /** Node type */
   type: string;
-  /** X позиция относительно родителя / X position relative to parent */
+  /** X position relative to parent */
   x?: number;
-  /** Y позиция относительно родителя / Y position relative to parent */
+  /** Y position relative to parent */
   y?: number;
-  /** Ширина элемента / Element width */
+  /** Element width */
   width?: number;
-  /** Высота элемента / Element height */
+  /** Element height */
   height?: number;
-  /** Направление layout (только для auto-layout) / Layout direction (auto-layout only) */
+  /** Layout direction (auto-layout only) */
   layout?: 'row' | 'column';
-  /** Gap между дочерними элементами / Gap between children */
+  /** Gap between children */
   gap?: number;
-  /** ID компонента (только для INSTANCE) / Component ID (INSTANCE only) */
+  /** Component ID (INSTANCE only) */
   componentId?: string;
-  /** Скрыт ли узел / Is node hidden */
+  /** Is node hidden */
   hidden?: boolean;
-  /** Текстовое содержимое (только для TEXT) / Text content (TEXT only) */
+  /** Text content (TEXT only) */
   characters?: string;
-  /** Дочерние узлы / Child nodes */
+  /** Child nodes */
   children?: HierarchyNode[];
 }
 
 /**
- * Полный результат ONE-SHOT генерации
  * Complete ONE-SHOT generation result
  */
 export interface OneShotResult {
-  /** Название экрана */
   screenName: string;
-  /** Канонический nodeId из Figma API / Canonical nodeId from Figma API */
+  /** Canonical nodeId from Figma API */
   nodeId: string;
-  /** Сгенерированные файлы */
+  /** Generated files */
   files: GeneratedFile[];
-  /** Результаты обнаружения */
+  /** Detection results */
   detections: DetectionResults;
-  /** Резюме генерации */
+  /** Generation summary */
   summary: GenerationSummary;
-  /** Извлеченные изображения */
+  /** Extracted images */
   images: ExtractedImage[];
-  /** Путь к скриншоту экрана (для валидации) */
   screenshotPath?: string;
-  /** ID скрытых узлов / Hidden node IDs */
+  /** Hidden node IDs */
   hiddenNodes?: string[];
-  /** Общее количество узлов / Total node count */
+  /** Total node count */
   totalNodes?: number;
-  /** Количество экземпляров / Instance count */
+  /** Instance count */
   instanceCount?: number;
-  /** Полная иерархия узла / Full node hierarchy */
+  /** Full node hierarchy */
   hierarchy?: HierarchyNode;
-  /** Извлеченные интерактивности / Extracted interactions */
+  /** Extracted interactions */
   interactions?: ExtractedInteraction[];
-  /** Извлеченные прокрутки / Extracted scrolls */
+  /** Extracted scrolls */
   scrolls?: ScrollInfo[];
 }
 
 /**
- * Опции для ONE-SHOT генерации
  * Options for ONE-SHOT generation
  */
 export interface OneShotOptions {
-  /** Генерировать TypeScript типы (по умолчанию: true) */
+  /** Generate TypeScript types (default: true) */
   generateTypes?: boolean;
-  /** Генерировать React Query хуки (по умолчанию: true) */
+  /** Generate React Query hooks (default: true) */
   generateHooks?: boolean;
-  /** Обнаруживать анимации (по умолчанию: false, может быть медленным) */
+  /** Detect animations (default: false, may be slow) */
   detectAnimations?: boolean;
-  /** Пользовательская конфигурация проекта */
+  /** Custom project config */
   config?: ProjectConfig;
-  /** Генерировать дополнительные файлы (схемы форм, gesture handlers) */
+  /** Generate extras (form schemas, gesture handlers) */
   generateExtras?: boolean;
-  /** Папка для сохранения скриншота и ассетов / Folder for screenshot and assets */
+  /** Folder for screenshot and assets */
   outputFolder?: string;
 }
 
 /**
- * Парсит URL Figma для извлечения fileKey и nodeId
  * Parses Figma URL to extract fileKey and nodeId
  *
- * @param figmaUrl - URL Figma узла
- * @returns Объект с fileKey и nodeId
+ * @param figmaUrl - Figma URL
  */
 function parseFigmaUrl(figmaUrl: string): { fileKey: string; nodeId: string } | null {
-  // Поддерживаемые форматы:
   // - https://www.figma.com/file/{fileKey}/...?node-id={nodeId}
   // - https://www.figma.com/design/{fileKey}/...?node-id={nodeId}
   // Supported formats above
@@ -495,32 +464,28 @@ function parseFigmaUrl(figmaUrl: string): { fileKey: string; nodeId: string } | 
 }
 
 /**
- * Извлекает изображения и иконки из Figma узла
  * Extracts images and icons from Figma node
  */
 function extractImageNodes(node: any, config?: ProjectConfig): ExtractedImage[] {
   const images: ExtractedImage[] = [];
   const seenComponentIds = new Set<string>();
 
-  // Паттерн для иконок: Icon*, ic/*, ic, *_icon
   // Icon pattern: Icon*, ic/*, ic, *_icon
   const iconPattern = /^Icon|^ic\/|^ic$|_icon$/i;
 
-  // Паттерн для изображений: photo*, img*, image*, *_image
   // Image pattern: photo*, img*, image*, *_image
   const imagePattern = /^photo|^img$|^image|_image$/i;
 
-  // Паттерн для системных компонентов (исключаем)
   // System components pattern (exclude)
   const systemPattern = /StatusBar|HomeIndicator|_StatusBar/i;
 
-  // Проверяет наличие image fill в узле / Checks for image fill in node
+  // Checks for image fill in node
   function hasImageFill(n: any): boolean {
     if (!n.fills || !Array.isArray(n.fills)) return false;
     return n.fills.some((f: any) => f.type === 'IMAGE' && f.visible !== false);
   }
 
-  // Конфигурация ассетов / Assets config
+  // Assets config
   const assetsConfig = {
     defaultIconFormat: config?.assets?.defaultIconFormat || 'svg',
     defaultImageFormat: config?.assets?.defaultImageFormat || 'png',
@@ -529,7 +494,7 @@ function extractImageNodes(node: any, config?: ProjectConfig): ExtractedImage[] 
     importPrefix: config?.assets?.importPrefix || '@assets'
   };
 
-  // Счетчик для уникальных имен файлов / Counter for unique filenames
+  // Counter for unique filenames
   const filenameCount = new Map<string, number>();
 
   function traverse(n: any): void {
@@ -538,31 +503,31 @@ function extractImageNodes(node: any, config?: ProjectConfig): ExtractedImage[] 
     const name = n.name || '';
     const type = n.type || '';
 
-    // Определяем тип ассета / Determine asset type
+    // Determine asset type
     const isIcon = type === 'INSTANCE' && iconPattern.test(name) && !systemPattern.test(name);
     const isImageByName = type === 'INSTANCE' && imagePattern.test(name) && !systemPattern.test(name);
     const isImageByFill = (type === 'RECTANGLE' || type === 'FRAME') && hasImageFill(n) && !systemPattern.test(name);
 
     if (isIcon || isImageByName || isImageByFill) {
-      // Дедупликация по componentId или nodeId / Deduplicate by componentId or nodeId
+      // Deduplicate by componentId or nodeId
       const uniqueKey = n.componentId || n.id;
       if (seenComponentIds.has(uniqueKey)) {
-        // Уже видели этот компонент, пропускаем / Already seen this component, skip
+        // Already seen this component, skip
       } else {
         seenComponentIds.add(uniqueKey);
 
-        // Определяем категорию / Determine category
+        // Determine category
         const category: 'icon' | 'image' = isIcon ? 'icon' : 'image';
         const format = category === 'icon' ? assetsConfig.defaultIconFormat : assetsConfig.defaultImageFormat;
 
-        // Генерируем имя файла / Generate filename
+        // Generate filename
         const cleanName = name
           .toLowerCase()
           .replace(/[^a-z0-9]+/gi, '-')
           .replace(/^-|-$/g, '')
           .replace(/--+/g, '-') || 'asset';
 
-        // Добавляем номер если имя уже использовано / Add number if name already used
+        // Add number if name already used
         const baseFilename = `${cleanName}.${format}`;
         const count = filenameCount.get(baseFilename) || 0;
         filenameCount.set(baseFilename, count + 1);
@@ -573,7 +538,7 @@ function extractImageNodes(node: any, config?: ProjectConfig): ExtractedImage[] 
 
         images.push({
           nodeId: n.id,
-          componentId: n.componentId, // Для экспорта используем componentId / Use componentId for export
+          componentId: n.componentId, // Use componentId for export
           nodeName: name,
           category,
           suggestedPath,
@@ -587,7 +552,7 @@ function extractImageNodes(node: any, config?: ProjectConfig): ExtractedImage[] 
       }
     }
 
-    // Рекурсивно обходим детей / Recursively traverse children
+    // Recursively traverse children
     if (n.children && Array.isArray(n.children)) {
       for (const child of n.children) {
         traverse(child);
@@ -597,13 +562,12 @@ function extractImageNodes(node: any, config?: ProjectConfig): ExtractedImage[] 
 
   traverse(node);
 
-  console.error(`[ONE-SHOT] Найдено ${images.length} ассетов (${seenComponentIds.size} уникальных компонентов)`);
+  console.error(`[ONE-SHOT] Found ${images.length} assets (${seenComponentIds.size} unique components)`);
 
   return images;
 }
 
 /**
- * Извлекает ID скрытых узлов из дерева Figma
  * Extracts IDs of hidden nodes from Figma tree
  */
 function extractHiddenNodes(node: any): string[] {
@@ -612,15 +576,14 @@ function extractHiddenNodes(node: any): string[] {
   function traverse(n: any) {
     if (!n) return;
 
-    // Проверяем, скрыт ли узел / Check if node is hidden
+    // Check if node is hidden
     if (n.visible === false) {
       hiddenNodes.push(n.id);
-      // Не продолжаем вглубь скрытого узла, т.к. все дети тоже скрыты
       // Don't traverse into hidden node, all children are also hidden
       return;
     }
 
-    // Рекурсивно обходим детей / Recursively traverse children
+    // Recursively traverse children
     if (n.children && Array.isArray(n.children)) {
       n.children.forEach(traverse);
     }
@@ -631,7 +594,6 @@ function extractHiddenNodes(node: any): string[] {
 }
 
 /**
- * Подсчитывает узлы и экземпляры в дереве
  * Counts nodes and instances in tree
  */
 function countNodes(node: any): { total: number; instances: number } {
@@ -654,7 +616,6 @@ function countNodes(node: any): { total: number; instances: number } {
 }
 
 /**
- * Извлекает полную иерархию из дерева Figma с позиционированием
  * Extracts full hierarchy from Figma tree with positioning
  */
 function extractHierarchy(node: any, parentBounds?: { x: number; y: number }): HierarchyNode {
@@ -664,7 +625,6 @@ function extractHierarchy(node: any, parentBounds?: { x: number; y: number }): H
     type: node.type || 'UNKNOWN',
   };
 
-  // Позиционирование относительно родителя
   // Positioning relative to parent
   if (node.absoluteBoundingBox) {
     const { x, y, width, height } = node.absoluteBoundingBox;
@@ -674,7 +634,6 @@ function extractHierarchy(node: any, parentBounds?: { x: number; y: number }): H
     hierarchyNode.height = Math.round(height);
   }
 
-  // Layout direction (только для auto-layout)
   // Layout direction (only for auto-layout)
   if (node.layoutMode === 'HORIZONTAL') {
     hierarchyNode.layout = 'row';
@@ -682,31 +641,26 @@ function extractHierarchy(node: any, parentBounds?: { x: number; y: number }): H
     hierarchyNode.layout = 'column';
   }
 
-  // Gap между дочерними элементами
   // Gap between children
   if (node.itemSpacing > 0) {
     hierarchyNode.gap = node.itemSpacing;
   }
 
-  // Добавляем componentId для INSTANCE
   // Add componentId for INSTANCE
   if (node.type === 'INSTANCE' && node.componentId) {
     hierarchyNode.componentId = node.componentId;
   }
 
-  // Добавляем hidden если true
   // Add hidden if true
   if (node.visible === false) {
     hierarchyNode.hidden = true;
   }
 
-  // Добавляем текст для TEXT узлов
   // Add text for TEXT nodes
   if (node.type === 'TEXT' && node.characters) {
     hierarchyNode.characters = node.characters;
   }
 
-  // Рекурсивно обрабатываем детей с текущими bounds как родительские
   // Recursively process children with current bounds as parent
   if (node.children && Array.isArray(node.children) && node.children.length > 0) {
     const currentBounds = node.absoluteBoundingBox;
@@ -719,24 +673,22 @@ function extractHierarchy(node: any, parentBounds?: { x: number; y: number }): H
 }
 
 /**
- * Извлеченная интерактивность
  * Extracted interaction
  */
 export interface ExtractedInteraction {
-  /** ID узла / Node ID */
+  /** Node ID */
   nodeId: string;
-  /** Имя узла / Node name */
+  /** Node name */
   nodeName: string;
-  /** Триггер взаимодействия / Interaction trigger */
+  /** Interaction trigger */
   trigger: string;
-  /** Действие / Action */
+  /** Action */
   action: string;
-  /** ID назначения (для навигации) / Destination ID (for navigation) */
+  /** Destination ID (for navigation) */
   destinationId?: string;
 }
 
 /**
- * Извлекает интерактивные элементы и их действия
  * Extracts interactive elements and their actions
  */
 function extractInteractions(node: any): ExtractedInteraction[] {
@@ -768,20 +720,18 @@ function extractInteractions(node: any): ExtractedInteraction[] {
 }
 
 /**
- * Информация о прокрутке
  * Scroll information
  */
 export interface ScrollInfo {
-  /** ID узла / Node ID */
+  /** Node ID */
   nodeId: string;
-  /** Имя узла / Node name */
+  /** Node name */
   nodeName: string;
-  /** Направление прокрутки / Scroll direction */
+  /** Scroll direction */
   direction: 'HORIZONTAL' | 'VERTICAL' | 'BOTH';
 }
 
 /**
- * Извлекает scrollBehavior для ScrollView определения
  * Extracts scrollBehavior for ScrollView detection
  */
 function extractScrollInfo(node: any): ScrollInfo[] {
@@ -808,14 +758,12 @@ function extractScrollInfo(node: any): ScrollInfo[] {
 }
 
 /**
- * Скачивает изображения напрямую в локальную папку ассетов
  * Downloads images directly to local assets folder
  *
- * @param token - Токен Figma API
- * @param fileKey - Ключ файла
- * @param images - Массив изображений для скачивания
- * @param assetsDir - Путь к папке ассетов / Path to assets folder
- * @returns Обновленный массив с путями к скачанным файлам
+ * @param token - Figma API token
+ * @param fileKey - File key
+ * @param images - Images array to download
+ * @returns Updated array with downloaded file paths
  */
 async function downloadExtractedImages(
   token: string,
@@ -825,18 +773,15 @@ async function downloadExtractedImages(
 ): Promise<ExtractedImage[]> {
   if (images.length === 0) return [];
 
-  // Дедуплицируем изображения по nodeId
   // Deduplicate images by nodeId
   const uniqueImages = Array.from(
     new Map(images.map(img => [img.nodeId, img])).values()
   );
-  console.error(`[ONE-SHOT] Дедупликация: ${images.length} → ${uniqueImages.length} уникальных`);
+  console.error(`[ONE-SHOT] Deduplication: ${images.length} → ${uniqueImages.length} unique`);
 
-  // Убедимся, что папка ассетов существует
   // Ensure assets folder exists
   await mkdir(assetsDir, { recursive: true });
 
-  // Группируем по формату для оптимизации API вызовов
   // Group by format to optimize API calls
   const pngImages = uniqueImages.filter(img => img.format === 'png');
   const svgImages = uniqueImages.filter(img => img.format === 'svg');
@@ -844,9 +789,7 @@ async function downloadExtractedImages(
   const results: ExtractedImage[] = [...uniqueImages];
 
   try {
-    // Скачиваем PNG изображения напрямую в папку ассетов
     // Download PNG images directly to assets folder
-    // Используем componentId если доступен (лучше экспортируется), иначе nodeId
     // Use componentId if available (better export), otherwise nodeId
     if (pngImages.length > 0) {
       const pngResults = await downloadFigmaImages(
@@ -858,7 +801,6 @@ async function downloadExtractedImages(
         2 // scale
       );
 
-      // Логируем успешные и неудачные загрузки
       // Log successful and failed downloads
       const downloadedIds = new Set(pngResults.map(r => r.nodeId));
       pngImages.forEach(img => {
@@ -876,9 +818,7 @@ async function downloadExtractedImages(
       });
     }
 
-    // Скачиваем SVG иконки напрямую в папку ассетов
     // Download SVG icons directly to assets folder
-    // Используем componentId если доступен (лучше экспортируется), иначе nodeId
     // Use componentId if available (better export), otherwise nodeId
     if (svgImages.length > 0) {
       const svgResults = await downloadFigmaImages(
@@ -890,7 +830,6 @@ async function downloadExtractedImages(
         1
       );
 
-      // Логируем успешные и неудачные загрузки
       // Log successful and failed downloads
       const downloadedIds = new Set(svgResults.map(r => r.nodeId));
       svgImages.forEach(img => {
@@ -908,8 +847,7 @@ async function downloadExtractedImages(
       });
     }
   } catch (error) {
-    console.error('[ONE-SHOT] ❌ Критическая ошибка при скачивании изображений:', error);
-    // Не прерываем генерацию, просто логируем ошибку
+    console.error('[ONE-SHOT] ❌ Critical error downloading images:', error);
     // Don't break generation, just log the error
   }
 
@@ -917,14 +855,11 @@ async function downloadExtractedImages(
 }
 
 /**
- * Скачивает скриншот экрана напрямую в локальную папку
  * Downloads screen screenshot directly to local folder
  *
- * @param token - Токен Figma API
- * @param fileKey - Ключ файла
- * @param nodeId - ID узла экрана
- * @param outputPath - Полный путь для сохранения скриншота / Full output path
- * @returns true если успешно, false при ошибке / true if successful, false on error
+ * @param token - Figma API token
+ * @param fileKey - File key
+ * @param outputPath - Full output path / Full output path
  */
 async function downloadScreenshot(
   token: string,
@@ -933,20 +868,17 @@ async function downloadScreenshot(
   outputPath: string
 ): Promise<boolean> {
   try {
-    console.error('[ONE-SHOT] Экспорт скриншота экрана...');
     const screenshotUrl = await fetchFigmaScreenshot(token, fileKey, nodeId, 2);
 
     if (!screenshotUrl) {
-      console.error('[ONE-SHOT] Не удалось получить URL скриншота');
+      console.error('[ONE-SHOT] Failed to get screenshot URL');
       return false;
     }
 
-    // Убедимся, что родительская директория существует
     // Ensure parent directory exists
     const parentDir = dirname(outputPath);
     await mkdir(parentDir, { recursive: true });
 
-    // Скачиваем скриншот напрямую в локальную папку
     // Download screenshot directly to local folder
     await new Promise<void>((resolve, reject) => {
       https.get(screenshotUrl, (res) => {
@@ -964,26 +896,21 @@ async function downloadScreenshot(
       }).on('error', reject);
     });
 
-    console.error(`[ONE-SHOT] Скриншот сохранен: ${outputPath}`);
     return true;
   } catch (error) {
-    console.error('[ONE-SHOT] Ошибка при экспорте скриншота:', error);
+    console.error('[ONE-SHOT] Screenshot export error:', error);
     return false;
   }
 }
 
 /**
- * Определяет приоритетный тип экрана на основе обнаружений
  * Determines primary screen type based on detections
  *
- * @param detections - Результаты обнаружения
- * @returns Тип экрана
+ * @param detections - Detection results
  */
 function determineScreenType(detections: DetectionResults): GenerationSummary['screenType'] {
-  // Приоритет 1: Форма - ТОЛЬКО если есть 2+ реальных полей ввода
   // Priority 1: Form - ONLY if there are 2+ real input fields
   if (detections.form && detections.form.fields.length >= 2) {
-    // Проверяем, что это реальные поля ввода, а не просто кнопки
     // Check that these are real input fields, not just buttons
     const realInputFields = detections.form.fields.filter(f =>
       f.type === 'text' || f.type === 'email' || f.type === 'password' ||
@@ -996,41 +923,35 @@ function determineScreenType(detections: DetectionResults): GenerationSummary['s
     }
   }
 
-  // Приоритет 2: Action Sheet
   // Priority 2: Action Sheet
   if (detections.sheet && detections.sheet.type === 'action-sheet' && detections.sheet.confidence > 0.7) {
     return 'action-sheet';
   }
 
-  // Приоритет 3: Bottom Sheet
   // Priority 3: Bottom Sheet
   if (detections.sheet && detections.sheet.type === 'bottom-sheet' && detections.sheet.confidence > 0.7) {
     return 'sheet';
   }
 
-  // Приоритет 4: Modal
   // Priority 4: Modal
   if (detections.sheet && detections.sheet.type === 'modal' && detections.sheet.confidence > 0.7) {
     return 'modal';
   }
 
-  // Приоритет 5: Список - с высокой уверенностью
   // Priority 5: List - with high confidence
   if (detections.list && detections.list.type !== 'none' && detections.list.confidence > 0.75) {
     return 'list';
   }
 
-  // По умолчанию: обычный экран
   // Default: regular screen
   return 'regular';
 }
 
 /**
- * Вычисляет общую уверенность обнаружения
  * Calculates overall detection confidence
  *
- * @param detections - Результаты обнаружения
- * @returns Уверенность от 0 до 1
+ * @param detections - Detection results
+ * @returns Confidence from 0 to 1
  */
 function calculateOverallConfidence(detections: DetectionResults): number {
   const confidences: number[] = [];
@@ -1040,7 +961,7 @@ function calculateOverallConfidence(detections: DetectionResults): number {
   }
 
   if (detections.form && detections.form.fields.length > 0) {
-    confidences.push(0.9); // Высокая уверенность для форм
+    confidences.push(0.9); // High confidence for forms
   }
 
   if (detections.sheet && detections.sheet.type !== 'none') {
@@ -1048,26 +969,21 @@ function calculateOverallConfidence(detections: DetectionResults): number {
   }
 
   if (confidences.length === 0) {
-    return 0.5; // Средняя уверенность для обычных экранов
   }
 
-  // Возвращаем максимальную уверенность
   // Return maximum confidence
   return Math.max(...confidences);
 }
 
 /**
- * ONE-SHOT генератор полного экрана
  * ONE-SHOT complete screen generator
  *
- * Выполняет все обнаружения параллельно и генерирует полный набор файлов
  * Performs all detections in parallel and generates complete file set
  *
- * @param figmaToken - Токен доступа Figma API
- * @param figmaUrl - URL Figma узла
- * @param screenName - Название экрана
- * @param options - Опции генерации
- * @returns Полный результат с файлами и обнаружениями
+ * @param figmaToken - Figma API access token
+ * @param figmaUrl - Figma URL
+ * @param options - Generation options
+ * @returns Complete result with files and detections
  */
 export async function generateCompleteScreen(
   figmaToken: string,
@@ -1075,7 +991,6 @@ export async function generateCompleteScreen(
   screenName: string,
   options: OneShotOptions = {}
 ): Promise<OneShotResult> {
-  // Устанавливаем опции по умолчанию
   // Set default options
   const {
     generateTypes = true,
@@ -1086,28 +1001,23 @@ export async function generateCompleteScreen(
     outputFolder,
   } = options;
 
-  // 1. Парсим URL Figma
   // 1. Parse Figma URL
   const parsedUrl = parseFigmaUrl(figmaUrl);
   if (!parsedUrl) {
-    throw new Error(`Неверный формат URL Figma: ${figmaUrl}`);
   }
 
   const { fileKey, nodeId } = parsedUrl;
 
-  // 2. Загружаем узел из Figma ОДИН РАЗ
   // 2. Fetch node from Figma ONCE
-  console.error(`[ONE-SHOT] Загрузка узла из Figma: ${nodeId}`);
   const response = await fetchFigmaNodes(figmaToken, fileKey, [nodeId]);
   const node = response.nodes[nodeId]?.document;
 
   if (!node) {
-    throw new Error(`Узел ${nodeId} не найден в файле ${fileKey}`);
+    throw new Error(`Node ${nodeId} not found in file ${fileKey}`);
   }
 
   // Build style name lookup map from full file endpoint
   // (styles are not included in /nodes response, must use /files endpoint)
-  console.error(`[ONE-SHOT] Загрузка стилей из Figma...`);
   const styleMap = new Map<string, string>();
   try {
     const styles = await fetchFigmaStyles(figmaToken, fileKey);
@@ -1116,71 +1026,51 @@ export async function generateCompleteScreen(
         styleMap.set(styleId, styleDef.name);
       }
     }
-    console.error(`[ONE-SHOT] Загружено ${styleMap.size} стилей`);
   } catch (error) {
-    console.error(`[ONE-SHOT] Ошибка загрузки стилей:`, error);
   }
 
-  // 3. Загружаем конфигурацию проекта (если не предоставлена)
   // 3. Load project config (if not provided)
   const projectConfig = config || await loadProjectConfig() || undefined;
 
-  console.error('[ONE-SHOT] Запуск параллельных обнаружений...');
 
-  // 4. Запускаем ВСЕ детекторы ПАРАЛЛЕЛЬНО + извлечение изображений
   // 4. Run ALL detectors in PARALLEL + image extraction
   const [listDetection, formDetection, sheetDetection, variantsDetection, animationHints, dataModels, extractedImages] = await Promise.all([
-    // Обнаружение списочного паттерна
     // List pattern detection
     Promise.resolve(detectListPattern(node)),
 
-    // Обнаружение элементов формы
     // Form elements detection
     Promise.resolve(detectFormElements(node)),
 
-    // Обнаружение sheet/modal
     // Sheet/modal detection
     Promise.resolve(detectSheetOrModal(node)),
 
-    // Обнаружение вариантов и состояний
     // Variants and states detection
     Promise.resolve(detectVariantsAndStates(node)),
 
-    // Извлечение подсказок по анимациям (опционально)
     // Animation hints extraction (optional)
     detectAnimations ? Promise.resolve(extractAnimationHints(node)) : Promise.resolve(null),
 
-    // Вывод моделей данных
     // Data models inference
     Promise.resolve(inferDataModels(node, screenName)),
 
-    // Извлечение изображений
     // Image extraction
     Promise.resolve(extractImageNodes(node, projectConfig)),
   ]);
 
-  console.error('[ONE-SHOT] Обнаружения завершены');
-  console.error(`[ONE-SHOT] Найдено изображений: ${extractedImages.length}`);
 
-  // 4.1. Скачиваем изображения
   // 4.1. Download images
   let downloadedImages: ExtractedImage[] = extractedImages;
   if (extractedImages.length > 0) {
-    console.error('[ONE-SHOT] Скачивание изображений...');
-    // Если указана outputFolder, скачиваем напрямую в локальную папку
     // If outputFolder is specified, download directly to local folder
     if (outputFolder) {
       const assetsDir = join(outputFolder, 'assets');
       downloadedImages = await downloadExtractedImages(figmaToken, fileKey, extractedImages, assetsDir);
     } else {
-      // Legacy: без outputFolder (используется в тестах)
       // Legacy: without outputFolder (used in tests)
       downloadedImages = await downloadExtractedImages(figmaToken, fileKey, extractedImages, join('.', 'assets'));
     }
-    console.error(`[ONE-SHOT] Скачано: ${downloadedImages.filter(i => i.downloadedPath).length}/${extractedImages.length}`);
   }
 
-  // 5. Формируем результаты обнаружений
   // 5. Form detection results
   const detections: DetectionResults = {
     list: listDetection.type !== 'none' ? listDetection : null,
@@ -1191,29 +1081,21 @@ export async function generateCompleteScreen(
     dataModels,
   };
 
-  // 6. Определяем тип экрана
   // 6. Determine screen type
   const screenType = determineScreenType(detections);
 
-  console.error(`[ONE-SHOT] Тип экрана: ${screenType}`);
 
-  // 7. Генерируем файлы на основе типа экрана
   // 7. Generate files based on screen type
   const files: GeneratedFile[] = [];
 
-  // 7.1. ВСЕГДА используем оригинальный генератор для основного компонента
   // 7.1. ALWAYS use the original generator for the main component
-  // Это гарантирует правильное извлечение контента из Figma
   // This ensures proper content extraction from Figma
-  console.error('[ONE-SHOT] Генерация основного компонента через code-generator-v2...');
 
-  // Создаем карту изображений для генератора
   // Create image map for the generator
   const imageMap = new Map<string, string>();
   downloadedImages.forEach(img => {
     imageMap.set(img.nodeId, img.suggestedPath);
   });
-  console.error(`[ONE-SHOT] Создана карта изображений: ${imageMap.size} элементов`);
 
   let mainComponentCode: string;
   mainComponentCode = await generateReactNativeComponent(node, screenName, projectConfig, imageMap, { styleMap });
@@ -1224,13 +1106,10 @@ export async function generateCompleteScreen(
     type: 'screen',
   });
 
-  // 7.2. Дополнительные файлы на основе обнаруженных паттернов
   // 7.2. Additional files based on detected patterns
 
-  // Если обнаружена форма с реальными полями ввода (не просто кнопки)
   // If form detected with real input fields (not just buttons)
   if (screenType === 'form' && detections.form && detections.form.fields.length >= 2) {
-    // Генерация Zod схемы
     // Generate Zod schema
     if (generateExtras) {
       const zodSchema = generateZodSchema(detections.form);
@@ -1240,7 +1119,6 @@ export async function generateCompleteScreen(
         type: 'form',
       });
 
-      // Генерация хука формы
       // Generate form hook
       const formHook = generateFormHook(detections.form, screenName);
       files.push({
@@ -1251,10 +1129,8 @@ export async function generateCompleteScreen(
     }
   }
 
-  // Для списков добавляем комментарий о FlatList паттерне
   // For lists, add comment about FlatList pattern
   if (screenType === 'list' && detections.list && detections.list.confidence > 0.7) {
-    // Добавляем информацию о списке в комментарии
     const listInfo = `
 // 📋 DETECTED LIST PATTERN:
 // - Type: ${detections.list.type}
@@ -1264,14 +1140,12 @@ export async function generateCompleteScreen(
 // Consider wrapping repeated items in FlatList for better performance
 `;
     mainComponentCode = listInfo + mainComponentCode;
-    // Обновляем файл с комментарием
+    // Update file with comment
     files[0].content = mainComponentCode;
   }
 
-  // Для sheet/modal добавляем wrapper если уверенность высокая
   // For sheet/modal, we keep the generated code but note the detection
   if ((screenType === 'sheet' || screenType === 'modal' || screenType === 'action-sheet') && detections.sheet) {
-    // Добавляем информацию о sheet/modal
     const sheetInfo = `
 // 📱 DETECTED ${detections.sheet.type.toUpperCase()} PATTERN:
 // - Snap points: ${detections.sheet.snapPoints.join(', ') || 'auto'}
@@ -1283,8 +1157,7 @@ export async function generateCompleteScreen(
     files[0].content = mainComponentCode;
   }
 
-  // 7.3. Генерация TypeScript типов
-  // 7.2. Generate TypeScript types
+  // 7.3. Generate TypeScript types
   if (generateTypes && dataModels.length > 0) {
     const typeDefinitions = generateTypeDefinitions(dataModels);
     files.push({
@@ -1294,8 +1167,7 @@ export async function generateCompleteScreen(
     });
   }
 
-  // 7.3. Генерация React Query хуков
-  // 7.3. Generate React Query hooks
+  // 7.4. Generate React Query hooks
   if (generateHooks && dataModels.length > 0) {
     const reactQueryHooks = generateReactQueryHooks(dataModels, screenName);
     files.push({
@@ -1305,8 +1177,7 @@ export async function generateCompleteScreen(
     });
   }
 
-  // 7.4. Генерация анимаций (если обнаружены)
-  // 7.4. Generate animations (if detected)
+  // 7.5. Generate animations (if detected)
   if (detections.animations && generateExtras) {
     const animationCode = generateReanimatedCode(detections.animations);
     files.push({
@@ -1315,7 +1186,6 @@ export async function generateCompleteScreen(
       type: 'animations',
     });
 
-    // Генерация gesture handlers
     // Generate gesture handlers
     if (detections.animations.gestureAreas.length > 0) {
       const gestureCode = generateGestureHandlerCode(detections.animations.gestureAreas);
@@ -1327,13 +1197,12 @@ export async function generateCompleteScreen(
     }
   }
 
-  // 8. Формируем резюме
   // 8. Form summary
   const summary: GenerationSummary = {
     screenType,
     hasAnimations: !!detections.animations && detections.animations.transitions.length > 0,
     hasDataModels: dataModels.length > 0,
-    componentMatches: [], // TODO: добавить обнаружение совпадений компонентов
+    componentMatches: [], // TODO: add component match detection
     metadata: {
       formFieldsCount: detections.form?.fields.length,
       listItemsCount: detections.list?.itemCount,
@@ -1341,46 +1210,38 @@ export async function generateCompleteScreen(
     },
   };
 
-  console.error(`[ONE-SHOT] Генерация завершена. Файлов: ${files.length}`);
 
-  // 9. Скачиваем скриншот экрана для валидации
   // 9. Download screenshot for validation
   let screenshotPath: string | undefined;
   if (outputFolder) {
-    // Скачиваем напрямую в локальную папку / Download directly to local folder
+    // Download directly to local folder
     const screenshotOutputPath = join(outputFolder, 'screenshot.png');
     const success = await downloadScreenshot(figmaToken, fileKey, nodeId, screenshotOutputPath);
     if (success) {
       screenshotPath = screenshotOutputPath;
     }
   }
-  // Legacy: если outputFolder не указан, скриншот не скачиваем
   // Legacy: if outputFolder not specified, don't download screenshot
 
-  // 10. Извлекаем скрытые узлы / Extract hidden nodes
+  // 10. Extract hidden nodes
   const hiddenNodes = extractHiddenNodes(node);
-  console.error(`[ONE-SHOT] Найдено скрытых узлов: ${hiddenNodes.length}`);
 
-  // 11. Подсчитываем узлы / Count nodes
+  // 11. Count nodes
   const nodeCounts = countNodes(node);
-  console.error(`[ONE-SHOT] Всего узлов: ${nodeCounts.total}, экземпляров: ${nodeCounts.instances}`);
 
-  // 12. Извлекаем полную иерархию / Extract full hierarchy
+  // 12. Extract full hierarchy
   const hierarchy = extractHierarchy(node);
-  console.error(`[ONE-SHOT] Иерархия извлечена: ${hierarchy.name} (${hierarchy.type})`);
 
-  // 13. Извлекаем интерактивности / Extract interactions
+  // 13. Extract interactions
   const interactions = extractInteractions(node);
-  console.error(`[ONE-SHOT] Найдено интерактивностей: ${interactions.length}`);
 
-  // 14. Извлекаем прокрутки / Extract scrolls
+  // 14. Extract scrolls
   const scrolls = extractScrollInfo(node);
-  console.error(`[ONE-SHOT] Найдено прокруток: ${scrolls.length}`);
 
-  // 15. Возвращаем полный результат / Return complete result
+  // 15. Return complete result
   return {
     screenName,
-    nodeId, // Канонический ID из Figma API / Canonical ID from Figma API
+    nodeId, // Canonical ID from Figma API
     files,
     detections,
     summary,
@@ -1396,22 +1257,18 @@ export async function generateCompleteScreen(
 }
 
 /**
- * Вспомогательная функция для пакетной генерации нескольких экранов
  * Helper function for batch generation of multiple screens
  *
- * @param figmaToken - Токен доступа Figma API
- * @param screens - Массив объектов с URL и именами экранов
- * @param options - Опции генерации
- * @returns Массив результатов для каждого экрана
+ * @param figmaToken - Figma API access token
+ * @param screens - Array of objects with URLs and screen names
+ * @param options - Generation options
  */
 export async function generateMultipleScreens(
   figmaToken: string,
   screens: Array<{ url: string; name: string }>,
   options: OneShotOptions = {}
 ): Promise<OneShotResult[]> {
-  console.error(`[ONE-SHOT] Пакетная генерация ${screens.length} экранов...`);
 
-  // Генерируем все экраны параллельно
   // Generate all screens in parallel
   const results = await Promise.all(
     screens.map(screen =>
@@ -1419,17 +1276,14 @@ export async function generateMultipleScreens(
     )
   );
 
-  console.error('[ONE-SHOT] Пакетная генерация завершена');
 
   return results;
 }
 
 /**
- * Утилита для сохранения сгенерированных файлов на диск
  * Utility for saving generated files to disk
  *
- * @param result - Результат ONE-SHOT генерации
- * @param baseDir - Базовая директория для сохранения (по умолчанию: процесс.cwd())
+ * @param result - ONE-SHOT generation result
  */
 export async function saveGeneratedFiles(
   result: OneShotResult,
@@ -1438,28 +1292,23 @@ export async function saveGeneratedFiles(
   const fs = await import('fs/promises');
   const path = await import('path');
 
-  console.error(`[ONE-SHOT] Сохранение ${result.files.length} файлов в ${baseDir}...`);
 
   for (const file of result.files) {
     const fullPath = path.join(baseDir, file.path);
     const dir = path.dirname(fullPath);
 
-    // Создаем директорию если не существует
     // Create directory if it doesn't exist
     await fs.mkdir(dir, { recursive: true });
 
-    // Сохраняем файл
     // Save file
     await fs.writeFile(fullPath, file.content, 'utf-8');
 
     console.error(`[ONE-SHOT] ✓ ${file.path}`);
   }
 
-  console.error('[ONE-SHOT] Сохранение завершено');
 }
 
 /**
- * Экспорт всех типов для удобства
  * Export all types for convenience
  */
 export type {

@@ -1,16 +1,14 @@
 /**
- * Пример использования ONE-SHOT генератора
- * Example usage of ONE-SHOT generator
+ * ONE-SHOT generator usage example
  */
 
 import { generateCompleteScreen, saveGeneratedFiles, generateMultipleScreens } from '../src/one-shot-generator.js';
 
 /**
- * Пример 1: Базовая генерация одного экрана
  * Example 1: Basic single screen generation
  */
 async function example1_BasicGeneration() {
-  console.log('=== Пример 1: Базовая генерация ===\n');
+  console.log('=== Example 1: Basic generation ===\n');
 
   const figmaToken = process.env.FIGMA_TOKEN || 'your-token-here';
   const figmaUrl = 'https://www.figma.com/file/ABC123/Project?node-id=1-234';
@@ -19,48 +17,46 @@ async function example1_BasicGeneration() {
   try {
     const result = await generateCompleteScreen(figmaToken, figmaUrl, screenName);
 
-    console.log(`✓ Название экрана: ${result.screenName}`);
-    console.log(`✓ Тип экрана: ${result.summary.screenType}`);
-    console.log(`✓ Сгенерировано файлов: ${result.files.length}`);
-    console.log(`✓ Уверенность: ${(result.summary.metadata.confidence * 100).toFixed(0)}%`);
+    console.log(`✓ Screen name: ${result.screenName}`);
+    console.log(`✓ Screen type: ${result.summary.screenType}`);
+    console.log(`✓ Files generated: ${result.files.length}`);
+    console.log(`✓ Confidence: ${(result.summary.metadata.confidence * 100).toFixed(0)}%`);
 
-    console.log('\nСгенерированные файлы:');
+    console.log('\nGenerated files:');
     result.files.forEach(file => {
       console.log(`  - ${file.path} (${file.type})`);
     });
 
-    // Выводим информацию о обнаружениях
     // Display detection info
     if (result.detections.list) {
-      console.log(`\nОбнаружен список:`);
-      console.log(`  - Тип: ${result.detections.list.type}`);
-      console.log(`  - Элементов: ${result.detections.list.itemCount}`);
-      console.log(`  - Ориентация: ${result.detections.list.orientation}`);
+      console.log(`\nList detected:`);
+      console.log(`  - Type: ${result.detections.list.type}`);
+      console.log(`  - Items: ${result.detections.list.itemCount}`);
+      console.log(`  - Orientation: ${result.detections.list.orientation}`);
     }
 
     if (result.detections.form) {
-      console.log(`\nОбнаружена форма:`);
-      console.log(`  - Полей: ${result.detections.form.fields.length}`);
-      console.log(`  - Кнопка отправки: ${result.detections.form.hasSubmitButton ? 'да' : 'нет'}`);
+      console.log(`\nForm detected:`);
+      console.log(`  - Fields: ${result.detections.form.fields.length}`);
+      console.log(`  - Submit button: ${result.detections.form.hasSubmitButton ? 'yes' : 'no'}`);
     }
 
     if (result.detections.dataModels.length > 0) {
-      console.log(`\nМодели данных:`);
+      console.log(`\nData models:`);
       result.detections.dataModels.forEach(model => {
-        console.log(`  - ${model.name} (${model.fields.length} полей)`);
+        console.log(`  - ${model.name} (${model.fields.length} fields)`);
       });
     }
   } catch (error) {
-    console.error('Ошибка:', error);
+    console.error('Error:', error);
   }
 }
 
 /**
- * Пример 2: Генерация с расширенными опциями
  * Example 2: Generation with advanced options
  */
 async function example2_AdvancedOptions() {
-  console.log('\n=== Пример 2: Расширенные опции ===\n');
+  console.log('\n=== Example 2: Advanced options ===\n');
 
   const figmaToken = process.env.FIGMA_TOKEN || 'your-token-here';
   const figmaUrl = 'https://www.figma.com/file/XYZ789/App?node-id=5-678';
@@ -72,10 +68,10 @@ async function example2_AdvancedOptions() {
       figmaUrl,
       screenName,
       {
-        generateTypes: true,        // Генерировать TypeScript типы
-        generateHooks: true,         // Генерировать React Query хуки
-        detectAnimations: true,      // Обнаруживать анимации (медленнее)
-        generateExtras: true,        // Генерировать дополнительные файлы
+        generateTypes: true,        // Generate TypeScript types
+        generateHooks: true,         // Generate React Query hooks
+        detectAnimations: true,      // Detect animations (slower)
+        generateExtras: true,        // Generate additional files
         config: {
           framework: 'react-native',
           codeStyle: {
@@ -94,32 +90,29 @@ async function example2_AdvancedOptions() {
       }
     );
 
-    console.log(`✓ Сгенерировано ${result.files.length} файлов`);
+    console.log(`✓ Generated ${result.files.length} files`);
 
-    // Проверяем наличие анимаций
     // Check for animations
     if (result.summary.hasAnimations && result.detections.animations) {
-      console.log('\nОбнаружены анимации:');
-      console.log(`  - Переходов: ${result.detections.animations.transitions.length}`);
-      console.log(`  - Областей с жестами: ${result.detections.animations.gestureAreas.length}`);
+      console.log('\nAnimations detected:');
+      console.log(`  - Transitions: ${result.detections.animations.transitions.length}`);
+      console.log(`  - Gesture areas: ${result.detections.animations.gestureAreas.length}`);
       console.log(`  - Shared elements: ${result.detections.animations.sharedElements.length}`);
     }
 
-    // Сохраняем файлы
     // Save files
     await saveGeneratedFiles(result, './generated');
-    console.log('\n✓ Файлы сохранены в ./generated');
+    console.log('\n✓ Files saved to ./generated');
   } catch (error) {
-    console.error('Ошибка:', error);
+    console.error('Error:', error);
   }
 }
 
 /**
- * Пример 3: Пакетная генерация нескольких экранов
  * Example 3: Batch generation of multiple screens
  */
 async function example3_BatchGeneration() {
-  console.log('\n=== Пример 3: Пакетная генерация ===\n');
+  console.log('\n=== Example 3: Batch generation ===\n');
 
   const figmaToken = process.env.FIGMA_TOKEN || 'your-token-here';
 
@@ -139,7 +132,7 @@ async function example3_BatchGeneration() {
   ];
 
   try {
-    console.log(`Генерация ${screens.length} экранов...`);
+    console.log(`Generating ${screens.length} screens...`);
 
     const results = await generateMultipleScreens(
       figmaToken,
@@ -147,39 +140,36 @@ async function example3_BatchGeneration() {
       {
         generateTypes: true,
         generateHooks: true,
-        detectAnimations: false, // Отключаем для скорости
+        detectAnimations: false, // Disable for speed
       }
     );
 
-    console.log('\n✓ Генерация завершена\n');
+    console.log('\n✓ Generation complete\n');
 
-    // Выводим сводку по каждому экрану
     // Display summary for each screen
     results.forEach((result, index) => {
       console.log(`${index + 1}. ${result.screenName}`);
-      console.log(`   - Тип: ${result.summary.screenType}`);
-      console.log(`   - Файлов: ${result.files.length}`);
-      console.log(`   - Уверенность: ${(result.summary.metadata.confidence * 100).toFixed(0)}%`);
+      console.log(`   - Type: ${result.summary.screenType}`);
+      console.log(`   - Files: ${result.files.length}`);
+      console.log(`   - Confidence: ${(result.summary.metadata.confidence * 100).toFixed(0)}%`);
     });
 
-    // Сохраняем все файлы
     // Save all files
     for (const result of results) {
       await saveGeneratedFiles(result, './generated');
     }
 
-    console.log('\n✓ Все файлы сохранены в ./generated');
+    console.log('\n✓ All files saved to ./generated');
   } catch (error) {
-    console.error('Ошибка:', error);
+    console.error('Error:', error);
   }
 }
 
 /**
- * Пример 4: Условная генерация на основе обнаружений
  * Example 4: Conditional generation based on detections
  */
 async function example4_ConditionalGeneration() {
-  console.log('\n=== Пример 4: Условная генерация ===\n');
+  console.log('\n=== Example 4: Conditional generation ===\n');
 
   const figmaToken = process.env.FIGMA_TOKEN || 'your-token-here';
   const figmaUrl = 'https://www.figma.com/file/DEF/App?node-id=7-890';
@@ -188,20 +178,17 @@ async function example4_ConditionalGeneration() {
   try {
     const result = await generateCompleteScreen(figmaToken, figmaUrl, screenName);
 
-    // Проверяем уверенность обнаружения
     // Check detection confidence
     if (result.summary.metadata.confidence < 0.5) {
-      console.warn('⚠ Низкая уверенность обнаружения. Рекомендуется ручная проверка.');
+      console.warn('⚠ Low detection confidence. Manual review recommended.');
     }
 
-    // Разное поведение в зависимости от типа экрана
     // Different behavior based on screen type
     switch (result.summary.screenType) {
       case 'form':
-        console.log('✓ Обнаружена форма');
-        console.log(`  - Полей: ${result.detections.form?.fields.length}`);
+        console.log('✓ Form detected');
+        console.log(`  - Fields: ${result.detections.form?.fields.length}`);
 
-        // Сохраняем только файлы формы
         // Save only form files
         const formFiles = result.files.filter(
           f => f.type === 'form' || f.type === 'screen'
@@ -213,29 +200,27 @@ async function example4_ConditionalGeneration() {
         break;
 
       case 'list':
-        console.log('✓ Обнаружен список');
-        console.log(`  - Элементов: ${result.detections.list?.itemCount}`);
+        console.log('✓ List detected');
+        console.log(`  - Items: ${result.detections.list?.itemCount}`);
 
-        // Генерируем дополнительные хуки для пагинации
         // Generate additional hooks for pagination
-        console.log('  - Рекомендуется добавить пагинацию');
+        console.log('  - Consider adding pagination');
         break;
 
       case 'sheet':
       case 'modal':
-        console.log('✓ Обнаружен overlay');
-        console.log(`  - Тип: ${result.detections.sheet?.type}`);
+        console.log('✓ Overlay detected');
+        console.log(`  - Type: ${result.detections.sheet?.type}`);
         console.log(`  - Snap points: ${result.detections.sheet?.snapPoints.join(', ')}`);
         break;
 
       default:
-        console.log('✓ Обычный экран');
+        console.log('✓ Regular screen');
     }
 
-    // Проверяем наличие моделей данных
     // Check for data models
     if (result.detections.dataModels.length > 0) {
-      console.log('\n✓ Обнаружены модели данных:');
+      console.log('\n✓ Data models detected:');
       result.detections.dataModels.forEach(model => {
         console.log(`  - ${model.name}:`);
         model.fields.slice(0, 5).forEach(field => {
@@ -243,21 +228,20 @@ async function example4_ConditionalGeneration() {
         });
 
         if (model.fields.length > 5) {
-          console.log(`    ... и еще ${model.fields.length - 5} полей`);
+          console.log(`    ... and ${model.fields.length - 5} more fields`);
         }
       });
     }
   } catch (error) {
-    console.error('Ошибка:', error);
+    console.error('Error:', error);
   }
 }
 
 /**
- * Пример 5: Кастомная обработка результатов
  * Example 5: Custom result processing
  */
 async function example5_CustomProcessing() {
-  console.log('\n=== Пример 5: Кастомная обработка ===\n');
+  console.log('\n=== Example 5: Custom processing ===\n');
 
   const figmaToken = process.env.FIGMA_TOKEN || 'your-token-here';
   const figmaUrl = 'https://www.figma.com/file/GHI/Project?node-id=9-012';
@@ -266,12 +250,10 @@ async function example5_CustomProcessing() {
   try {
     const result = await generateCompleteScreen(figmaToken, figmaUrl, screenName);
 
-    // Модифицируем сгенерированные файлы
     // Modify generated files
     const modifiedFiles = result.files.map(file => {
       let content = file.content;
 
-      // Добавляем кастомный импорт
       // Add custom import
       if (file.type === 'screen') {
         content = content.replace(
@@ -280,9 +262,8 @@ async function example5_CustomProcessing() {
         );
       }
 
-      // Добавляем кастомные комментарии
       // Add custom comments
-      content = `/**\n * Автоматически сгенерировано ONE-SHOT генератором\n * Generated: ${new Date().toISOString()}\n * Source: ${figmaUrl}\n */\n\n${content}`;
+      content = `/**\n * Auto-generated by ONE-SHOT generator\n * Generated: ${new Date().toISOString()}\n * Source: ${figmaUrl}\n */\n\n${content}`;
 
       return {
         ...file,
@@ -290,7 +271,6 @@ async function example5_CustomProcessing() {
       };
     });
 
-    // Группируем файлы по типу
     // Group files by type
     const filesByType = modifiedFiles.reduce((acc, file) => {
       if (!acc[file.type]) {
@@ -300,12 +280,11 @@ async function example5_CustomProcessing() {
       return acc;
     }, {} as Record<string, typeof modifiedFiles>);
 
-    console.log('Файлы сгруппированы по типам:');
+    console.log('Files grouped by type:');
     Object.entries(filesByType).forEach(([type, files]) => {
-      console.log(`  ${type}: ${files.length} файл(ов)`);
+      console.log(`  ${type}: ${files.length} file(s)`);
     });
 
-    // Создаем index файл для экспорта
     // Create index file for exports
     const indexContent = modifiedFiles
       .filter(f => f.type === 'screen' || f.type === 'types')
@@ -315,23 +294,21 @@ async function example5_CustomProcessing() {
       })
       .join('\n');
 
-    console.log('\n✓ Создан index файл с экспортами');
+    console.log('\n✓ Created index file with exports');
 
-    // Сохраняем модифицированные файлы
     // Save modified files
     await saveGeneratedFiles(
       { ...result, files: modifiedFiles },
       './generated'
     );
 
-    console.log('✓ Сохранены модифицированные файлы');
+    console.log('✓ Saved modified files');
   } catch (error) {
-    console.error('Ошибка:', error);
+    console.error('Error:', error);
   }
 }
 
 /**
- * Запуск всех примеров
  * Run all examples
  */
 async function runAllExamples() {
@@ -341,18 +318,15 @@ async function runAllExamples() {
   // await example4_ConditionalGeneration();
   // await example5_CustomProcessing();
 
-  console.log('\n=== Примеры завершены ===\n');
-  console.log('Раскомментируйте нужные примеры для запуска');
+  console.log('\n=== Examples complete ===\n');
   console.log('Uncomment needed examples to run them');
 }
 
-// Запуск при выполнении файла напрямую
 // Run when file is executed directly
 if (import.meta.url === `file://${process.argv[1]}`) {
   runAllExamples().catch(console.error);
 }
 
-// Экспорт примеров для использования в других файлах
 // Export examples for use in other files
 export {
   example1_BasicGeneration,

@@ -18,7 +18,6 @@ import { generateSmartStyleName } from './smart-namer.js';
 import { normalizeStyleName } from './style-normalizer.js';
 
 /**
- * Опции генератора
  * Generator options
  */
 export interface GeneratorOptions {
@@ -26,45 +25,43 @@ export interface GeneratorOptions {
 }
 
 /**
- * Основная функция генерации React Native компонента
+ * Main React Native component generation function
  * Generates React Native component code using ts-morph for AST-based generation
  */
 export async function generateReactNativeComponent(
   metadata: any,
   componentName: string,
   config?: ProjectConfig,
-  imageMap?: Map<string, string>, // nodeId -> путь к изображению / path to image
+  imageMap?: Map<string, string>, // nodeId -> path to image
   options?: GeneratorOptions
 ): Promise<string> {
-  // Загружаем конфиг, если не предоставлен
   // Load config if not provided
   if (!config) {
     config = await loadProjectConfig() || getDefaultConfig();
   }
 
-  // Автоматически генерируем маппинги on-the-fly каждый раз
   // Auto-generate mappings on-the-fly every time
   if (config.theme?.location) {
-    // Генерируем маппинги цветов / Generate color mappings
+    // Generate color mappings
     const figmaColors = extractFigmaColors(metadata);
     const colorMappings = await autoGenerateColorMappings(figmaColors, config);
 
-    // Путь к основному файлу темы (или fallback на colors) / Path to main theme file (or fallback to colors)
+    // Path to main theme file (or fallback to colors)
     const mainThemePath = config.theme.mainThemeLocation || config.theme.location;
 
-    // Генерируем маппинги spacing / Generate spacing mappings
+    // Generate spacing mappings
     const figmaSpacing = extractFigmaSpacing(metadata);
     const spacingMappings = await autoGenerateSpacingMappings(figmaSpacing, mainThemePath);
 
-    // Генерируем маппинги radii / Generate radii mappings
+    // Generate radii mappings
     const figmaRadii = extractFigmaRadii(metadata);
     const radiiMappings = await autoGenerateRadiiMappings(figmaRadii, mainThemePath);
 
-    // Генерируем маппинги shadows / Generate shadow mappings
+    // Generate shadow mappings
     const figmaShadows = extractFigmaShadows(metadata);
     const shadowMappings = await autoGenerateShadowMappings(figmaShadows, mainThemePath);
 
-    // Генерируем маппинги typography / Generate typography mappings
+    // Generate typography mappings
     const figmaTypography = extractFigmaTypography(metadata);
     const typographyPath = config.theme?.typographyFile
       ? `${config.projectRoot || '.'}/${config.theme.typographyFile}`
@@ -78,7 +75,6 @@ export async function generateReactNativeComponent(
     config.mappings.shadows = shadowMappings;
     config.mappings.typography = typographyMappings;
 
-    // НЕ сохраняем маппинги в файл - используем только в памяти
     // DON'T save mappings to file - use in memory only
     // await updateConfigMappings({ colors: colorMappings }); // REMOVED
 
@@ -90,31 +86,31 @@ export async function generateReactNativeComponent(
     console.error('  - Typography:', config.mappings.typography ? Object.keys(config.mappings.typography).length : 0);
   }
 
-  // Создаем новый TypeScript проект
+  // Create new TypeScript project
   const project = new Project({
     useInMemoryFileSystem: true,
   });
 
-  // Создаем source file
+  // Create source file
   const sourceFile = project.createSourceFile(
     `${componentName}.tsx`,
     '',
     { overwrite: true }
   );
 
-  // Добавляем импорты
+  // Add imports
   addImports(sourceFile, metadata);
 
-  // Генерируем компонент
+  // Generate component
   generateComponent(sourceFile, metadata, componentName, imageMap, options?.styleMap);
 
-  // Генерируем createStyles
+  // Generate createStyles
   generateCreateStyles(sourceFile, metadata, config);
 
-  // Получаем сгенерированный код
+  // Get generated code
   let code = sourceFile.getFullText();
 
-  // Форматируем с помощью prettier
+  // Format with prettier
   code = await prettier.format(code, {
     parser: 'typescript',
     singleQuote: true,
@@ -122,7 +118,6 @@ export async function generateReactNativeComponent(
     tabWidth: 2,
   });
 
-  // Применяем маппинги темы
   // Apply theme mappings
   console.error('[DEBUG] About to apply theme mappings. Code length:', code.length);
   console.error('[DEBUG] Code contains rgba() before mapping:', code.includes('rgba('));
@@ -134,7 +129,6 @@ export async function generateReactNativeComponent(
 }
 
 /**
- * Возвращает конфигурацию по умолчанию
  * Returns default configuration
  */
 function getDefaultConfig(): ProjectConfig {
@@ -149,21 +143,19 @@ function getDefaultConfig(): ProjectConfig {
 }
 
 /**
- * Применяет маппинги темы к сгенерированному коду
  * Applies theme mappings to generated code
  */
 /**
- * Интерфейс маппингов темы
  * Theme mappings interface
  */
 interface ThemeMappings {
   colors?: Record<string, string>;
   typography?: Record<string, string>;
   fonts?: Record<string, string>;
-  spacing?: Record<number, string>;    // NEW: number → theme path
-  radii?: Record<number, string>;      // NEW: number → theme path
-  shadows?: Record<string, string>;    // NEW: shadow signature → theme path
-  gradients?: Record<string, string>;  // NEW: gradient signature → theme path
+  spacing?: Record<number, string>;    // number → theme path
+  radii?: Record<number, string>;      // number → theme path
+  shadows?: Record<string, string>;    // shadow signature → theme path
+  gradients?: Record<string, string>;  // gradient signature → theme path
 }
 
 function applyThemeMappings(
@@ -180,14 +172,12 @@ function applyThemeMappings(
 
   let result = code;
 
-  // Заменяем цвета: 'rgba(122, 84, 255, 1)' → palette.primary
   // Replace colors: 'rgba(122, 84, 255, 1)' → palette.primary
   if (mappings.colors) {
     console.error(`[DEBUG] Applying ${Object.keys(mappings.colors).length} color mappings`);
 
     for (const [figmaHex, themePath] of Object.entries(mappings.colors)) {
       const rgb = hexToRgb(figmaHex);
-      // Включаем кавычки в паттерн, чтобы заменить 'rgba(...)' на palette.token (без кавычек)
       // Include quotes in pattern to replace 'rgba(...)' with palette.token (without quotes)
       const rgbaPattern = `'rgba\\(${rgb.r}, ${rgb.g}, ${rgb.b}, [0-9.]+\\)'`;
 
@@ -207,20 +197,17 @@ function applyThemeMappings(
     console.error('[DEBUG] No color mappings provided');
   }
 
-  // Заменяем типографику: fontSize + fontWeight → ...typography.body
   // Replace typography: fontSize + fontWeight → ...typography.body
   if (mappings.typography) {
     console.error(`[DEBUG] Applying ${Object.keys(mappings.typography).length} typography mappings`);
 
     for (const [figmaKey, themePath] of Object.entries(mappings.typography)) {
-      // figmaKey формат: "SF Pro/590/17" или "fontSize-17-fontWeight-590"
       // figmaKey format: "SF Pro/590/17" or "fontSize-17-fontWeight-590"
       const parts = figmaKey.split('/');
       if (parts.length >= 3) {
         const weight = parts[1];
         const size = parts[2];
 
-        // Заменяем комбинацию fontSize + fontWeight на spread
         // Replace fontSize + fontWeight combination with spread
         const pattern = `fontSize:\\s*scale\\(${size}\\),\\s*fontWeight:\\s*['"]?${weight}['"]?`;
         const regex = new RegExp(pattern, 'g');
@@ -236,7 +223,6 @@ function applyThemeMappings(
     }
   }
 
-  // Заменяем шрифты: 'SF Pro' → commonFonts.primary.semibold
   // Replace fonts: 'SF Pro' → commonFonts.primary.semibold
   if (mappings.fonts) {
     console.error(`[DEBUG] Applying ${Object.keys(mappings.fonts).length} font mappings`);
@@ -258,14 +244,12 @@ function applyThemeMappings(
     console.error('[DEBUG] No font mappings provided');
   }
 
-  // Заменяем spacing: paddingLeft: scale(16) → paddingLeft: theme.spacing.medium
   // Replace spacing: paddingLeft: scale(16) → paddingLeft: theme.spacing.medium
   if (mappings.spacing) {
     console.error(`[DEBUG] Applying ${Object.keys(mappings.spacing).length} spacing mappings`);
 
     for (const [figmaValue, themePath] of Object.entries(mappings.spacing)) {
       const value = Number(figmaValue);
-      // Паттерн для всех spacing свойств
       // Pattern for all spacing properties
       const spacingProps = [
         'paddingLeft', 'paddingRight', 'paddingTop', 'paddingBottom',
@@ -288,14 +272,12 @@ function applyThemeMappings(
     console.error('[DEBUG] No spacing mappings provided');
   }
 
-  // Заменяем radii: borderRadius: scale(12) → borderRadius: theme.border.radius.small
   // Replace radii: borderRadius: scale(12) → borderRadius: theme.border.radius.small
   if (mappings.radii) {
     console.error(`[DEBUG] Applying ${Object.keys(mappings.radii).length} radii mappings`);
 
     for (const [figmaValue, themePath] of Object.entries(mappings.radii)) {
       const value = Number(figmaValue);
-      // Паттерн для всех radius свойств
       // Pattern for all radius properties
       const radiusProps = [
         'borderRadius',
@@ -318,20 +300,16 @@ function applyThemeMappings(
     console.error('[DEBUG] No radii mappings provided');
   }
 
-  // Заменяем shadows: группы shadow свойств → ...theme.shadows.card
   // Replace shadows: shadow property groups → ...theme.shadows.card
   if (mappings.shadows) {
     console.error(`[DEBUG] Applying ${Object.keys(mappings.shadows).length} shadow mappings`);
 
     for (const [shadowSignature, themePath] of Object.entries(mappings.shadows)) {
-      // shadowSignature формат: "shadowColor-rgba(...)-shadowOpacity-0.1-shadowRadius-scale(8)-elevation-4"
       // shadowSignature format: "shadowColor-rgba(...)-shadowOpacity-0.1-shadowRadius-scale(8)-elevation-4"
 
-      // Извлекаем компоненты из сигнатуры
       // Extract components from signature
       const parts = shadowSignature.split('-');
       if (parts.length >= 8) {
-        // Ищем паттерн с этими конкретными значениями
         // Find pattern with these specific values
         const shadowColorValue = parts.slice(1, parts.indexOf('shadowOpacity')).join('-');
         const opacityIdx = parts.indexOf('shadowOpacity');
@@ -342,7 +320,6 @@ function applyThemeMappings(
         const radiusValue = parts.slice(radiusIdx + 1, elevationIdx).join('-');
         const elevationValue = parts[elevationIdx + 1];
 
-        // Создаем паттерн для поиска всех shadow свойств вместе
         // Create pattern to find all shadow properties together
         const pattern = `shadowColor:\\s*${shadowColorValue.replace(/[()]/g, '\\$&')},\\s*shadowOpacity:\\s*${opacityValue},\\s*shadowRadius:\\s*${radiusValue.replace(/[()]/g, '\\$&')},\\s*elevation:\\s*${elevationValue}`;
         const regex = new RegExp(pattern, 'g');
@@ -358,18 +335,15 @@ function applyThemeMappings(
     console.error('[DEBUG] No shadow mappings provided');
   }
 
-  // Заменяем gradients: colors={['#7A54FF', '#AB5CE9']} → colors={theme.gradients.primary}
   // Replace gradients: colors={['#7A54FF', '#AB5CE9']} → colors={theme.gradients.primary}
   if (mappings.gradients) {
     console.error(`[DEBUG] Applying ${Object.keys(mappings.gradients).length} gradient mappings`);
 
     for (const [gradientSignature, themePath] of Object.entries(mappings.gradients)) {
-      // gradientSignature формат: "#7A54FF,#AB5CE9"
       // gradientSignature format: "#7A54FF,#AB5CE9"
       const colors = gradientSignature.split(',');
       const colorPattern = colors.map(c => `'${c}'`).join(',\\s*');
 
-      // Паттерн: colors={['#7A54FF', '#AB5CE9']}
       // Pattern: colors={['#7A54FF', '#AB5CE9']}
       const pattern = `colors=\\{\\[${colorPattern}\\]\\}`;
       const regex = new RegExp(pattern, 'g');
@@ -384,7 +358,7 @@ function applyThemeMappings(
     console.error('[DEBUG] No gradient mappings provided');
   }
 
-  // Добавляем импорты для использованных токенов / Add imports for used tokens
+  // Add imports for used tokens
   const needsPaletteImport = result.includes('palette.');
   const needsTypographyImport = result.includes('...typography.');
   const needsThemeImport = result.includes('theme.spacing') ||
@@ -396,10 +370,9 @@ function applyThemeMappings(
     const imports: string[] = [];
     if (needsPaletteImport) imports.push('palette');
     if (needsTypographyImport) imports.push('typography');
-    // theme будет доступен из useTheme hook, не нужен отдельный импорт
     // theme will be available from useTheme hook, no separate import needed
 
-    // Ищем место для импорта (после последнего import) / Find place for import (after last import)
+    // Find place for import (after last import)
     const importMatch = result.match(/^(import .+;\n)+/m);
     if (importMatch && imports.length > 0) {
       const lastImportEnd = importMatch.index! + importMatch[0].length;
@@ -408,9 +381,7 @@ function applyThemeMappings(
       console.error(`[DEBUG] Added theme import: ${themeImport.trim()}`);
     }
 
-    // Примечание: theme.spacing, theme.border, theme.shadows используются через объект theme
     // Note: theme.spacing, theme.border, theme.shadows are used via theme object
-    // который уже доступен из useTheme hook
     // which is already available from useTheme hook
     if (needsThemeImport) {
       console.error('[DEBUG] Theme tokens (spacing/border/shadows/gradients) will be accessed via theme object from useTheme');
@@ -422,7 +393,6 @@ function applyThemeMappings(
 }
 
 /**
- * Конвертирует HEX в RGB
  * Converts HEX to RGB
  */
 function hexToRgb(hex: string): { r: number, g: number, b: number } {
@@ -439,7 +409,6 @@ function hexToRgb(hex: string): { r: number, g: number, b: number } {
 }
 
 /**
- * Системные компоненты, которые не нужно генерировать
  * System components that should not be generated
  */
 const SKIP_GENERATION_PATTERNS = [
@@ -458,7 +427,6 @@ const SKIP_GENERATION_PATTERNS = [
 ];
 
 /**
- * Проверяет, нужно ли пропускать узел при генерации
  * Checks if the node should be skipped during generation
  */
 function shouldSkipNode(nodeName: string): boolean {
@@ -475,7 +443,6 @@ function shouldSkipNode(nodeName: string): boolean {
 }
 
 /**
- * Проверяет наличие StatusBar в дереве компонентов
  * Checks if StatusBar exists in component tree
  */
 function hasStatusBar(node: any): boolean {
@@ -493,7 +460,7 @@ function hasStatusBar(node: any): boolean {
 }
 
 /**
- * Добавляет необходимые импорты
+ * Adds necessary imports
  */
 function addImports(sourceFile: SourceFile, metadata: any): void {
   // React
@@ -502,10 +469,9 @@ function addImports(sourceFile: SourceFile, metadata: any): void {
     defaultImport: 'React',
   });
 
-  // Собираем необходимые RN компоненты
+  // Collect necessary RN components
   const rnComponents = collectRNComponents(metadata);
 
-  // Добавляем StatusBar если обнаружен в дизайне
   // Add StatusBar if detected in design
   if (hasStatusBar(metadata)) {
     rnComponents.add('StatusBar');
@@ -535,7 +501,6 @@ function addImports(sourceFile: SourceFile, metadata: any): void {
     namedImports: [{ name: 'ThemeType', isTypeOnly: true }],
   });
 
-  // LinearGradient (если нужен)
   // LinearGradient (if needed)
   if (hasGradientFills(metadata)) {
     sourceFile.addImportDeclaration({
@@ -546,13 +511,12 @@ function addImports(sourceFile: SourceFile, metadata: any): void {
 }
 
 /**
- * Собирает все необходимые RN компоненты из метаданных
+ * Collects all necessary RN components from metadata
  */
 function collectRNComponents(node: any): Set<string> {
   const components = new Set<string>();
 
   const traverse = (n: any) => {
-    // Пропускаем системные компоненты
     // Skip system components
     if (shouldSkipNode(n.name)) {
       return;
@@ -571,7 +535,6 @@ function collectRNComponents(node: any): Set<string> {
 }
 
 /**
- * Проверяет наличие градиентных заливок в узле или его потомках
  * Checks if node or its descendants have gradient fills
  */
 function hasGradientFills(node: any): boolean {
@@ -585,7 +548,7 @@ function hasGradientFills(node: any): boolean {
 }
 
 /**
- * Генерирует функциональный компонент
+ * Generates functional component
  */
 function generateComponent(
   sourceFile: SourceFile,
@@ -608,14 +571,13 @@ function generateComponent(
       writer.write('  <>');
       writer.newLine();
 
-      // Добавляем StatusBar если обнаружен в дизайне
       // Add StatusBar if detected in design
       if (includeStatusBar) {
         writer.write('    <StatusBar barStyle="dark-content" />');
         writer.newLine();
       }
 
-      // Генерируем JSX
+      // Generate JSX
       const jsx = generateJSXRecursive(metadata, 2, undefined, imageMap, styleMap);
       writer.write(jsx);
 
@@ -628,7 +590,6 @@ function generateComponent(
 }
 
 /**
- * Информация о градиенте
  * Gradient information
  */
 interface GradientInfo {
@@ -640,7 +601,6 @@ interface GradientInfo {
 }
 
 /**
- * Извлекает информацию о градиенте из fills
  * Extracts gradient information from fills
  */
 function extractGradientInfo(fills: any[]): GradientInfo | null {
@@ -673,7 +633,7 @@ function extractGradientInfo(fills: any[]): GradientInfo | null {
 }
 
 /**
- * Генерирует JSX рекурсивно
+ * Generates JSX recursively
  */
 function generateJSXRecursive(
   node: any,
@@ -682,7 +642,6 @@ function generateJSXRecursive(
   imageMap?: Map<string, string>,
   styleMap?: Map<string, string>
 ): string {
-  // Пропускаем системные компоненты
   // Skip system components
   if (shouldSkipNode(node.name)) {
     return '';
@@ -690,7 +649,6 @@ function generateJSXRecursive(
 
   const indent = '  '.repeat(depth);
   const component = mapToRNComponent(node);
-  // Генерируем имя стиля и нормализуем его (транслитерация + camelCase)
   // Generate style name and normalize it (transliteration + camelCase)
   const styleName = normalizeStyleName(generateSmartStyleName(
     node.name || 'root',
@@ -701,32 +659,27 @@ function generateJSXRecursive(
     }
   ));
 
-  // Проверяем, нужно ли сохранить оригинальное имя в комментарии
   // Check if original name should be preserved as comment
   const originalName = node.name || '';
   const nameNeedsComment = originalName &&
     (originalName.includes('/') || originalName.includes('_') || originalName.startsWith('_'));
 
-  // Получаем ID стиля, если есть
   // Get style ID if present
   const styleId = node.styles?.fills || node.styles?.fill;
   const resolvedStyleName = styleId && styleMap ? styleMap.get(styleId) : undefined;
 
-  // Формируем текст комментария, если нужно
   // Form comment text if needed
   let commentText = '';
-  // Добавляем componentId для INSTANCE узлов
   // Add componentId for INSTANCE nodes
   const hasComponentId = node.type === 'INSTANCE' && node.componentId;
 
-  // Извлекаем variant props из componentProperties
   // Extract variant props from componentProperties
   let variantStr = '';
   if (node.componentProperties) {
     const variants = Object.entries(node.componentProperties)
       .filter(([_, v]: [string, any]) => v.value !== undefined)
       .map(([k, v]: [string, any]) => `${k}=${v.value}`)
-      .slice(0, 3); // Ограничиваем до 3 / Limit to 3
+      .slice(0, 3); // Limit to 3
     if (variants.length > 0) {
       variantStr = variants.join(', ');
     }
@@ -741,14 +694,12 @@ function generateJSXRecursive(
     commentText = `${indent}{/* ${comments.join(' | ')} */}\n`;
   }
 
-  // Проверяем наличие градиента
   // Check for gradient
   const gradientInfo = extractGradientInfo(node.fills);
 
   let jsx = '';
 
   if (gradientInfo) {
-    // Оборачиваем в LinearGradient
     // Wrap in LinearGradient
     if (commentText) {
       jsx += commentText;
@@ -763,7 +714,6 @@ function generateJSXRecursive(
     if (node.children && node.children.length > 0) {
       jsx += '>\n';
 
-      // Фильтруем дочерние элементы и убираем пустые строки
       // Filter children and remove empty strings
       const childrenJSX = node.children
         .map((child: any) => generateJSXRecursive(child, depth + 1, node, imageMap, styleMap))
@@ -780,7 +730,6 @@ function generateJSXRecursive(
       jsx += ' />';
     }
   } else {
-    // Обычный компонент без градиента
     // Regular component without gradient
     if (commentText) {
       jsx = commentText;
@@ -789,14 +738,12 @@ function generateJSXRecursive(
       jsx = `${indent}<${component} style={styles.${styleName}}`;
     }
 
-    // Добавляем специфичные props для компонентов
+    // Add component-specific props
     if (component === 'Text' && node.characters) {
-      // Добавляем hint для шрифта если есть fontPostScriptName
       // Add font hint if fontPostScriptName available
       const fontHint = node.style?.fontPostScriptName ? ` {/* font: ${node.style.fontPostScriptName} */}` : '';
       jsx += `>${fontHint}\n${indent}  {${JSON.stringify(node.characters)}}\n${indent}</${component}>`;
     } else if (component === 'Image' && node.fills?.[0]?.imageRef) {
-      // Определяем resizeMode из scaleMode
       // Determine resizeMode from scaleMode
       const scaleMode = node.fills[0].scaleMode;
       const resizeModeMap: Record<string, string> = {
@@ -808,19 +755,16 @@ function generateJSXRecursive(
       };
       const resizeMode = resizeModeMap[scaleMode] || 'cover';
 
-      // Добавляем hint для imageTransform если есть (как отдельную строку комментария)
       // Add imageTransform hint if present (as separate comment line)
       let transformHint = '';
       if (node.fills[0].imageTransform) {
         const [[a, c, tx], [b, d, ty]] = node.fills[0].imageTransform;
-        // Если трансформация не identity (1,0,0 / 0,1,0), добавляем hint
         // If transform is not identity, add hint
         if (a !== 1 || b !== 0 || c !== 0 || d !== 1 || tx !== 0 || ty !== 0) {
           transformHint = `\n${indent}{/* imageTransform: scale(${a.toFixed(2)},${d.toFixed(2)}) translate(${tx.toFixed(0)},${ty.toFixed(0)}) */}`;
         }
       }
 
-      // Проверяем, есть ли путь к изображению в imageMap
       // Check if image path is available in imageMap
       const imagePath = imageMap?.get(node.id);
       if (imagePath) {
@@ -831,7 +775,6 @@ function generateJSXRecursive(
     } else if (node.children && node.children.length > 0) {
       jsx += '>\n';
 
-      // Фильтруем дочерние элементы и убираем пустые строки
       // Filter children and remove empty strings
       const childrenJSX = node.children
         .map((child: any) => generateJSXRecursive(child, depth + 1, node, imageMap, styleMap))
@@ -853,10 +796,10 @@ function generateJSXRecursive(
 }
 
 /**
- * Генерирует createStyles функцию
+ * Generates createStyles function
  */
 function generateCreateStyles(sourceFile: SourceFile, metadata: any, config: ProjectConfig): void {
-  // Собираем все стили
+  // Collect all styles
   const stylesMap = new Map<string, any>();
   collectStyles(metadata, stylesMap, config);
 
@@ -869,7 +812,6 @@ function generateCreateStyles(sourceFile: SourceFile, metadata: any, config: Pro
           writer.write('({palette, commonFonts}: ThemeType) => ({');
           writer.newLine();
 
-          // Вручную пишем каждый стиль
           // Manually write each style
           const styleNames = Array.from(stylesMap.keys());
           styleNames.forEach((styleName, styleIndex) => {
@@ -878,7 +820,6 @@ function generateCreateStyles(sourceFile: SourceFile, metadata: any, config: Pro
             writer.write(`  ${styleName}: {`);
             writer.newLine();
 
-            // Пишем каждое свойство стиля
             // Write each style property
             const propNames = Object.keys(styleProps);
             propNames.forEach((propName, propIndex) => {
@@ -886,35 +827,28 @@ function generateCreateStyles(sourceFile: SourceFile, metadata: any, config: Pro
 
               writer.write(`    ${propName}: `);
 
-              // Определяем, нужны ли кавычки
               // Determine if quotes are needed
               if (typeof value === 'string') {
-                // Проверяем, является ли значение вызовом функции или ссылкой на тему
                 // Check if value is a function call or theme reference
                 if (
                   value.startsWith('scale(') ||
                   value.startsWith('palette.') ||
                   value.startsWith('commonFonts.')
                 ) {
-                  // Не добавляем кавычки для вызовов функций и ссылок на тему
                   // No quotes for function calls and theme references
                   writer.write(value);
                 } else {
-                  // Добавляем кавычки для строковых литералов
                   // Add quotes for string literals
                   writer.write(`'${value}'`);
                 }
               } else if (typeof value === 'number') {
-                // Числа без кавычек
                 // Numbers without quotes
                 writer.write(String(value));
               } else {
-                // Для других типов используем JSON.stringify
                 // For other types use JSON.stringify
                 writer.write(JSON.stringify(value));
               }
 
-              // Добавляем запятую, если это не последнее свойство
               // Add comma if not the last property
               if (propIndex < propNames.length - 1) {
                 writer.write(',');
@@ -925,7 +859,6 @@ function generateCreateStyles(sourceFile: SourceFile, metadata: any, config: Pro
 
             writer.write('  }');
 
-            // Добавляем запятую, если это не последний стиль
             // Add comma if not the last style
             if (styleIndex < styleNames.length - 1) {
               writer.write(',');
@@ -942,16 +875,14 @@ function generateCreateStyles(sourceFile: SourceFile, metadata: any, config: Pro
 }
 
 /**
- * Собирает все стили из дерева метаданных
+ * Collects all styles from metadata tree
  */
 function collectStyles(node: any, stylesMap: Map<string, any>, config: ProjectConfig, parentNode?: any): void {
-  // Пропускаем системные компоненты
   // Skip system components
   if (shouldSkipNode(node.name)) {
     return;
   }
 
-  // Генерируем имя стиля и нормализуем его (транслитерация + camelCase)
   // Generate style name and normalize it (transliteration + camelCase)
   const styleName = normalizeStyleName(generateSmartStyleName(
     node.name || 'root',
@@ -963,7 +894,6 @@ function collectStyles(node: any, stylesMap: Map<string, any>, config: ProjectCo
   ));
   const styleObject = generateStyleObject(node, config);
 
-  // Пропускаем пустые объекты стилей
   // Skip empty style objects
   if (Object.keys(styleObject).length > 0) {
     stylesMap.set(styleName, styleObject);
@@ -975,12 +905,11 @@ function collectStyles(node: any, stylesMap: Map<string, any>, config: ProjectCo
 }
 
 /**
- * Валидирует и очищает объект стилей
  * Validates and cleans style object
  *
- * @param styles - Объект стилей
- * @param nodeType - Тип узла (TEXT, FRAME, etc.)
- * @returns Очищенный объект стилей
+ * @param styles - Style object
+ * @param nodeType - Node type (TEXT, FRAME, etc.)
+ * @returns Cleaned style object
  */
 function validateStyleObject(
   styles: Record<string, any>,
@@ -989,19 +918,16 @@ function validateStyleObject(
   const validated: Record<string, any> = {};
 
   for (const [key, value] of Object.entries(styles)) {
-    // Правило 1: Text не может иметь backgroundColor
     // Rule 1: Text cannot have backgroundColor
     if (nodeType === 'TEXT' && key === 'backgroundColor') {
       continue;  // Skip
     }
 
-    // Правило 2: Пропускаем undefined и null
     // Rule 2: Skip undefined and null
     if (value === undefined || value === null) {
       continue;
     }
 
-    // Правило 3: Пропускаем пустые строки
     // Rule 3: Skip empty strings
     if (value === '') {
       continue;
@@ -1014,13 +940,12 @@ function validateStyleObject(
 }
 
 /**
- * Генерирует объект стилей для узла
+ * Generates style object for node
  */
 function generateStyleObject(node: any, config: ProjectConfig): Record<string, any> {
   const styles: Record<string, any> = {};
   const scaleFunc = config.codeStyle.scaleFunction;
 
-  // Helper для применения scale функции
   // Helper to apply scale function
   const applyScale = (value: number): string | number => {
     return scaleFunc ? `${scaleFunc}(${value})` : value;
@@ -1107,7 +1032,6 @@ function generateStyleObject(node: any, config: ProjectConfig): Record<string, a
   if (node.fills && Array.isArray(node.fills) && node.fills.length > 0) {
     const fill = node.fills[0];
     if (fill.type?.startsWith('GRADIENT_')) {
-      // Пропускаем - обрабатывается LinearGradient
       // Skip - handled by LinearGradient wrapper
     } else if (fill.type === 'SOLID' && fill.color) {
       const { r, g, b } = fill.color;
@@ -1150,7 +1074,7 @@ function generateStyleObject(node: any, config: ProjectConfig): Record<string, a
     }
   }
 
-  // Typography (для Text компонентов)
+  // Typography (for Text components)
   if (node.type === 'TEXT' && node.style) {
     if (node.style.fontFamily) {
       styles.fontFamily = node.style.fontFamily;
@@ -1225,24 +1149,19 @@ function generateStyleObject(node: any, config: ProjectConfig): Record<string, a
   }
 
   // Layout align (child alignment override)
-  // Выравнивание дочернего элемента (переопределение выравнивания родителя)
   if (node.layoutAlign === 'STRETCH') {
     styles.alignSelf = 'stretch';
   }
 
-  // Ограничения для абсолютного позиционирования
   // Constraints for absolute positioning
   if (node.layoutPositioning === 'ABSOLUTE' && node.constraints) {
     styles.position = 'absolute';
 
-    // Горизонтальное ограничение
     // Horizontal constraint
     const h = node.constraints.horizontal;
     if (h === 'LEFT' || h === 'MIN') {
-      // Нужен x от родителя - используем boundingBox если есть
       // Need x from parent - use boundingBox if available
       if (node.absoluteBoundingBox?.x !== undefined) {
-        // Примечание: это абсолютные координаты, нужен offset от родителя
         // Note: these are absolute coords, need offset from parent
         styles.left = applyScale(0); // Placeholder - parent offset needed
       }
@@ -1252,7 +1171,6 @@ function generateStyleObject(node: any, config: ProjectConfig): Record<string, a
       styles.alignSelf = 'center';
     }
 
-    // Вертикальное ограничение
     // Vertical constraint
     const v = node.constraints.vertical;
     if (v === 'TOP' || v === 'MIN') {
@@ -1260,18 +1178,16 @@ function generateStyleObject(node: any, config: ProjectConfig): Record<string, a
     } else if (v === 'BOTTOM' || v === 'MAX') {
       styles.bottom = applyScale(0);
     } else if (v === 'CENTER') {
-      // Центрирование по вертикали требует особой обработки
       // Vertical centering requires special handling
     }
   }
 
-  // Валидируем стили перед возвратом
   // Validate styles before return
   return validateStyleObject(styles, node.type || 'FRAME');
 }
 
 /**
- * Маппинг типов Figma узлов в React Native компоненты
+ * Maps Figma node types to React Native components
  */
 function mapToRNComponent(node: any): string {
   if (!node.type) return 'View';
@@ -1280,14 +1196,14 @@ function mapToRNComponent(node: any): string {
     case 'TEXT':
       return 'Text';
     case 'RECTANGLE':
-      // Если есть изображение
+      // If has image
       if (node.fills && node.fills.some((f: any) => f.type === 'IMAGE')) {
         return 'Image';
       }
       return 'View';
     case 'FRAME':
     case 'GROUP':
-      // Если похоже на кнопку (имеет обработчики или специфичное имя)
+      // If looks like a button (has handlers or specific name)
       if (node.name && /button|btn/i.test(node.name)) {
         return 'TouchableOpacity';
       }
@@ -1301,10 +1217,9 @@ function mapToRNComponent(node: any): string {
 }
 
 /**
- * Конвертирует строку в camelCase
- * Если результат начинается с цифры, добавляет префикс _
+ * Converts string to camelCase
+ * If result starts with a digit, adds underscore prefix
  *
- * ПРИМЕЧАНИЕ: Эта функция сохранена как fallback и используется внутри smart-namer.ts
  * NOTE: This function is kept as a fallback and is used internally by smart-namer.ts
  */
 function toCamelCase(str: string): string {
@@ -1313,13 +1228,11 @@ function toCamelCase(str: string): string {
     .replace(/^[A-Z]/, (chr) => chr.toLowerCase())
     .replace(/[^a-zA-Z0-9]/g, '');
 
-  // Если начинается с цифры, добавляем префикс
   // If starts with digit, add underscore prefix
   if (/^\d/.test(result)) {
     result = '_' + result;
   }
 
-  // Если пустая строка, возвращаем fallback
   // If empty string, return fallback
   if (!result) {
     result = 'element';

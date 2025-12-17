@@ -1,6 +1,6 @@
 /**
- * MCP Client для e2e тестирования
- * JSON-RPC клиент для взаимодействия с MCP сервером через stdio
+ * MCP Client for e2e testing
+ * JSON-RPC client for interacting with MCP server via stdio
  */
 
 import { spawn, ChildProcess } from 'child_process';
@@ -71,7 +71,7 @@ export class MCPClient {
   private serverReady = false;
 
   /**
-   * Запускает MCP сервер и ожидает его готовности
+   * Starts MCP server and waits for readiness
    */
   async start(figmaToken: string): Promise<void> {
     const serverPath = join(__dirname, '../../dist/index.js');
@@ -88,20 +88,20 @@ export class MCPClient {
       throw new Error('Failed to create stdio pipes');
     }
 
-    // Обрабатываем stdout (JSON-RPC ответы)
+    // Process stdout (JSON-RPC responses)
     this.process.stdout.on('data', (data: Buffer) => {
       this.buffer += data.toString();
       this.processBuffer();
     });
 
-    // Логируем stderr (отладочная информация сервера)
+    // Log stderr (server debug information)
     this.process.stderr?.on('data', (data: Buffer) => {
       const message = data.toString();
-      // Детектируем готовность сервера по сообщениям в stderr
+      // Detect server readiness from stderr messages
       if (message.includes('Marafet Figma MCP Server')) {
         this.serverReady = true;
       }
-      // Для отладки можно раскомментировать:
+      // For debugging, uncomment:
       // console.error('[MCP Server]', message);
     });
 
@@ -115,12 +115,12 @@ export class MCPClient {
       }
     });
 
-    // Ждём готовности сервера
+    // Wait for server readiness
     await this.waitForReady(10000);
   }
 
   /**
-   * Ожидает готовности сервера
+   * Waits for server readiness
    */
   private waitForReady(timeout: number): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -145,10 +145,10 @@ export class MCPClient {
   }
 
   /**
-   * Обрабатывает буфер и извлекает JSON-RPC ответы
+   * Processes buffer and extracts JSON-RPC responses
    */
   private processBuffer(): void {
-    // JSON-RPC сообщения разделены переносом строки
+    // JSON-RPC messages are separated by newline
     const lines = this.buffer.split('\n');
     this.buffer = lines.pop() || '';
 
@@ -163,13 +163,13 @@ export class MCPClient {
           pending.resolve(response);
         }
       } catch (error) {
-        // Игнорируем не-JSON вывод (может быть отладочная информация)
+        // Ignore non-JSON output (may be debug information)
       }
     }
   }
 
   /**
-   * Отправляет JSON-RPC запрос и ожидает ответ
+   * Sends JSON-RPC request and waits for response
    */
   private async sendRequest(method: string, params?: Record<string, unknown>): Promise<MCPResponse> {
     if (!this.process?.stdin) {
@@ -195,7 +195,7 @@ export class MCPClient {
         }
       });
 
-      // Таймаут 60 секунд (API вызовы могут быть медленными)
+      // 60 second timeout (API calls can be slow)
       setTimeout(() => {
         if (this.pendingRequests.has(id)) {
           this.pendingRequests.delete(id);
@@ -206,7 +206,7 @@ export class MCPClient {
   }
 
   /**
-   * Получает список доступных инструментов
+   * Gets list of available tools
    */
   async listTools(): Promise<Array<{ name: string; description: string }>> {
     const response = await this.sendRequest('tools/list');
@@ -220,7 +220,7 @@ export class MCPClient {
   }
 
   /**
-   * Вызывает инструмент generate_screen
+   * Calls generate_screen tool
    */
   async generateScreen(params: GenerateScreenParams): Promise<MCPToolResult> {
     const response = await this.sendRequest('tools/call', {
@@ -236,7 +236,7 @@ export class MCPClient {
   }
 
   /**
-   * Вызывает инструмент generate_flow
+   * Calls generate_flow tool
    */
   async generateFlow(params: GenerateFlowParams): Promise<MCPToolResult> {
     const response = await this.sendRequest('tools/call', {
@@ -252,13 +252,13 @@ export class MCPClient {
   }
 
   /**
-   * Останавливает MCP сервер
+   * Stops MCP server
    */
   async stop(): Promise<void> {
     if (this.process) {
       this.process.kill('SIGTERM');
 
-      // Ждём завершения процесса
+      // Wait for process to finish
       await new Promise<void>((resolve) => {
         if (!this.process) {
           resolve();
@@ -279,7 +279,7 @@ export class MCPClient {
       this.process = null;
     }
 
-    // Очищаем pending requests
+    // Clear pending requests
     for (const [id, { reject }] of this.pendingRequests) {
       reject(new Error('MCP server stopped'));
     }
@@ -288,7 +288,7 @@ export class MCPClient {
 }
 
 /**
- * Создаёт и запускает MCP клиент
+ * Creates and starts MCP client
  */
 export async function createMCPClient(figmaToken: string): Promise<MCPClient> {
   const client = new MCPClient();

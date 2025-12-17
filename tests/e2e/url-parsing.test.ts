@@ -1,7 +1,7 @@
 /**
- * E2E тесты для парсинга URL
+ * E2E tests for URL parsing
  *
- * Тестирует обработку различных форматов Figma URL и обработку ошибок
+ * Tests handling of various Figma URL formats and error handling
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
@@ -40,8 +40,8 @@ describe('URL Parsing', () => {
     await workspace.cleanup();
   });
 
-  describe('Валидные URL форматы', () => {
-    it('должен обрабатывать стандартный Figma design URL', async () => {
+  describe('Valid URL formats', () => {
+    it('should handle standard Figma design URL', async () => {
       const result = await client.generateScreen({
         figmaUrl: TEST_URLS.mainScreen,
         screenName: 'StandardUrl',
@@ -52,8 +52,8 @@ describe('URL Parsing', () => {
       expect(result.content[0].text).toContain('Generated:');
     });
 
-    it('должен обрабатывать URL с закодированным node-id', async () => {
-      // URL с закодированным node-id (123%3A456 вместо 123:456)
+    it('should handle URL with encoded node-id', async () => {
+      // URL with encoded node-id (123%3A456 instead of 123:456)
       const encodedUrl = `https://www.figma.com/design/${TEST_FILE_KEY}/test?node-id=4212%3A63544&m=dev`;
 
       const result = await client.generateScreen({
@@ -65,8 +65,8 @@ describe('URL Parsing', () => {
       expect(result.isError).toBeFalsy();
     });
 
-    it('должен обрабатывать URL с дефисом в node-id', async () => {
-      // URL с дефисом (4212-63544) - стандартный формат
+    it('should handle URL with hyphen in node-id', async () => {
+      // URL with hyphen (4212-63544) - standard format
       const result = await client.generateScreen({
         figmaUrl: createFigmaUrl('4212-63544'),
         screenName: 'HyphenUrl',
@@ -76,8 +76,8 @@ describe('URL Parsing', () => {
       expect(result.isError).toBeFalsy();
     });
 
-    it('должен обрабатывать URL с дополнительными параметрами', async () => {
-      // URL с дополнительными query параметрами
+    it('should handle URL with additional parameters', async () => {
+      // URL with additional query parameters
       const urlWithParams = `${TEST_URLS.mainScreen}&t=abc123&scaling=min-zoom`;
 
       const result = await client.generateScreen({
@@ -89,8 +89,8 @@ describe('URL Parsing', () => {
       expect(result.isError).toBeFalsy();
     });
 
-    it('должен обрабатывать URL в формате /file/', async () => {
-      // Старый формат URL с /file/ вместо /design/
+    it('should handle URL in /file/ format', async () => {
+      // Old URL format with /file/ instead of /design/
       const fileUrl = TEST_URLS.mainScreen.replace('/design/', '/file/');
 
       const result = await client.generateScreen({
@@ -103,16 +103,16 @@ describe('URL Parsing', () => {
     });
   });
 
-  describe('Невалидные URL', () => {
-    it('должен возвращать ошибку для URL без node-id', async () => {
+  describe('Invalid URLs', () => {
+    it('should return error for URL without node-id', async () => {
       const result = await client.generateScreen({
         figmaUrl: INVALID_URLS.missingNodeId,
         screenName: 'NoNodeId',
         projectRoot: workspace.root,
       });
 
-      // Ожидаем ошибку или предупреждение
-      // Сервер может обработать это по-разному
+      // Expect error or warning
+      // Server may handle this differently
       expect(
         result.isError ||
         result.content[0].text.toLowerCase().includes('error') ||
@@ -120,7 +120,7 @@ describe('URL Parsing', () => {
       ).toBe(true);
     });
 
-    it('должен возвращать ошибку для malformed URL', async () => {
+    it('should return error for malformed URL', async () => {
       const result = await client.generateScreen({
         figmaUrl: INVALID_URLS.malformed,
         screenName: 'MalformedUrl',
@@ -130,14 +130,14 @@ describe('URL Parsing', () => {
       expect(result.isError).toBe(true);
     });
 
-    it('должен обрабатывать несуществующий node-id gracefully', async () => {
+    it('should handle non-existent node-id gracefully', async () => {
       const result = await client.generateScreen({
         figmaUrl: INVALID_URLS.nonExistentNode,
         screenName: 'NonExistentNode',
         projectRoot: workspace.root,
       });
 
-      // Должна быть ошибка, но не crash
+      // Should be error, but not crash
       expect(
         result.isError ||
         result.content[0].text.toLowerCase().includes('error') ||
@@ -146,54 +146,54 @@ describe('URL Parsing', () => {
     });
   });
 
-  describe('Извлечение компонентов URL', () => {
-    it('extractNodeId должен корректно извлекать nodeId', () => {
-      // С дефисом
+  describe('URL Components Extraction', () => {
+    it('extractNodeId should correctly extract nodeId', () => {
+      // With hyphen
       expect(extractNodeId('https://figma.com/design/abc?node-id=123-456')).toBe('123:456');
 
-      // С двоеточием (закодированным)
+      // With colon (encoded)
       expect(extractNodeId('https://figma.com/design/abc?node-id=123%3A456')).toBe('123:456');
 
-      // Без node-id
+      // Without node-id
       expect(extractNodeId('https://figma.com/design/abc')).toBeNull();
     });
 
-    it('extractFileKey должен корректно извлекать fileKey', () => {
-      // /design/ формат
+    it('extractFileKey should correctly extract fileKey', () => {
+      // /design/ format
       expect(extractFileKey('https://figma.com/design/ABC123xyz')).toBe('ABC123xyz');
 
-      // /file/ формат
+      // /file/ format
       expect(extractFileKey('https://figma.com/file/ABC123xyz')).toBe('ABC123xyz');
 
-      // С дополнительными параметрами
+      // With additional parameters
       expect(extractFileKey('https://figma.com/design/ABC123xyz/Name?node-id=1-1')).toBe('ABC123xyz');
 
-      // Невалидный URL
+      // Invalid URL
       expect(extractFileKey('not-a-url')).toBeNull();
     });
 
-    it('isValidFigmaUrl должен корректно валидировать URL', () => {
-      // Валидные
+    it('isValidFigmaUrl should correctly validate URL', () => {
+      // Valid
       expect(isValidFigmaUrl('https://figma.com/design/abc?node-id=1-1')).toBe(true);
       expect(isValidFigmaUrl('https://www.figma.com/file/abc?node-id=1-1')).toBe(true);
 
-      // Невалидные
-      expect(isValidFigmaUrl('https://figma.com/design/abc')).toBe(false); // нет node-id
-      expect(isValidFigmaUrl('https://google.com?node-id=1-1')).toBe(false); // не figma
+      // Invalid
+      expect(isValidFigmaUrl('https://figma.com/design/abc')).toBe(false); // no node-id
+      expect(isValidFigmaUrl('https://google.com?node-id=1-1')).toBe(false); // not figma
       expect(isValidFigmaUrl('not-a-url')).toBe(false);
     });
   });
 
-  describe('NodeId нормализация', () => {
-    it('должен нормализовать nodeId с дефисом к двоеточию', async () => {
-      // Генерируем с дефисом
+  describe('NodeId normalization', () => {
+    it('should normalize nodeId with hyphen to colon', async () => {
+      // Generate with hyphen
       await client.generateScreen({
         figmaUrl: createFigmaUrl('4212-63544'),
         screenName: 'NormalizeTest',
         projectRoot: workspace.root,
       });
 
-      // Проверяем manifest - nodeId должен быть с двоеточием
+      // Check manifest - nodeId should have colon
       const manifest = await workspace.readJson<{
         screens: Record<string, unknown>;
         modals: Record<string, unknown>;
@@ -201,7 +201,7 @@ describe('URL Parsing', () => {
         components: Record<string, unknown>;
       }>('.figma/manifest.json');
 
-      // Ищем ключ с двоеточием
+      // Search for key with colon
       const allKeys = [
         ...Object.keys(manifest.screens || {}),
         ...Object.keys(manifest.modals || {}),
@@ -209,17 +209,17 @@ describe('URL Parsing', () => {
         ...Object.keys(manifest.components || {}),
       ];
 
-      // Должен быть ключ с двоеточием, не с дефисом
+      // Should have key with colon, not hyphen
       const hasColonKey = allKeys.some(key => key.includes(':') && key.includes('4212') && key.includes('63544'));
       expect(hasColonKey).toBe(true);
     });
   });
 
   describe('Branch URL', () => {
-    it('должен обрабатывать URL с branch', async () => {
-      // URL формат: /design/{fileKey}/branch/{branchKey}/
-      // Для этого теста используем обычный URL, так как нет тестового branch
-      // В реальном сценарии branchKey используется как fileKey
+    it('should handle URL with branch', async () => {
+      // URL format: /design/{fileKey}/branch/{branchKey}/
+      // For this test use regular URL, since no test branch exists
+      // In real scenario branchKey is used as fileKey
 
       const result = await client.generateScreen({
         figmaUrl: TEST_URLS.mainScreen,

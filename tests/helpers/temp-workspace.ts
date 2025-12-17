@@ -1,6 +1,6 @@
 /**
- * Temporary Workspace для изолированных тестов
- * Создаёт временную директорию для каждого теста
+ * Temporary Workspace for isolated tests
+ * Creates temporary directory for each test
  */
 
 import { mkdtemp, rm, readFile, readdir, stat } from 'fs/promises';
@@ -9,21 +9,21 @@ import { tmpdir } from 'os';
 import { existsSync } from 'fs';
 
 export interface TempWorkspace {
-  /** Корневая директория workspace */
+  /** Workspace root directory */
   root: string;
-  /** Путь к .figma директории */
+  /** Path to .figma directory */
   figmaDir: string;
-  /** Очистка workspace */
+  /** Cleanup workspace */
   cleanup: () => Promise<void>;
-  /** Проверка существования файла */
+  /** Check file existence */
   exists: (relativePath: string) => boolean;
-  /** Чтение файла */
+  /** Read file */
   readFile: (relativePath: string) => Promise<string>;
-  /** Чтение JSON файла */
+  /** Read JSON file */
   readJson: <T = unknown>(relativePath: string) => Promise<T>;
-  /** Список файлов в директории */
+  /** List files in directory */
   listDir: (relativePath: string) => Promise<string[]>;
-  /** Проверка структуры директории */
+  /** Check directory structure */
   checkStructure: () => Promise<WorkspaceStructure>;
 }
 
@@ -37,7 +37,7 @@ export interface WorkspaceStructure {
 }
 
 /**
- * Создаёт временный workspace для теста
+ * Creates temporary workspace for test
  */
 export async function createTempWorkspace(prefix = 'figma-test-'): Promise<TempWorkspace> {
   const root = await mkdtemp(join(tmpdir(), prefix));
@@ -51,7 +51,7 @@ export async function createTempWorkspace(prefix = 'figma-test-'): Promise<TempW
       try {
         await rm(root, { recursive: true, force: true });
       } catch (error) {
-        // Игнорируем ошибки очистки
+        // Ignore cleanup errors
         console.error('Cleanup error:', error);
       }
     },
@@ -88,22 +88,22 @@ export async function createTempWorkspace(prefix = 'figma-test-'): Promise<TempW
         components: [],
       };
 
-      // Собираем список экранов
+      // Collect screen list
       if (workspace.exists('.figma/screens')) {
         structure.screens = await workspace.listDir('.figma/screens');
       }
 
-      // Собираем список модалов
+      // Collect modal list
       if (workspace.exists('.figma/modals')) {
         structure.modals = await workspace.listDir('.figma/modals');
       }
 
-      // Собираем список sheets
+      // Collect sheets list
       if (workspace.exists('.figma/sheets')) {
         structure.sheets = await workspace.listDir('.figma/sheets');
       }
 
-      // Собираем список компонентов
+      // Collect components list
       if (workspace.exists('.figma/components')) {
         structure.components = await workspace.listDir('.figma/components');
       }
@@ -116,7 +116,7 @@ export async function createTempWorkspace(prefix = 'figma-test-'): Promise<TempW
 }
 
 /**
- * Проверяет, что сгенерированный компонент имеет правильную структуру
+ * Validates that generated component has correct structure
  */
 export async function validateGeneratedComponent(
   workspace: TempWorkspace,
@@ -142,7 +142,7 @@ export async function validateGeneratedComponent(
     assetsDir: workspace.exists(`${basePath}/assets`),
   };
 
-  // Проверяем обязательные файлы
+  // Check required files
   if (!files.indexTsx) {
     errors.push(`Missing ${basePath}/index.tsx`);
   }
@@ -151,22 +151,22 @@ export async function validateGeneratedComponent(
     errors.push(`Missing ${basePath}/meta.json`);
   }
 
-  // Проверяем содержимое index.tsx
+  // Check index.tsx content
   if (files.indexTsx) {
     const content = await workspace.readFile(`${basePath}/index.tsx`);
 
-    // Должен содержать экспорт компонента
+    // Should contain component export
     if (!content.includes(`export const ${name}`)) {
       errors.push(`index.tsx should export const ${name}`);
     }
 
-    // Должен содержать createStyles
+    // Should contain createStyles
     if (!content.includes('createStyles')) {
       errors.push('index.tsx should contain createStyles function');
     }
   }
 
-  // Проверяем содержимое meta.json
+  // Check meta.json content
   if (files.metaJson) {
     try {
       const meta = await workspace.readJson<{
@@ -204,7 +204,7 @@ export async function validateGeneratedComponent(
 }
 
 /**
- * Получает статистику по workspace
+ * Gets workspace statistics
  */
 export async function getWorkspaceStats(workspace: TempWorkspace): Promise<{
   totalFiles: number;

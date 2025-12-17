@@ -74,7 +74,7 @@ export interface FigmaNodeFull {
     color?: FigmaColor;
     opacity?: number;
     imageRef?: string;
-    // Для градиентов / For gradients
+    // For gradients
     gradientHandlePositions?: Array<{ x: number; y: number }>;
     gradientStops?: Array<{
       position: number;
@@ -103,7 +103,7 @@ export interface FigmaNodeFull {
     spread?: number;
   }>;
 
-  // Свойства компонентов (для COMPONENT и INSTANCE узлов)
+  // Component properties (for COMPONENT and INSTANCE nodes)
   componentPropertyDefinitions?: {
     [propertyName: string]: {
       type: 'VARIANT' | 'TEXT' | 'BOOLEAN' | 'INSTANCE_SWAP';
@@ -112,15 +112,15 @@ export interface FigmaNodeFull {
     };
   };
 
-  // Выбранные значения для экземпляров компонентов
+  // Selected values for component instances
   componentPropertyReferences?: {
     [propertyName: string]: string;
   };
 
-  // ID компонента (для INSTANCE узлов)
+  // Component ID (for INSTANCE nodes)
   componentId?: string;
 
-  // Dev Mode аннотации
+  // Dev Mode annotations
   annotations?: Array<{
     label: string;
     properties?: Array<{
@@ -129,7 +129,7 @@ export interface FigmaNodeFull {
     }>;
   }>;
 
-  // Статус разработки из Dev Mode
+  // Development status from Dev Mode
   devStatus?: {
     type: string;
     description?: string;
@@ -435,12 +435,12 @@ export function extractBorders(node: FigmaNodeFull): string {
 }
 
 /**
- * Извлечение аннотаций из узла для LLM
+ * Extract annotations from node for LLM
  */
 export function extractAnnotations(node: FigmaNodeFull): string {
   let output = '';
 
-  // Статус разработки
+  // Development status
   if (node.devStatus) {
     output += `## Dev Status\n\n`;
     output += `- **Status**: ${node.devStatus.type}\n`;
@@ -450,7 +450,7 @@ export function extractAnnotations(node: FigmaNodeFull): string {
     output += '\n';
   }
 
-  // Аннотации дизайнера
+  // Designer annotations
   if (node.annotations && node.annotations.length > 0) {
     output += `## Designer Annotations\n\n`;
     node.annotations.forEach((annotation, i) => {
@@ -504,7 +504,7 @@ export function createDesignSpec(node: FigmaNodeFull): string {
     spec += typography + '\n';
   }
 
-  // Эффекты/Тени
+  // Effects/Shadows
   if (node.effects && node.effects.length > 0) {
     const shadowStyles = mapEffectsToRNStyles(node.effects);
     const shadowOutput = formatShadowStylesForLLM(shadowStyles);
@@ -513,7 +513,7 @@ export function createDesignSpec(node: FigmaNodeFull): string {
     }
   }
 
-  // Аннотации Dev Mode
+  // Dev Mode annotations
   const annotations = extractAnnotations(node);
   if (annotations) {
     spec += annotations;

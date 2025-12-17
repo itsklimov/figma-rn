@@ -1,6 +1,6 @@
 /**
- * Экстрактор дизайн-токенов из Figma API
- * Извлекает цвета, типографику, градиенты, тени с 100% точностью
+ * Design tokens extractor from Figma API
+ * Extracts colors, typography, gradients, shadows with 100% accuracy
  *
  * Design Tokens Extractor from Figma API
  * Extracts colors, typography, gradients, shadows with 100% accuracy
@@ -9,7 +9,7 @@
 import { rgbaToHex } from './color-utils.js';
 
 // ============================================================================
-// Типы Figma API для заливок и градиентов / Figma API types for fills and gradients
+// Figma API types for fills and gradients / Figma API types for fills and gradients
 // ============================================================================
 
 interface FigmaColor {
@@ -34,10 +34,10 @@ export interface FigmaFill {
   visible?: boolean;
   opacity?: number;
   color?: FigmaColor;
-  // Для градиентов / For gradients
+  // For gradients / For gradients
   gradientHandlePositions?: Vector[];
   gradientStops?: GradientStop[];
-  // Для изображений / For images
+  // For images / For images
   imageRef?: string;
   scaleMode?: 'FILL' | 'FIT' | 'CROP' | 'TILE';
 }
@@ -69,38 +69,38 @@ export interface FigmaTextStyle {
 }
 
 // ============================================================================
-// Извлечённые токены / Extracted tokens
+// Extracted tokens / Extracted tokens
 // ============================================================================
 
 export interface ExtractedColor {
-  /** Уникальный ключ (hex или gradient-id) / Unique key */
+  /** Unique key (hex or gradient-id) / Unique key */
   key: string;
-  /** Тип: solid или gradient / Type: solid or gradient */
+  /** Type: solid or gradient / Type: solid or gradient */
   type: 'solid' | 'gradient';
-  /** HEX для solid цветов / HEX for solid colors */
+  /** HEX for solid colors / HEX for solid colors */
   hex?: string;
-  /** RGBA для solid цветов / RGBA for solid colors */
+  /** RGBA for solid colors / RGBA for solid colors */
   rgba?: { r: number; g: number; b: number; a: number };
-  /** Тип градиента / Gradient type */
+  /** Gradient type / Gradient type */
   gradientType?: 'linear' | 'radial' | 'angular' | 'diamond';
-  /** Точки градиента / Gradient stops */
+  /** Gradient stops / Gradient stops */
   gradientStops?: Array<{ position: number; hex: string; opacity: number }>;
-  /** Угол для linear градиента / Angle for linear gradient */
+  /** Angle for linear gradient / Angle for linear gradient */
   angle?: number;
-  /** Где используется / Where used */
+  /** Where used / Where used */
   usedIn: string[];
-  /** Количество использований / Usage count */
+  /** Usage count / Usage count */
   usageCount: number;
-  /** Предложенное имя переменной / Suggested variable name */
+  /** Suggested variable name / Suggested variable name */
   suggestedName?: string;
-  /** Маппинг на тему проекта / Theme mapping */
+  /** Theme mapping / Theme mapping */
   themeMapping?: string;
 }
 
 export interface ExtractedTypography {
-  /** Уникальный ключ (fontFamily/weight/size) */
+  /** Unique key (fontFamily/weight/size) */
   key: string;
-  /** Figma значения / Figma values */
+  /** Figma values / Figma values */
   figma: {
     fontFamily: string;
     fontWeight: number;
@@ -109,7 +109,7 @@ export interface ExtractedTypography {
     letterSpacing: number;
     textAlign: string;
   };
-  /** React Native значения / React Native values */
+  /** React Native values / React Native values */
   reactNative: {
     fontFamily: string;
     fontSize: string;
@@ -117,28 +117,28 @@ export interface ExtractedTypography {
     letterSpacing: number;
     textAlign: 'left' | 'center' | 'right';
   };
-  /** Где используется / Where used */
+  /** Where used / Where used */
   usedIn: string[];
-  /** Количество использований / Usage count */
+  /** Usage count / Usage count */
   usageCount: number;
-  /** Предложенное имя / Suggested name */
+  /** Suggested name / Suggested name */
   suggestedName?: string;
-  /** Маппинг на тему / Theme mapping */
+  /** Theme mapping / Theme mapping */
   themeMapping?: string;
 }
 
 export interface ExtractedShadow {
-  /** Уникальный ключ */
+  /** Unique key */
   key: string;
-  /** Тип тени / Shadow type */
+  /** Shadow type / Shadow type */
   type: 'drop' | 'inner';
-  /** Значения / Values */
+  /** Values / Values */
   color: string;
   offset: { x: number; y: number };
   radius: number;
   spread: number;
   opacity: number;
-  /** React Native стиль / React Native style */
+  /** React Native style / React Native style */
   reactNative: {
     shadowColor: string;
     shadowOffset: { width: number; height: number };
@@ -146,7 +146,7 @@ export interface ExtractedShadow {
     shadowRadius: number;
     elevation?: number;
   };
-  /** Где используется / Where used */
+  /** Where used / Where used */
   usedIn: string[];
   usageCount: number;
 }
@@ -168,33 +168,33 @@ export interface ExtractedSpacing {
 }
 
 /**
- * Полный результат извлечения токенов / Complete extraction result
+ * Complete extraction result
  */
 export interface DesignTokens {
-  /** Версия / Version */
+  /** Version */
   version: string;
-  /** Время извлечения / Extraction timestamp */
+  /** Extraction timestamp */
   extractedAt: string;
-  /** Источник (Figma URL) / Source (Figma URL) */
+  /** Source (Figma URL) */
   source: string;
-  /** Цвета и градиенты / Colors and gradients */
+  /** Colors and gradients */
   colors: ExtractedColor[];
-  /** Типографика / Typography */
+  /** Typography */
   typography: ExtractedTypography[];
-  /** Тени / Shadows */
+  /** Shadows */
   shadows: ExtractedShadow[];
-  /** Радиусы скругления / Corner radii */
+  /** Corner radii */
   cornerRadii: ExtractedCornerRadius[];
-  /** Отступы / Spacing */
+  /** Spacing */
   spacing: ExtractedSpacing[];
 }
 
 // ============================================================================
-// Утилиты / Utilities
+// Utilities / Utilities
 // ============================================================================
 
 /**
- * Преобразование Figma RGBA (0-1) в стандартный формат (0-255)
+ * Convert Figma RGBA (0-1) to standard format (0-255)
  */
 function normalizeColor(color: FigmaColor): { r: number; g: number; b: number; a: number } {
   return {
@@ -206,7 +206,7 @@ function normalizeColor(color: FigmaColor): { r: number; g: number; b: number; a
 }
 
 /**
- * Вычисление угла градиента из handle positions
+ * Calculate gradient angle from handle positions
  */
 function calculateGradientAngle(handles: Vector[]): number {
   if (!handles || handles.length < 2) return 0;
@@ -215,7 +215,7 @@ function calculateGradientAngle(handles: Vector[]): number {
   const dx = end.x - start.x;
   const dy = end.y - start.y;
 
-  // Угол в градусах (0 = сверху вниз, по часовой стрелке)
+  // Angle in degrees (0 = top to bottom, clockwise)
   let angle = Math.atan2(dx, -dy) * (180 / Math.PI);
   if (angle < 0) angle += 360;
 
@@ -223,7 +223,7 @@ function calculateGradientAngle(handles: Vector[]): number {
 }
 
 /**
- * Генерация уникального ключа для градиента
+ * Generate unique key for gradient
  */
 function generateGradientKey(fill: FigmaFill): string {
   if (!fill.gradientStops) return 'gradient-unknown';
@@ -236,7 +236,7 @@ function generateGradientKey(fill: FigmaFill): string {
 }
 
 /**
- * Маппинг fontWeight в имя шрифта SF Pro
+ * Map fontWeight to SF Pro font name
  */
 const SF_PRO_WEIGHTS: Record<number, string> = {
   100: 'SFProDisplay-Ultralight',
@@ -252,7 +252,7 @@ const SF_PRO_WEIGHTS: Record<number, string> = {
 };
 
 function mapFontWeight(weight: number): string {
-  // Найти ближайший вес
+  // Find closest weight
   const weights = Object.keys(SF_PRO_WEIGHTS).map(Number).sort((a, b) => a - b);
   let closest = weights[0];
 
@@ -266,10 +266,10 @@ function mapFontWeight(weight: number): string {
 }
 
 /**
- * Генерация имени типографики на основе размера
+ * Generate typography name based on size
  */
 function suggestTypographyName(fontSize: number, fontWeight: number): string {
-  // Базовое имя по размеру
+  // Base name by size
   if (fontSize >= 28) return 'heading1';
   if (fontSize >= 22) return 'heading2';
   if (fontSize >= 18) return 'heading3';
@@ -281,12 +281,12 @@ function suggestTypographyName(fontSize: number, fontWeight: number): string {
 }
 
 // ============================================================================
-// Основной экстрактор / Main extractor
+// Main extractor / Main extractor
 // ============================================================================
 
 /**
- * Извлечение дизайн-токенов из узла Figma
- * Рекурсивно обходит дерево и собирает все уникальные токены
+ * Extract design tokens from Figma node
+ * Recursively traverses tree and collects all unique tokens
  */
 export function extractDesignTokens(
   node: any,
@@ -300,7 +300,7 @@ export function extractDesignTokens(
   const spacing = new Map<string, ExtractedSpacing>();
 
   /**
-   * Рекурсивный обход дерева / Recursive tree traversal
+   * Recursive tree traversal / Recursive tree traversal
    */
   function traverse(n: any, path: string = ''): void {
     if (!n) return;
@@ -308,7 +308,7 @@ export function extractDesignTokens(
     const nodePath = path ? `${path}/${n.name}` : n.name;
 
     // ═══════════════════════════════════════════════════════════════════
-    // Извлечение цветов и градиентов / Extract colors and gradients
+    // Extract colors and gradients / Extract colors and gradients
     // ═══════════════════════════════════════════════════════════════════
     if (n.fills && Array.isArray(n.fills)) {
       for (const fill of n.fills as FigmaFill[]) {
@@ -361,7 +361,7 @@ export function extractDesignTokens(
       }
     }
 
-    // Цвета из strokes / Colors from strokes
+    // Colors from strokes / Colors from strokes
     if (n.strokes && Array.isArray(n.strokes)) {
       for (const stroke of n.strokes) {
         if (stroke.type === 'SOLID' && stroke.color) {
@@ -389,7 +389,7 @@ export function extractDesignTokens(
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // Извлечение типографики / Extract typography
+    // Extract typography / Extract typography
     // ═══════════════════════════════════════════════════════════════════
     if (n.type === 'TEXT' && n.style) {
       const style = n.style as FigmaTextStyle;
@@ -429,7 +429,7 @@ export function extractDesignTokens(
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // Извлечение теней / Extract shadows
+    // Extract shadows / Extract shadows
     // ═══════════════════════════════════════════════════════════════════
     if (n.effects && Array.isArray(n.effects)) {
       for (const effect of n.effects as FigmaEffect[]) {
@@ -469,7 +469,7 @@ export function extractDesignTokens(
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // Извлечение радиусов / Extract corner radii
+    // Extract corner radii / Extract corner radii
     // ═══════════════════════════════════════════════════════════════════
     if (n.cornerRadius !== undefined) {
       const value = n.cornerRadius;
@@ -508,7 +508,7 @@ export function extractDesignTokens(
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // Извлечение отступов / Extract spacing
+    // Extract spacing / Extract spacing
     // ═══════════════════════════════════════════════════════════════════
     // Padding
     const paddings = [
@@ -557,7 +557,7 @@ export function extractDesignTokens(
       }
     }
 
-    // Рекурсия по детям / Recurse into children
+    // Recurse into children
     if (n.children && Array.isArray(n.children)) {
       for (const child of n.children) {
         traverse(child, nodePath);
@@ -565,10 +565,10 @@ export function extractDesignTokens(
     }
   }
 
-  // Запуск обхода / Start traversal
+  // Start traversal / Start traversal
   traverse(node);
 
-  // Сортировка по частоте использования / Sort by usage count
+  // Sort by usage count / Sort by usage count
   const sortByUsage = <T extends { usageCount: number }>(arr: T[]): T[] =>
     arr.sort((a, b) => b.usageCount - a.usageCount);
 
@@ -585,12 +585,12 @@ export function extractDesignTokens(
 }
 
 // ============================================================================
-// Слияние токенов / Token merging
+// Token merging / Token merging
 // ============================================================================
 
 /**
- * Слияние новых токенов в существующий theme.json
- * Добавляет новые токены, обновляет usageCount существующих
+ * Merge new tokens into existing theme.json
+ * Adds new tokens, updates usageCount for existing
  */
 export function mergeDesignTokens(
   existing: DesignTokens,
@@ -607,7 +607,7 @@ export function mergeDesignTokens(
     spacing: [...existing.spacing],
   };
 
-  // Слияние цветов / Merge colors
+  // Merge colors / Merge colors
   for (const newColor of newTokens.colors) {
     const existingColor = merged.colors.find(c => c.key === newColor.key);
     if (existingColor) {
@@ -618,7 +618,7 @@ export function mergeDesignTokens(
     }
   }
 
-  // Слияние типографики / Merge typography
+  // Merge typography / Merge typography
   for (const newTypo of newTokens.typography) {
     const existingTypo = merged.typography.find(t => t.key === newTypo.key);
     if (existingTypo) {
@@ -629,7 +629,7 @@ export function mergeDesignTokens(
     }
   }
 
-  // Аналогично для остальных / Same for others
+  // Same for others / Same for others
   for (const newShadow of newTokens.shadows) {
     const existingShadow = merged.shadows.find(s => s.key === newShadow.key);
     if (existingShadow) {
@@ -664,11 +664,11 @@ export function mergeDesignTokens(
 }
 
 // ============================================================================
-// Форматирование для вывода / Formatting for output
+// Formatting for output / Formatting for output
 // ============================================================================
 
 /**
- * Форматирование градиента в CSS/RN строку
+ * Format gradient as CSS/RN string
  */
 export function formatGradient(color: ExtractedColor): string {
   if (color.type !== 'gradient' || !color.gradientStops) return '';
@@ -685,7 +685,7 @@ export function formatGradient(color: ExtractedColor): string {
 }
 
 /**
- * Генерация React Native градиента (для expo-linear-gradient)
+ * Generate React Native gradient (for expo-linear-gradient)
  */
 export function formatRNGradient(color: ExtractedColor): {
   colors: string[];
@@ -698,7 +698,7 @@ export function formatRNGradient(color: ExtractedColor): {
   const colors = color.gradientStops.map(s => s.hex);
   const locations = color.gradientStops.map(s => s.position);
 
-  // Конвертация угла в start/end для linear градиента
+  // Convert angle to start/end for linear gradient
   if (color.gradientType === 'linear' && color.angle !== undefined) {
     const angleRad = (color.angle * Math.PI) / 180;
     return {
