@@ -1,6 +1,9 @@
-# ONE-SHOT Generator - Руководство по использованию
+# Internal API Reference
 
-ONE-SHOT генератор объединяет все этапы обнаружения паттернов и генерации кода в один вызов функции.
+> **Note:** This document describes the internal TypeScript API for direct programmatic usage.
+> For MCP tool usage via Claude, see the [README](../README.md).
+
+The ONE-SHOT generator combines all pattern detection and code generation steps into a single function call.
 
 ## Основные возможности
 

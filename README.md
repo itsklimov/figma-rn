@@ -1,39 +1,51 @@
 # figma-rn
 
-MCP server for generating production-ready React Native code from Figma designs.
+MCP server that generates production-ready React Native code from Figma designs in **one call**.
 
-## Features
+## How It Works
 
-- **One-shot generation** - Complete screens from Figma URL in a single call
-- **AST-based code generation** - Valid TypeScript syntax guaranteed (ts-morph)
-- **Delta E color matching** - Accurate theme color mapping
-- **Pattern recognition** - Detects and reuses existing components
-- **Project-agnostic** - Works with any React Native project via `.figmarc.json`
-- **Token-efficient** - Minimal context extraction (~5KB vs 50-100KB)
+```
+Figma URL  →  Auto-Detection  →  .figma/{category}/{name}/
+                                  ├── index.tsx      (component)
+                                  ├── meta.json      (metadata)
+                                  ├── screenshot.png (reference)
+                                  └── assets/        (images/icons)
+```
 
-## Installation
+**One URL = One complete folder.** No multi-step workflow. The server:
+
+1. Fetches the Figma node
+2. Detects patterns (list, form, modal, sheet, etc.)
+3. Categorizes into appropriate folder (screens/modals/sheets/components)
+4. Generates production-ready TypeScript code
+5. Downloads assets and captures screenshot for validation
+
+## Quick Start
+
+### Prerequisites
+
+- Node.js 18+
+- Figma Personal Access Token ([get one here](https://www.figma.com/developers/api#access-tokens))
+
+### Installation
 
 ```bash
 git clone https://github.com/itsklimov/figma-rn
 cd figma-rn
-npm install
-npm run build
+yarn install
+yarn build
 ```
 
-## Configuration
+### MCP Configuration
 
-1. Copy the example config:
-```bash
-cp .mcp.json.example .mcp.json
-```
+Add to your Claude Code or Claude Desktop config:
 
-2. Add your Figma token to `.mcp.json`:
 ```json
 {
   "mcpServers": {
     "figma": {
       "command": "node",
-      "args": ["dist/index.js"],
+      "args": ["/absolute/path/to/figma-rn/dist/index.js"],
       "env": {
         "FIGMA_TOKEN": "your_figma_personal_access_token"
       }
@@ -42,126 +54,199 @@ cp .mcp.json.example .mcp.json
 }
 ```
 
-Get your token: https://www.figma.com/developers/api#access-tokens
+### First Use
 
-## Quick Start
-
-After configuration, restart Claude Code and try:
+After configuration, restart Claude and try:
 
 ```
-"Generate HomeScreen from https://www.figma.com/design/FILE_ID?node-id=123-456"
+Generate a login screen from https://www.figma.com/design/FILE_ID?node-id=123-456
 ```
 
-## Available Tools
+## Tools
 
-### Primary Tools
+### `generate_screen`
 
-| Tool | Purpose |
-|------|---------|
-| `generate_screen` | Generate complete screen from Figma URL |
-| `generate_flow` | Generate multiple screens with shared navigation |
-| `analyze_element` | Detect element type before generation |
+Generate a complete React Native component from a single Figma URL.
 
-### Analysis Tools
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `figmaUrl` | Yes | Figma URL with `node-id` parameter |
+| `screenName` | No | Component name (auto-generated if not provided) |
+| `projectRoot` | No | Project root directory (defaults to cwd) |
 
-| Tool | Purpose |
-|------|---------|
-| `get_minimal_context` | Token-efficient design overview (~5KB YAML) |
-| `recognize_components` | Find existing component matches with confidence scores |
-| `get_design_spec` | Exact typography, spacing, colors |
-| `download_figma_images` | Fetch assets with smart categorization |
-
-### Setup Tools
-
-| Tool | Purpose |
-|------|---------|
-| `setup_project` | Create `.figmarc.json` for your project |
-
-## Recommended Workflow
-
-### Single Screen
+**Example:**
 ```
-1. analyze_element    → Understand what you're generating
-2. generate_screen    → Get production-ready code
+Generate PaymentModal from https://www.figma.com/design/ABC123?node-id=456-789
 ```
 
-### Multiple Screens
-```
-generate_flow → Screens + navigation types + shared types + index.ts
-```
+### `generate_flow`
 
-### First-Time Setup
+Generate multiple screens in parallel with shared navigation types.
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `screens` | Yes | Array of `{figmaUrl, screenName}` |
+| `options.generateNavigation` | No | Generate React Navigation types (default: true) |
+| `options.generateSharedTypes` | No | Generate shared TypeScript types (default: true) |
+| `options.generateIndex` | No | Generate barrel export (default: true) |
+
+**Example:**
 ```
-setup_project → Creates .figmarc.json with theme mappings
-```
-
-## Generated Code Example
-
-Input from Figma:
-```
-Frame with #7A54FF background, 16px padding, SF Pro 17pt text
-```
-
-Output:
-```typescript
-import { scale } from '@app/utils/responsive';
-import { useTheme } from '@app/contexts/ThemeContext';
-
-export const MyScreen = () => {
-  const { styles } = useTheme(createStyles);
-  return <View style={styles.container}>...</View>;
-};
-
-const createStyles = ({ palette }: ThemeType) => ({
-  container: {
-    backgroundColor: palette.primary,  // Delta E matched
-    padding: scale(16),                 // scale() as function
-  },
-}) as const;
+Generate auth flow:
+- LoginScreen from https://www.figma.com/design/ABC?node-id=1-1
+- RegisterScreen from https://www.figma.com/design/ABC?node-id=1-2
+- ForgotPasswordScreen from https://www.figma.com/design/ABC?node-id=1-3
 ```
 
 ## Auto-Detection
 
-The generator automatically detects and handles:
+The server automatically detects UI patterns and generates appropriate code:
 
-| Pattern | Generated Code |
-|---------|---------------|
-| Lists | FlatList with renderItem, keyExtractor, pagination |
-| Forms | react-hook-form + Zod validation + typed fields |
-| Bottom Sheets | @gorhom/bottom-sheet with snap points |
-| Modals | react-native-modal with animations |
-| Icons | Small vectors (<64px) - suggests icon component |
-| System elements | Keyboards, tab bars - skipped |
+| Pattern | Detection | Generated Code |
+|---------|-----------|----------------|
+| **Lists** | Repeating items, scroll containers | `FlatList` with `renderItem`, `keyExtractor` |
+| **Forms** | Input fields, submit buttons | `react-hook-form` + Zod validation |
+| **Bottom Sheets** | Partial overlays, drag handles | `@gorhom/bottom-sheet` with snap points |
+| **Modals** | Full overlays, close buttons | `react-native-modal` with animations |
+| **Action Sheets** | Button lists at bottom | Pressable action lists |
 
-## Project Configuration
+### Auto-Categorization
 
-For optimal code generation, run setup once per project:
+Elements are automatically placed in the right folder:
+
+| Category | Criteria | Output Path |
+|----------|----------|-------------|
+| `screens` | Full-screen frames | `.figma/screens/{name}/` |
+| `modals` | Overlay with backdrop | `.figma/modals/{name}/` |
+| `sheets` | Bottom-anchored partial overlay | `.figma/sheets/{name}/` |
+| `components` | Reusable UI elements | `.figma/components/{name}/` |
+
+## Output Structure
 
 ```
-"Set up figma-rn for this project"
+.figma/
+├── screens/
+│   └── HomeScreen/
+│       ├── index.tsx        # React Native component
+│       ├── meta.json        # Figma metadata, exports, dependencies
+│       ├── screenshot.png   # Visual reference for validation
+│       └── assets/          # Downloaded images and icons
+├── modals/
+├── sheets/
+├── components/
+├── manifest.json            # Registry of all generated elements
+├── config.json              # Auto-detected project settings
+└── theme.json               # Extracted design tokens
 ```
 
-Creates `.figmarc.json` with:
-- Theme file location and color tokens
-- Scale function detection (scale/RFValue/moderateScale)
-- Import path patterns (@app, ~, @components)
-- Style approach (useTheme, StyleSheet, styled-components)
+### Generated Code Features
 
-## Development
+- **AST-based generation** via ts-morph (valid TypeScript guaranteed)
+- **Delta E color matching** to your theme tokens
+- **Typography mapping** to your font system
+- **Scale function** support (scale/RFValue/moderateScale)
+- **Theme integration** (useTheme, StyleSheet, styled-components)
 
-```bash
-npm run dev    # Run with tsx (hot reload)
-npm run build  # Compile TypeScript
-npm start      # Run compiled version
+## Theme Integration
+
+On first use, the server auto-detects your project's theme configuration and creates `.figma/config.json`:
+
+```json
+{
+  "theme": {
+    "colorsFile": "src/theme/colors.ts",
+    "typographyFile": "src/theme/typography.ts",
+    "type": "palette-object"
+  },
+  "codeStyle": {
+    "scaleFunction": "scale",
+    "importPrefix": "@app/"
+  }
+}
+```
+
+Colors from Figma are matched to your theme using Delta E (perceptual color difference):
+
+```typescript
+// Figma: #7A54FF → Matched to: palette.primary
+backgroundColor: palette.primary,
 ```
 
 ## Examples
 
-See `docs/` for detailed examples:
-- [Batch Generation](docs/batch-generation.md)
-- [Flow Generation](docs/flow-generation.md)
-- [Form Detection](docs/form-hooks.md)
+### Single Screen
+
+```
+Generate ProductDetailScreen from https://www.figma.com/design/ABC?node-id=10-20
+```
+
+Output:
+```typescript
+// .figma/screens/ProductDetailScreen/index.tsx
+import { View, Text, Image, ScrollView } from 'react-native';
+import { useTheme } from '@app/contexts/ThemeContext';
+import { scale } from '@app/utils/responsive';
+
+export interface ProductDetailScreenProps {
+  productId: string;
+}
+
+export const ProductDetailScreen = ({ productId }: ProductDetailScreenProps) => {
+  const { styles } = useTheme(createStyles);
+  // ...
+};
+```
+
+### Form Screen
+
+```
+Generate CheckoutForm from https://www.figma.com/design/ABC?node-id=30-40
+```
+
+Output includes:
+- Form component with `react-hook-form`
+- Zod validation schema
+- TypeScript interfaces for form data
+
+### Multiple Screens
+
+```
+Generate onboarding flow with screens:
+- WelcomeScreen from https://www.figma.com/design/ABC?node-id=1-1
+- FeaturesScreen from https://www.figma.com/design/ABC?node-id=1-2
+- GetStartedScreen from https://www.figma.com/design/ABC?node-id=1-3
+```
+
+Output includes:
+- All three screen components
+- React Navigation types
+- Shared TypeScript types
+- Barrel export (`index.ts`)
+
+## Deduplication
+
+- **Same URL** → Updates existing component (designers may have made changes)
+- **Same name** → Auto-suffixed to ensure uniqueness (e.g., `Screen2`)
+- **Tracking** → All generations logged in `.figma/manifest.json`
+
+## Development
+
+```bash
+yarn dev      # Run with hot reload (tsx)
+yarn build    # Compile TypeScript
+yarn start    # Run compiled version
+yarn test     # Run tests
+```
+
+## Documentation
+
+- [Flow Generation](docs/flow-generation.md) - Multi-screen generation details
+- [Form Detection](docs/form-hooks.md) - Form pattern detection internals
+- [Data Models](docs/data-model-generator.md) - Data model inference
+- [Internal API](docs/api.md) - Programmatic TypeScript API (advanced)
 
 ## License
 
 [PolyForm Small Business License 1.0.0](LICENSE.md)
+
+Free for companies with <100 employees and <$1M revenue. See license for details.

@@ -390,33 +390,6 @@ if (criticalFailed.length > 0) {
 }
 ```
 
-## Migration from Batch Generator
-
-Если вы использовали `batch-generator`, миграция простая:
-
-```typescript
-// Старый способ (batch-generator)
-const batchResult = await generateBatch(
-  { screens, sharedTypesPath, generateNavigation, generateIndex },
-  figmaToken
-);
-
-// Новый способ (flow-generator)
-const flowResult = await generateCompleteFlow(
-  figmaToken,
-  screens,
-  { generateNavigation, generateSharedTypes: true, generateIndex }
-);
-```
-
-**Отличия Flow Generator от Batch Generator:**
-
-1. ✅ Генерирует **несколько файлов на экран** (component, types, hooks)
-2. ✅ Обнаруживает **модели данных** автоматически
-3. ✅ Генерирует **React Query хуки**
-4. ✅ Предоставляет детальную информацию о каждом экране
-5. ✅ Более гибкие опции генерации
-
 ## Troubleshooting
 
 ### Ошибка: "Узел не найден"
@@ -475,4 +448,4 @@ Promise<FlowResult> с полными результатами генераци�
 
 ## License
 
-MIT
+[PolyForm Small Business License 1.0.0](../LICENSE.md)
