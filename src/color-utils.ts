@@ -1,0 +1,20 @@
+/**
+ * Утилиты для работы с цветами
+ */
+
+interface FigmaColor {
+  r: number;
+  g: number;
+  b: number;
+  a: number;
+}
+
+/**
+ * Преобразование Figma RGBA (0-1) в HEX строку
+ */
+export function rgbaToHex(color: FigmaColor | { r: number; g: number; b: number; a?: number }): string {
+  const r = Math.round(color.r * 255);
+  const g = Math.round(color.g * 255);
+  const b = Math.round(color.b * 255);
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`.toUpperCase();
+}

@@ -1,0 +1,50 @@
+{
+  "name": "figma-rn",
+  "version": "1.0.0",
+  "description": "MCP server for generating production-ready React Native code from Figma designs. AST-based generation, Delta E color matching, pattern recognition, project-agnostic theme mapping.",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "figma-rn": "dist/index.js"
+  },
+  "keywords": [
+    "figma",
+    "react-native",
+    "mcp",
+    "model-context-protocol",
+    "code-generation",
+    "design-to-code"
+  ],
+  "license": "PolyForm-Small-Business-1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/itsklimov/figma-rn"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "ajv": "^8.12.0",
+    "chroma-js": "^2.4.2",
+    "cosmiconfig": "^9.0.0",
+    "glob": "^10.3.10",
+    "prettier": "^3.2.0",
+    "string-similarity": "^4.0.4",
+    "ts-morph": "^21.0.0"
+  },
+  "devDependencies": {
+    "@types/chroma-js": "^2.4.0",
+    "@types/node": "^20.0.0",
+    "@types/string-similarity": "^4.0.0",
+    "@vitest/coverage-v8": "^3.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.0.0",
+    "vitest": "^3.0.0"
+  }
+}

@@ -1,0 +1,54 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Generated files
+generated/
+
+# Local config (contains tokens)
+.mcp.json
+.figmarc.json
+*.local.json
+
+# Claude Code settings
+.claude/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test output
+coverage/
+.nyc_output/
+
+# Figma MCP generated files
+.figma/
+
+# Local development (private, never committed)
+.local/
+*.private.*
+NOTES.md
+TODO.local.md
+
+# Yarn
+.yarn/install-state.gz
+.pnp.*
