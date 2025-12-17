@@ -470,8 +470,8 @@ function extractImageNodes(node: any, config?: ProjectConfig): ExtractedImage[] 
   const images: ExtractedImage[] = [];
   const seenComponentIds = new Set<string>();
 
-  // Icon pattern: Icon*, ic/*, ic, *_icon
-  const iconPattern = /^Icon|^ic\/|^ic$|_icon$/i;
+  // Icon pattern: Icon*, ic/*, ic, *_icon, *-icon, star*, chevron*, arrow*
+  const iconPattern = /^Icon|^ic[\/\-_]|^ic$|[_\-]icon|star|chevron|arrow/i;
 
   // Image pattern: photo*, img*, image*, *_image
   const imagePattern = /^photo|^img$|^image|_image$/i;
@@ -500,11 +500,15 @@ function extractImageNodes(node: any, config?: ProjectConfig): ExtractedImage[] 
   function traverse(n: any): void {
     if (!n) return;
 
+    // Skip hidden nodes - Figma API returns null for hidden node images
+    if (n.visible === false) return;
+
     const name = n.name || '';
     const type = n.type || '';
 
     // Determine asset type
-    const isIcon = type === 'INSTANCE' && iconPattern.test(name) && !systemPattern.test(name);
+    // Allow INSTANCE and FRAME types for icons (many icons are FRAME with vector children)
+    const isIcon = (type === 'INSTANCE' || type === 'FRAME') && iconPattern.test(name) && !systemPattern.test(name);
     const isImageByName = type === 'INSTANCE' && imagePattern.test(name) && !systemPattern.test(name);
     const isImageByFill = (type === 'RECTANGLE' || type === 'FRAME') && hasImageFill(n) && !systemPattern.test(name);
 
