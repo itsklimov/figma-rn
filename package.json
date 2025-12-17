@@ -1,27 +1,56 @@
 {
   "name": "figma-rn",
   "version": "1.0.0",
-  "description": "MCP server for generating production-ready React Native code from Figma designs. AST-based generation, Delta E color matching, pattern recognition, project-agnostic theme mapping.",
+  "description": "MCP server for Claude AI that generates production-ready React Native code from Figma designs. One-shot code generation with automatic pattern detection, AST-based TypeScript output, and Delta E color matching.",
   "type": "module",
   "main": "dist/index.js",
-  "bin": "dist/index.js",
+  "bin": {
+    "figma-rn": "dist/index.js"
+  },
   "keywords": [
-    "figma",
-    "react-native",
     "mcp",
     "model-context-protocol",
+    "figma",
+    "react-native",
     "code-generation",
-    "design-to-code"
+    "design-to-code",
+    "figma-to-code",
+    "figma-api",
+    "claude",
+    "anthropic",
+    "ai",
+    "typescript",
+    "ast",
+    "react-navigation",
+    "react-hook-form",
+    "zod",
+    "mobile-development",
+    "ui-components",
+    "design-system"
   ],
+  "author": "itsklimov",
   "license": "PolyForm-Small-Business-1.0.0",
+  "homepage": "https://github.com/itsklimov/figma-rn#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/itsklimov/figma-rn"
+    "url": "git+https://github.com/itsklimov/figma-rn.git"
   },
+  "bugs": {
+    "url": "https://github.com/itsklimov/figma-rn/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE.md"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
+    "prepublishOnly": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"

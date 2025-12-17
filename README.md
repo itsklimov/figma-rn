@@ -1,8 +1,14 @@
-# figma-rn
+# figma-rn — Figma to React Native MCP Server
 
-MCP server that generates production-ready React Native code from Figma designs in **one call**.
+[![MCP](https://img.shields.io/badge/MCP-Model%20Context%20Protocol-blue)](https://modelcontextprotocol.io)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)](https://www.typescriptlang.org/)
+[![License](https://img.shields.io/badge/License-PolyForm%20Small%20Business-green)](LICENSE.md)
 
-## How It Works
+**MCP server for Claude AI** that generates production-ready React Native code from Figma designs in **one call**.
+
+> Convert Figma designs to React Native components automatically. Works with Claude Code and Claude Desktop via Model Context Protocol (MCP).
+
+## How Figma to React Native Code Generation Works
 
 ```
 Figma URL  →  Auto-Detection  →  .figma/{category}/{name}/
@@ -12,12 +18,12 @@ Figma URL  →  Auto-Detection  →  .figma/{category}/{name}/
                                   └── assets/        (images/icons)
 ```
 
-**One URL = One complete folder.** No multi-step workflow. The server:
+**One URL = One complete folder.** No multi-step workflow. The MCP server:
 
-1. Fetches the Figma node
-2. Detects patterns (list, form, modal, sheet, etc.)
+1. Fetches the Figma node via API
+2. Detects UI patterns (list, form, modal, sheet, etc.)
 3. Categorizes into appropriate folder (screens/modals/sheets/components)
-4. Generates production-ready TypeScript code
+4. Generates production-ready TypeScript React Native code
 5. Downloads assets and captures screenshot for validation
 
 ## Quick Start
@@ -36,9 +42,9 @@ yarn install
 yarn build
 ```
 
-### MCP Configuration
+### Claude MCP Configuration
 
-Add to your Claude Code or Claude Desktop config:
+Add to your Claude Code or Claude Desktop MCP config:
 
 ```json
 {
@@ -54,7 +60,7 @@ Add to your Claude Code or Claude Desktop config:
 }
 ```
 
-### First Use
+### First Use with Claude
 
 After configuration, restart Claude and try:
 
@@ -62,9 +68,9 @@ After configuration, restart Claude and try:
 Generate a login screen from https://www.figma.com/design/FILE_ID?node-id=123-456
 ```
 
-## Tools
+## MCP Tools
 
-### `generate_screen`
+### `generate_screen` — Single Figma Frame to React Native
 
 Generate a complete React Native component from a single Figma URL.
 
@@ -79,9 +85,9 @@ Generate a complete React Native component from a single Figma URL.
 Generate PaymentModal from https://www.figma.com/design/ABC123?node-id=456-789
 ```
 
-### `generate_flow`
+### `generate_flow` — Multiple Screens with Navigation
 
-Generate multiple screens in parallel with shared navigation types.
+Generate multiple React Native screens in parallel with shared navigation types.
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
@@ -98,9 +104,9 @@ Generate auth flow:
 - ForgotPasswordScreen from https://www.figma.com/design/ABC?node-id=1-3
 ```
 
-## Auto-Detection
+## Automatic UI Pattern Detection
 
-The server automatically detects UI patterns and generates appropriate code:
+The MCP server automatically detects UI patterns and generates appropriate React Native code:
 
 | Pattern | Detection | Generated Code |
 |---------|-----------|----------------|
@@ -110,7 +116,7 @@ The server automatically detects UI patterns and generates appropriate code:
 | **Modals** | Full overlays, close buttons | `react-native-modal` with animations |
 | **Action Sheets** | Button lists at bottom | Pressable action lists |
 
-### Auto-Categorization
+### Smart Component Categorization
 
 Elements are automatically placed in the right folder:
 
@@ -121,7 +127,7 @@ Elements are automatically placed in the right folder:
 | `sheets` | Bottom-anchored partial overlay | `.figma/sheets/{name}/` |
 | `components` | Reusable UI elements | `.figma/components/{name}/` |
 
-## Output Structure
+## Generated React Native Code Structure
 
 ```
 .figma/
@@ -139,7 +145,7 @@ Elements are automatically placed in the right folder:
 └── theme.json               # Extracted design tokens
 ```
 
-### Generated Code Features
+### Code Generation Features
 
 - **AST-based generation** via ts-morph (valid TypeScript guaranteed)
 - **Delta E color matching** to your theme tokens
@@ -147,7 +153,7 @@ Elements are automatically placed in the right folder:
 - **Scale function** support (scale/RFValue/moderateScale)
 - **Theme integration** (useTheme, StyleSheet, styled-components)
 
-## Theme Integration
+## Theme Integration & Color Matching
 
 On first use, the server auto-detects your project's theme configuration and creates `.figma/config.json`:
 
@@ -172,9 +178,9 @@ Colors from Figma are matched to your theme using Delta E (perceptual color diff
 backgroundColor: palette.primary,
 ```
 
-## Examples
+## Usage Examples
 
-### Single Screen
+### Single Screen Generation
 
 ```
 Generate ProductDetailScreen from https://www.figma.com/design/ABC?node-id=10-20
@@ -197,7 +203,7 @@ export const ProductDetailScreen = ({ productId }: ProductDetailScreenProps) => 
 };
 ```
 
-### Form Screen
+### Form Screen with Validation
 
 ```
 Generate CheckoutForm from https://www.figma.com/design/ABC?node-id=30-40
@@ -208,7 +214,7 @@ Output includes:
 - Zod validation schema
 - TypeScript interfaces for form data
 
-### Multiple Screens
+### Multi-Screen Flow Generation
 
 ```
 Generate onboarding flow with screens:
@@ -223,7 +229,7 @@ Output includes:
 - Shared TypeScript types
 - Barrel export (`index.ts`)
 
-## Deduplication
+## Smart Deduplication
 
 - **Same URL** → Updates existing component (designers may have made changes)
 - **Same name** → Auto-suffixed to ensure uniqueness (e.g., `Screen2`)
@@ -244,6 +250,12 @@ yarn test     # Run tests
 - [Form Detection](docs/form-hooks.md) - Form pattern detection internals
 - [Data Models](docs/data-model-generator.md) - Data model inference
 - [Internal API](docs/api.md) - Programmatic TypeScript API (advanced)
+
+## Related
+
+- [Model Context Protocol](https://modelcontextprotocol.io) - The protocol this server implements
+- [Claude Code](https://claude.ai/code) - AI coding assistant that uses MCP
+- [Figma API](https://www.figma.com/developers/api) - Figma's REST API
 
 ## License
 
