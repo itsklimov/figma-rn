@@ -101,6 +101,28 @@ Verify branch state:
 **Note**: This step happens AFTER all startup todos are complete and you've automatically returned to discussion mode.
 
 After gathering context:
+
+### Orchestration Analysis (Before Todo Proposal)
+
+Before proposing todos, analyze the work for parallelization and delegation:
+
+1. **Scope Assessment**
+   - Is this substantial work (multiple files, complex logic)? → Plan for sub-agent delegation
+   - Or minor work (single file, simple change)? → Plan for direct execution
+
+2. **Parallelization Analysis**
+   - Which pieces of work are independent (can run in parallel)?
+   - Which have dependencies (must be sequential)?
+   - Are there file/module conflicts to avoid?
+
+3. **Structure Todos Accordingly**
+   - Group related work into single todos (avoid conflicts between parallel agents)
+   - For substantial work: structure todos so each can be delegated to a sub-agent
+   - Order dependent todos correctly (sequential items)
+   - Mark clearly: "parallel-safe" vs "depends on previous"
+
+### Implementation Proposal
+
 1. Analyze the task requirements thoroughly
 2. Propose implementation plan with structured format:
 

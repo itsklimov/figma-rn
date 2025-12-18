@@ -384,15 +384,21 @@ if (filePath && toolName === "Bash" &&
 if (STATE.flags.orchestrator_mode && !STATE.flags.bypass_mode) {
     if (CONFIG.blocked_actions.isToolBlocked(toolName)) {
         const todoList = STATE.todos.active.map((t, i) => `  #${i}: ${t.content}`).join('\n');
-        console.error(`[ORCHESTRATOR] You are in orchestrator mode. Cannot use ${toolName} directly.
-
-Delegate work to sub-agents using the Task tool:
-  Task({ subagent_type: "general-purpose", prompt: "Execute todo #N: [content]" })
+        console.error(`[ORCHESTRATOR MODE] Substantial work detected. Delegate to sub-agents.
 
 Your todos:
 ${todoList}
 
-To exit orchestrator mode and execute directly: say "exit orchestrator"`);
+To execute this work, spawn a sub-agent:
+  Task({
+    subagent_type: "general-purpose",
+    prompt: "Execute todo #N: [todo content]. [Additional context...]"
+  })
+
+For parallel work: spawn multiple Tasks in one message.
+For sequential work: spawn one at a time and review before continuing.
+
+To exit orchestrator mode: say "exit orchestrator"`);
         process.exit(2);
     }
 }
