@@ -685,13 +685,22 @@ if (!isApiCommand && taskStartDetected) {
         s.api.startup_load = true;
         s.todos.clearActive();
         s.todos.active = todos;
+        // Activate orchestrator mode immediately for task-startup
+        s.flags.orchestrator_mode = true;
     });
 
-    // Auto-load protocol content
+    // Auto-load protocol content with orchestrator notice
     if (protocolContent) {
-        context += `User triggered task startup. Protocol:\n${protocolContent}\n`;
+        context += `[TASK STARTUP PROTOCOL - ORCHESTRATOR MODE ACTIVE]
+
+You are in orchestrator mode for this task-startup. After completing the startup todos,
+you MUST propose implementation todos structured for sub-agent delegation.
+
+ALL implementation work will be delegated to sub-agents (even sequential work).
+
+Protocol:\n${protocolContent}\n`;
     } else {
-        context += "User triggered task startup. Read sessions/protocols/task-startup.md\n";
+        context += "[TASK STARTUP PROTOCOL - ORCHESTRATOR MODE ACTIVE]\nYou are in orchestrator mode. Read sessions/protocols/task-startup.md\n";
     }
 }
 //!<

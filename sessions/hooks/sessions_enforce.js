@@ -486,27 +486,13 @@ After the user approves with a trigger phrase, you may re-submit the updated tod
         }
     }
 
-    // Soft threshold: only activate orchestrator for substantial work
-    const isSubstantialWork = (todos) => {
-        if (todos.length >= 3) return true;
-        const substantialKeywords = ['implement', 'refactor', 'create', 'build', 'add feature', 'redesign', 'migrate'];
-        return todos.some(t =>
-            substantialKeywords.some(kw => (t.content || '').toLowerCase().includes(kw))
-        );
-    };
-
     editState(s => {
         if (!s.todos.storeTodos(incomingTodos)) {
             console.error("[TodoWrite Error] Failed to store todos - check format");
             process.exit(2);
         }
-        // Only activate orchestrator mode during task-startup protocol (implementation planning)
-        // Other protocols (task-creation, task-completion, context-compaction) → no enforcement
-        const isTaskStartup = s.active_protocol === 'task-startup';
-        if (s.mode === Mode.GO && isTaskStartup && isSubstantialWork(incomingTodos)) {
-            s.flags.orchestrator_mode = true;
-            s.orchestration.delegatable_todos = incomingTodos.map((_, i) => i);
-        }
+        // Orchestrator mode is now activated at task-startup trigger time,
+        // not here after TodoWrite
     });
 }
 //!<
