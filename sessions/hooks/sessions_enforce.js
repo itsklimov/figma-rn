@@ -381,7 +381,8 @@ if (filePath && toolName === "Bash" &&
 // --- All commands beyond here contain write patterns (read patterns exit early) ---
 
 //!> Orchestrator mode guard (main agent cannot write directly - must delegate)
-if (STATE.flags.orchestrator_mode && !STATE.flags.bypass_mode) {
+// Skip blocking for sub-agents - they ARE the delegated workers
+if (STATE.flags.orchestrator_mode && !STATE.flags.bypass_mode && !STATE.flags.subagent) {
     if (CONFIG.blocked_actions.isToolBlocked(toolName)) {
         const todoList = STATE.todos.active.map((t, i) => `  #${i}: ${t.content}`).join('\n');
         console.error(`[ORCHESTRATOR MODE] Substantial work detected. Delegate to sub-agents.
