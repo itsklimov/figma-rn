@@ -397,7 +397,7 @@ To execute this work, spawn a sub-agent:
   })
 
 For parallel work: spawn multiple Tasks in one message.
-For sequential work: spawn one at a time and review before continuing.
+For sequential work: spawn one at a time.
 
 To exit orchestrator mode: say "exit orchestrator"`);
         process.exit(2);

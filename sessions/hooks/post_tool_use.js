@@ -140,9 +140,7 @@ ORCHESTRATION WORKFLOW:
    - Use "Execute todo #N:" in prompt for tracking
    - Choose appropriate subagent_type per task
    - Spawn multiple Tasks in parallel when safe
-
-4. REVIEW: Approve/reject each sub-agent's output
-   - approve #N | reject #N [reason] | revise #N [notes]
+   - Sub-agents execute and return results (no approval needed)
 
 To exit and execute directly: say "exit orchestrator"
 `);
