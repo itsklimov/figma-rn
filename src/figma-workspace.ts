@@ -125,14 +125,22 @@ export interface ElementMeta {
     /** Destination ID (for navigation) */
     destinationId?: string;
   }>;
-  /** Extracted scrolls */
-  scrolls?: Array<{
-    /** Node ID */
+  /** Detected component groups (ratings, tabs, etc.) */
+  componentGroups?: Array<{
+    /** Parent node ID */
     nodeId: string;
-    /** Node name */
+    /** Parent node name */
     nodeName: string;
-    /** Scroll direction */
-    direction: 'HORIZONTAL' | 'VERTICAL' | 'BOTH';
+    /** Group type */
+    type: 'interactive-group';
+    /** Pattern type */
+    pattern: 'rating' | 'tabs' | 'segmented-control' | 'stepper' | 'toggle-group' | 'pagination' | 'unknown';
+    /** Number of items */
+    childCount: number;
+    /** Suggested component */
+    inferredComponent: string;
+    /** Confidence */
+    confidence: number;
   }>;
 }
 
@@ -1000,7 +1008,7 @@ export async function registerGeneration(
     totalNodes?: number;
     instanceCount?: number;
     interactions?: ElementMeta['interactions'];
-    scrolls?: ElementMeta['scrolls'];
+    componentGroups?: ElementMeta['componentGroups'];
   } = {}
 ): Promise<GenerationResult> {
   // Get manifest
@@ -1054,7 +1062,7 @@ export async function registerGeneration(
       ? options.tokens.colors.length + options.tokens.typography.length + options.tokens.shadows.length
       : 0,
     interactions: options.interactions,
-    scrolls: options.scrolls,
+    componentGroups: options.componentGroups,
   };
 
   await saveElementMeta(elementFolder, meta);

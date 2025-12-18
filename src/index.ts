@@ -472,7 +472,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             totalNodes: result.totalNodes,
             instanceCount: result.instanceCount,
             interactions: result.interactions,
-            scrolls: result.scrolls,
+            componentGroups: result.componentGroups,
           }
         );
 
