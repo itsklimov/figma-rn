@@ -1,17 +1,17 @@
 {
   "version": "1.0.0",
   "current_task": {
-    "name": null,
-    "file": null,
-    "branch": null,
-    "status": null,
-    "created": null,
-    "started": null,
+    "name": "h-implement-step4-quality",
+    "file": "h-implement-step4-quality.md",
+    "branch": "feature/step4-quality",
+    "status": "in-progress",
+    "created": "2025-12-17",
+    "started": "2025-12-17",
     "updated": null,
     "dependencies": null,
     "submodules": null
   },
-  "active_protocol": null,
+  "active_protocol": "task-startup",
   "api": {
     "startup_load": false,
     "completion": false,
@@ -21,24 +21,29 @@
   "todos": {
     "active": [
       {
-        "content": "Move h-implement-step3-codegen directory to tasks/done/",
-        "status": "completed",
-        "activeForm": "Moving task directory to done/"
-      },
-      {
-        "content": "Merge task/mapping-layer to dev",
+        "content": "Check git status and handle any uncommitted changes",
         "status": "in_progress",
-        "activeForm": "Merging to dev branch"
+        "activeForm": "Checking git status and handling uncommitted changes"
       },
       {
-        "content": "Push dev to remote",
+        "content": "Create/checkout task branch",
         "status": "pending",
-        "activeForm": "Pushing dev to remote"
+        "activeForm": "Creating/checking out task branch"
+      },
+      {
+        "content": "Verify context manifest for the task",
+        "status": "pending",
+        "activeForm": "Verifying context manifest"
+      },
+      {
+        "content": "Gather context for the task",
+        "status": "pending",
+        "activeForm": "Gathering context for the task"
       }
     ],
     "stashed": []
   },
-  "model": "opus",
+  "model": "sonnet",
   "flags": {
     "context_85": false,
     "context_90": false,
@@ -51,10 +56,30 @@
     "delegatable_todos": [
       0,
       1,
-      2
+      2,
+      3
     ],
-    "pending_delegations": {},
-    "review_queue": [],
+    "pending_delegations": {
+      "0": {
+        "status": "pending_review",
+        "started": "2025-12-18T06:17:51.242Z",
+        "completed": "2025-12-18T06:18:21.418Z"
+      }
+    },
+    "review_queue": [
+      {
+        "todo_index": 0,
+        "todo_content": "Create task file from template with appropriate priority, type, and structure",
+        "status": "pending_review",
+        "timestamp": "2025-12-18T06:17:12.275Z"
+      },
+      {
+        "todo_index": 0,
+        "todo_content": "Create task file from template with appropriate priority, type, and structure",
+        "status": "pending_review",
+        "timestamp": "2025-12-18T06:18:21.419Z"
+      }
+    ],
     "approved_results": []
   },
   "metadata": {}

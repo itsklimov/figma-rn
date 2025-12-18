@@ -262,6 +262,8 @@ if (STATE.mode === Mode.GO && discussionPhraseDetected) {
     editState(s => {
         s.mode = Mode.NO;
         s.todos.clearActive();
+        s.flags.orchestrator_mode = false;
+        s.orchestration.clear();
     });
     context += "[DAIC: EMERGENCY STOP] All tools locked. You are now in discussion mode. Re-align with your pair programmer.\n";
 }
