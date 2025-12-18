@@ -158,7 +158,7 @@ if (toolName === "TodoWrite") {
     if (freshState.flags.orchestrator_mode && !freshState.todos.allComplete()) {
         const todoList = freshState.todos.active.map((t, i) => `  #${i}: ${t.content}`).join('\n');
         console.error(`[ORCHESTRATOR MODE ACTIVATED]
-You are the orchestrator. ALL work must be done by sub-agents.
+Substantial work detected (${freshState.todos.active.length} todos). Delegation required.
 
 Your todos:
 ${todoList}
