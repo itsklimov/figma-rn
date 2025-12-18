@@ -4,14 +4,14 @@
     "name": "01-mapping-layer",
     "file": "h-implement-step3-codegen/01-mapping-layer.md",
     "branch": null,
-    "status": "in-progress",
+    "status": "completed",
     "created": null,
-    "started": "2025-12-17",
+    "started": null,
     "updated": null,
     "dependencies": null,
     "submodules": null
   },
-  "active_protocol": "task-startup",
+  "active_protocol": "task-completion",
   "api": {
     "startup_load": false,
     "completion": false,
@@ -21,29 +21,44 @@
   "todos": {
     "active": [
       {
-        "content": "Check git status and handle any uncommitted changes",
+        "content": "Remove hardcoded tokens from test scripts",
+        "status": "completed",
+        "activeForm": "Removing hardcoded tokens from test scripts"
+      },
+      {
+        "content": "Verify all success criteria are checked off",
+        "status": "completed",
+        "activeForm": "Verifying all success criteria are checked off"
+      },
+      {
+        "content": "Run code-review agent and address any critical issues",
+        "status": "completed",
+        "activeForm": "Addressing code review findings"
+      },
+      {
+        "content": "Run logging agent to consolidate work logs",
+        "status": "completed",
+        "activeForm": "Running logging agent"
+      },
+      {
+        "content": "Run service-documentation agent to update CLAUDE.md files and other documentation",
+        "status": "completed",
+        "activeForm": "Running service-documentation agent"
+      },
+      {
+        "content": "Mark task file complete and move to tasks/done/",
+        "status": "completed",
+        "activeForm": "Marking task file complete and archiving"
+      },
+      {
+        "content": "Commit changes (directory task - no merge until all subtasks complete)",
         "status": "in_progress",
-        "activeForm": "Checking git status and handling uncommitted changes"
+        "activeForm": "Committing changes"
       },
       {
-        "content": "Create/checkout task branch",
+        "content": "Push changes to remote",
         "status": "pending",
-        "activeForm": "Creating/checking out task branch"
-      },
-      {
-        "content": "Verify context manifest for the task",
-        "status": "pending",
-        "activeForm": "Verifying context manifest"
-      },
-      {
-        "content": "Gather context for the task",
-        "status": "pending",
-        "activeForm": "Gathering context for the task"
-      },
-      {
-        "content": "Plan task for parallel agent execution",
-        "status": "pending",
-        "activeForm": "Planning task for parallel agent execution"
+        "activeForm": "Pushing changes to remote"
       }
     ],
     "stashed": []
