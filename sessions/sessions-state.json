@@ -1,17 +1,17 @@
 {
   "version": "1.0.0",
   "current_task": {
-    "name": "02-generation",
-    "file": "h-implement-step3-codegen/02-generation.md",
+    "name": null,
+    "file": null,
     "branch": null,
-    "status": "in-progress",
+    "status": null,
     "created": null,
     "started": null,
     "updated": null,
     "dependencies": null,
     "submodules": null
   },
-  "active_protocol": "task-completion",
+  "active_protocol": null,
   "api": {
     "startup_load": false,
     "completion": false,
@@ -21,39 +21,19 @@
   "todos": {
     "active": [
       {
-        "content": "Verify all success criteria are checked off",
+        "content": "Move h-implement-step3-codegen directory to tasks/done/",
         "status": "completed",
-        "activeForm": "Verifying all success criteria are checked off"
+        "activeForm": "Moving task directory to done/"
       },
       {
-        "content": "Run code-review agent and address any critical issues",
-        "status": "completed",
-        "activeForm": "Running code-review agent"
-      },
-      {
-        "content": "Run logging agent to consolidate work logs",
-        "status": "completed",
-        "activeForm": "Running logging agent"
-      },
-      {
-        "content": "Run service-documentation agent to update CLAUDE.md files and other documentation",
-        "status": "completed",
-        "activeForm": "Running service-documentation agent"
-      },
-      {
-        "content": "Mark task file complete and move to tasks/done/",
-        "status": "completed",
-        "activeForm": "Marking task complete and archiving"
-      },
-      {
-        "content": "Commit changes (directory task - no merge until all subtasks complete)",
+        "content": "Merge task/mapping-layer to dev",
         "status": "in_progress",
-        "activeForm": "Committing changes"
+        "activeForm": "Merging to dev branch"
       },
       {
-        "content": "Push changes to remote",
+        "content": "Push dev to remote",
         "status": "pending",
-        "activeForm": "Pushing changes to remote"
+        "activeForm": "Pushing dev to remote"
       }
     ],
     "stashed": []
@@ -71,11 +51,7 @@
     "delegatable_todos": [
       0,
       1,
-      2,
-      3,
-      4,
-      5,
-      6
+      2
     ],
     "pending_delegations": {},
     "review_queue": [],
