@@ -233,13 +233,30 @@ if (STATE.mode === Mode.GO && toolName === "TodoWrite" && STATE.todos.allComplet
             console.error(`Your previous ${numRestored} todos have been restored:\n\n${JSON.stringify(restored, null, 2)}\n\nIf these todos are no longer relevant, you should clear them using: ${sessionsCmd} todos clear\nNote: You can only use this command immediately - it will be disabled after any other tool use.\n\n`);
         }
     } else {
+        const stillInOrchestrator = STATE.flags.orchestrator_mode;
         editState(s => {
             s.todos.active = [];
             s.mode = Mode.NO;
-            s.flags.orchestrator_mode = false;
-            s.orchestration.clear();
+            // Keep orchestrator_mode during task-startup (cleared on task completion or emergency stop)
+            if (s.active_protocol !== SessionsProtocol.START) {
+                s.flags.orchestrator_mode = false;
+                s.orchestration.clear();
+            }
         });
-        console.error("You have returned to discussion mode. You may now discuss next steps with the user.\n\n");
+
+        if (stillInOrchestrator && STATE.active_protocol === SessionsProtocol.START) {
+            console.error(`[DISCUSSION MODE - ORCHESTRATOR STILL ACTIVE]
+
+Startup todos complete. You are now in discussion mode.
+Orchestrator mode remains active for implementation planning.
+
+Next: Propose implementation todos for this task.
+Remember: ALL implementation work will be delegated to sub-agents.
+
+Structure your todos for delegation (parallel when safe, sequential when needed).\n\n`);
+        } else {
+            console.error("You have returned to discussion mode. You may now discuss next steps with the user.\n\n");
+        }
         mod = true;
     }
 }
