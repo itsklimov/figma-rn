@@ -205,6 +205,105 @@ describe('buildJSX', () => {
   });
 });
 
+describe('buildJSX accessibility', () => {
+  const baseBoundingBox = { x: 0, y: 0, width: 100, height: 100 };
+
+  it('should add accessibility props to Button', () => {
+    const node: ButtonIR = {
+      id: '1:1',
+      name: 'submitButton',
+      semanticType: 'Button',
+      boundingBox: baseBoundingBox,
+      styleRef: 'style_1',
+      label: 'Submit Order',
+      variant: 'primary',
+    };
+
+    const result = buildJSX(node, 0);
+    expect(result).toContain('accessibilityRole="button"');
+    expect(result).toContain('accessibilityLabel="Submit Order"');
+  });
+
+  it('should add accessibility props to Image', () => {
+    const node: ImageIR = {
+      id: '1:1',
+      name: 'productImage',
+      semanticType: 'Image',
+      boundingBox: baseBoundingBox,
+      styleRef: 'style_1',
+      imageRef: './product.png',
+    };
+
+    const result = buildJSX(node, 0);
+    expect(result).toContain('accessibilityRole="image"');
+    expect(result).toContain('accessibilityLabel="product Image"');
+  });
+
+  it('should add accessibility and hitSlop to small Icon', () => {
+    const node: IconIR = {
+      id: '1:1',
+      name: 'closeIcon',
+      semanticType: 'Icon',
+      boundingBox: { x: 0, y: 0, width: 24, height: 24 },
+      styleRef: 'style_1',
+      iconRef: './close.png',
+      size: 24,
+    };
+
+    const result = buildJSX(node, 0);
+    expect(result).toContain('accessibilityRole="button"');
+    expect(result).toContain('accessibilityLabel="close Icon"');
+    // hitSlop should be (44 - 24) / 2 = 10
+    expect(result).toContain('hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}');
+  });
+
+  it('should not add hitSlop to large Icon', () => {
+    const node: IconIR = {
+      id: '1:1',
+      name: 'largeIcon',
+      semanticType: 'Icon',
+      boundingBox: { x: 0, y: 0, width: 48, height: 48 },
+      styleRef: 'style_1',
+      iconRef: './large.png',
+      size: 48,
+    };
+
+    const result = buildJSX(node, 0);
+    expect(result).toContain('accessibilityRole="button"');
+    expect(result).not.toContain('hitSlop');
+  });
+
+  it('should wrap Icon in TouchableOpacity', () => {
+    const node: IconIR = {
+      id: '1:1',
+      name: 'menuIcon',
+      semanticType: 'Icon',
+      boundingBox: baseBoundingBox,
+      styleRef: 'style_1',
+      iconRef: './menu.png',
+      size: 24,
+    };
+
+    const result = buildJSX(node, 0);
+    expect(result).toContain('<TouchableOpacity');
+    expect(result).toContain('</TouchableOpacity>');
+    expect(result).toContain('<Image');
+  });
+
+  it('should derive readable a11y label from camelCase name', () => {
+    const node: ImageIR = {
+      id: '1:1',
+      name: 'userProfileAvatar',
+      semanticType: 'Image',
+      boundingBox: baseBoundingBox,
+      styleRef: 'style_1',
+    };
+
+    const result = buildJSX(node, 0);
+    expect(result).toContain('accessibilityLabel="user Profile Avatar"');
+  });
+});
+
 describe('collectStyleNames', () => {
   const baseBoundingBox = { x: 0, y: 0, width: 100, height: 100 };
   const baseLayout = {

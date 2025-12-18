@@ -6,13 +6,26 @@
  */
 
 // Main API
-export { generateComponent } from './component-builder.js';
-export type { GenerationResult, GenerationOptions } from './component-builder.js';
+export { generateComponent, generateComponentMultiFile } from './component-builder.js';
+export type {
+  GenerationResult,
+  GenerationOptions,
+  GeneratedFile,
+  MultiFileResult,
+} from './component-builder.js';
 
 // Individual builders (for advanced use cases)
 export { buildImports } from './imports-builder.js';
 export { buildJSX, collectStyleNames } from './jsx-builder.js';
 export { buildStyles } from './styles-builder.js';
+
+// List generation
+export { generateFlatList, generateItemComponent } from './list-generator.js';
+export type { FlatListResult } from './list-generator.js';
+
+// Token generation
+export { generateTokensFile, generateTokensIfNeeded } from './tokens-generator.js';
+export type { TokensGenerationResult } from './tokens-generator.js';
 
 // Utilities
 export { toValidIdentifier, escapeJSXText } from './utils.js';

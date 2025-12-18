@@ -1,15 +1,41 @@
 /**
  * JSX Builder - Transform IR tree to JSX string
+ * Includes accessibility props for production-ready components
  */
 
-import type { IRNode } from '../types.js';
+import type { IRNode, IconIR } from '../types.js';
 import { toValidIdentifier, escapeJSXText } from './utils.js';
+
+/** Minimum touch target size for comfortable interaction */
+const MIN_TOUCH_TARGET = 44;
 
 /**
  * Derive a valid JS style name from node name
  */
 function deriveStyleName(node: IRNode): string {
   return toValidIdentifier(node.name);
+}
+
+/**
+ * Calculate hitSlop needed to meet minimum touch target
+ */
+function calculateHitSlop(size: number): number {
+  if (size >= MIN_TOUCH_TARGET) return 0;
+  return Math.ceil((MIN_TOUCH_TARGET - size) / 2);
+}
+
+/**
+ * Derive accessibility label from node name
+ * Converts naming conventions to readable text and escapes quotes for JSX
+ */
+function deriveA11yLabel(nodeName: string): string {
+  // Convert camelCase/PascalCase/kebab-case to readable text
+  return nodeName
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/[-_]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/"/g, '\\"'); // Escape double quotes for JSX attribute
 }
 
 /**
@@ -47,22 +73,44 @@ ${spaces}</View>`;
       const source = node.imageRef
         ? `require('${node.imageRef}')`
         : `{ uri: '' } /* TODO: Add image source */`;
-      return `${spaces}<Image source={${source}} style={styles.${styleName}} />`;
+      const a11yLabel = deriveA11yLabel(node.name);
+      return `${spaces}<Image
+${spaces}  source={${source}}
+${spaces}  style={styles.${styleName}}
+${spaces}  accessibilityRole="image"
+${spaces}  accessibilityLabel="${a11yLabel}"
+${spaces}/>`;
     }
 
     case 'Button': {
       const escapedLabel = escapeJSXText(node.label);
-      return `${spaces}<TouchableOpacity style={styles.${styleName}} onPress={() => {}}>
+      return `${spaces}<TouchableOpacity
+${spaces}  style={styles.${styleName}}
+${spaces}  onPress={() => {}}
+${spaces}  accessibilityRole="button"
+${spaces}  accessibilityLabel="${escapedLabel}"
+${spaces}>
 ${spaces}  <Text style={styles.${styleName}Text}>${escapedLabel}</Text>
 ${spaces}</TouchableOpacity>`;
     }
 
     case 'Icon': {
       // Use iconRef if available, otherwise add placeholder comment
-      const iconSource = node.iconRef
-        ? `require('${node.iconRef}')`
+      const iconNode = node as IconIR;
+      const iconSource = iconNode.iconRef
+        ? `require('${iconNode.iconRef}')`
         : `{ uri: '' } /* TODO: Add icon source */`;
-      return `${spaces}<Image source={${iconSource}} style={styles.${styleName}} />`;
+      const hitSlop = calculateHitSlop(iconNode.size);
+      const a11yLabel = deriveA11yLabel(node.name);
+      const hitSlopProp = hitSlop > 0
+        ? `\n${spaces}  hitSlop={{ top: ${hitSlop}, bottom: ${hitSlop}, left: ${hitSlop}, right: ${hitSlop} }}`
+        : '';
+      return `${spaces}<TouchableOpacity
+${spaces}  accessibilityRole="button"
+${spaces}  accessibilityLabel="${a11yLabel}"${hitSlopProp}
+${spaces}>
+${spaces}  <Image source={${iconSource}} style={styles.${styleName}} />
+${spaces}</TouchableOpacity>`;
     }
 
     default: {

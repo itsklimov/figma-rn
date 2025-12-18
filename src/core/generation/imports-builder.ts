@@ -20,8 +20,11 @@ function collectComponents(node: IRNode, set: Set<string>): void {
       set.add('Text');
       break;
     case 'Image':
+      set.add('Image');
+      break;
     case 'Icon':
       set.add('Image');
+      set.add('TouchableOpacity');
       break;
     case 'Button':
       set.add('TouchableOpacity');
