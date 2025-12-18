@@ -43,9 +43,10 @@ function deriveA11yLabel(nodeName: string): string {
  *
  * @param node - IR node to transform
  * @param indent - Current indentation level
+ * @param imagePathMap - Optional mapping from imageRef to local file path
  * @returns JSX string
  */
-export function buildJSX(node: IRNode, indent: number = 0): string {
+export function buildJSX(node: IRNode, indent: number = 0, imagePathMap?: Map<string, string>): string {
   const spaces = '  '.repeat(indent);
   const styleName = deriveStyleName(node);
 
@@ -56,7 +57,7 @@ export function buildJSX(node: IRNode, indent: number = 0): string {
         return `${spaces}<View style={styles.${styleName}} />`;
       }
       const childrenJSX = node.children
-        .map((child) => buildJSX(child, indent + 1))
+        .map((child) => buildJSX(child, indent + 1, imagePathMap))
         .join('\n');
       return `${spaces}<View style={styles.${styleName}}>
 ${childrenJSX}
@@ -69,10 +70,15 @@ ${spaces}</View>`;
     }
 
     case 'Image': {
-      // Use imageRef if available, otherwise add placeholder comment
-      const source = node.imageRef
-        ? `require('${node.imageRef}')`
-        : `{ uri: '' } /* TODO: Add image source */`;
+      // Use imageRef if available, with mapping to local path
+      let source: string;
+      if (node.imageRef && imagePathMap?.has(node.imageRef)) {
+        source = `require('${imagePathMap.get(node.imageRef)}')`;
+      } else if (node.imageRef) {
+        source = `{ uri: '' } /* TODO: Image ref: ${node.imageRef} */`;
+      } else {
+        source = `{ uri: '' } /* TODO: Add image source */`;
+      }
       const a11yLabel = deriveA11yLabel(node.name);
       return `${spaces}<Image
 ${spaces}  source={${source}}
@@ -95,11 +101,16 @@ ${spaces}</TouchableOpacity>`;
     }
 
     case 'Icon': {
-      // Use iconRef if available, otherwise add placeholder comment
+      // Use iconRef if available, with mapping to local path
       const iconNode = node as IconIR;
-      const iconSource = iconNode.iconRef
-        ? `require('${iconNode.iconRef}')`
-        : `{ uri: '' } /* TODO: Add icon source */`;
+      let iconSource: string;
+      if (iconNode.iconRef && imagePathMap?.has(iconNode.iconRef)) {
+        iconSource = `require('${imagePathMap.get(iconNode.iconRef)}')`;
+      } else if (iconNode.iconRef) {
+        iconSource = `{ uri: '' } /* TODO: Icon ref: ${iconNode.iconRef} */`;
+      } else {
+        iconSource = `{ uri: '' } /* TODO: Add icon source */`;
+      }
       const hitSlop = calculateHitSlop(iconNode.size);
       const a11yLabel = deriveA11yLabel(node.name);
       const hitSlopProp = hitSlop > 0
