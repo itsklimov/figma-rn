@@ -490,6 +490,7 @@ class SessionsFlags {
         this.subagent = data.subagent || false;
         this.noob = data.noob !== undefined ? data.noob : true;
         this.bypass_mode = data.bypass_mode || false;
+        this.orchestrator_mode = data.orchestrator_mode || false;
     }
 
     clearFlags() {
@@ -497,6 +498,40 @@ class SessionsFlags {
         this.context_90 = false;
         this.subagent = false;
         this.bypass_mode = false;
+        this.orchestrator_mode = false;
+    }
+}
+
+class OrchestrationState {
+    constructor(data = {}) {
+        // Which todos can be executed in parallel (by index)
+        this.delegatable_todos = data.delegatable_todos || [];
+        // Current pending delegations: { todoIndex: { status, started, completed } }
+        this.pending_delegations = data.pending_delegations || {};
+        // Results from sub-agents awaiting review
+        this.review_queue = data.review_queue || [];
+        // Completed and approved results
+        this.approved_results = data.approved_results || [];
+    }
+
+    clear() {
+        this.delegatable_todos = [];
+        this.pending_delegations = {};
+        this.review_queue = [];
+        this.approved_results = [];
+    }
+
+    toDict() {
+        return {
+            delegatable_todos: this.delegatable_todos,
+            pending_delegations: this.pending_delegations,
+            review_queue: this.review_queue,
+            approved_results: this.approved_results
+        };
+    }
+
+    static fromDict(data) {
+        return new OrchestrationState(data || {});
     }
 }
 
@@ -615,6 +650,7 @@ class SessionsState {
         this.todos = new SessionsTodos(data.todos || {});
         this.model = data.model || Model.OPUS;
         this.flags = new SessionsFlags(data.flags || {});
+        this.orchestration = new OrchestrationState(data.orchestration || {});
         this.metadata = data.metadata || {};
     }
 
@@ -690,8 +726,10 @@ class SessionsState {
             context_90: context90,
             subagent: flagsData.subagent || false,
             noob: flagsData.noob !== undefined ? flagsData.noob : true,
-            bypass_mode: flagsData.bypass_mode || false
+            bypass_mode: flagsData.bypass_mode || false,
+            orchestrator_mode: flagsData.orchestrator_mode || false
         });
+        state.orchestration = OrchestrationState.fromDict(data.orchestration || {});
         state.metadata = data.metadata || {};
 
         return state;
@@ -710,6 +748,7 @@ class SessionsState {
             },
             model: this.model,
             flags: { ...this.flags },
+            orchestration: this.orchestration.toDict(),
             metadata: { ...this.metadata }
         };
     }
@@ -1197,6 +1236,7 @@ module.exports = {
     TaskState,
     CCTodo,
     SessionsFlags,
+    OrchestrationState,
     SessionsTodos,
     APIPerms,
     SessionsState,

@@ -380,6 +380,24 @@ if (filePath && toolName === "Bash" &&
 
 // --- All commands beyond here contain write patterns (read patterns exit early) ---
 
+//!> Orchestrator mode guard (main agent cannot write directly - must delegate)
+if (STATE.flags.orchestrator_mode && !STATE.flags.bypass_mode) {
+    if (CONFIG.blocked_actions.isToolBlocked(toolName)) {
+        const todoList = STATE.todos.active.map((t, i) => `  #${i}: ${t.content}`).join('\n');
+        console.error(`[ORCHESTRATOR] You are in orchestrator mode. Cannot use ${toolName} directly.
+
+Delegate work to sub-agents using the Task tool:
+  Task({ subagent_type: "general-purpose", prompt: "Execute todo #N: [content]" })
+
+Your todos:
+${todoList}
+
+To exit orchestrator mode and execute directly: say "exit orchestrator"`);
+        process.exit(2);
+    }
+}
+//!<
+
 //!> Discussion mode guard (block write tools)
 if (STATE.mode === Mode.NO && !STATE.flags.bypass_mode) {
     if (CONFIG.blocked_actions.isToolBlocked(toolName)) {
@@ -463,6 +481,11 @@ After the user approves with a trigger phrase, you may re-submit the updated tod
         if (!s.todos.storeTodos(incomingTodos)) {
             console.error("[TodoWrite Error] Failed to store todos - check format");
             process.exit(2);
+        }
+        // Activate orchestrator mode when loading NEW todos in implementation mode
+        if (s.mode === Mode.GO && incomingTodos.length > 0) {
+            s.flags.orchestrator_mode = true;
+            s.orchestration.delegatable_todos = incomingTodos.map((_, i) => i);
         }
     });
 }
