@@ -4,14 +4,14 @@
     "name": "h-implement-step4-quality",
     "file": "h-implement-step4-quality.md",
     "branch": "feature/step4-quality",
-    "status": "in-progress",
+    "status": "completed",
     "created": "2025-12-17",
-    "started": "2025-12-17",
+    "started": null,
     "updated": null,
     "dependencies": null,
     "submodules": null
   },
-  "active_protocol": "task-startup",
+  "active_protocol": "task-completion",
   "api": {
     "startup_load": false,
     "completion": false,
@@ -21,24 +21,39 @@
   "todos": {
     "active": [
       {
-        "content": "Check git status and handle any uncommitted changes",
+        "content": "Verify all success criteria are checked off",
+        "status": "completed",
+        "activeForm": "Verifying all success criteria are checked off"
+      },
+      {
+        "content": "Run code-review agent and address any critical issues",
+        "status": "completed",
+        "activeForm": "Running code-review agent"
+      },
+      {
+        "content": "Run logging agent to consolidate work logs",
+        "status": "completed",
+        "activeForm": "Running logging agent"
+      },
+      {
+        "content": "Run service-documentation agent to update CLAUDE.md files and other documentation",
+        "status": "completed",
+        "activeForm": "Running service-documentation agent"
+      },
+      {
+        "content": "Mark task file complete and move to tasks/done/",
+        "status": "completed",
+        "activeForm": "Marking task complete and archiving"
+      },
+      {
+        "content": "Commit changes and merge to dev",
         "status": "in_progress",
-        "activeForm": "Checking git status and handling uncommitted changes"
+        "activeForm": "Committing and merging to dev"
       },
       {
-        "content": "Create/checkout task branch",
+        "content": "Push changes to remote",
         "status": "pending",
-        "activeForm": "Creating/checking out task branch"
-      },
-      {
-        "content": "Verify context manifest for the task",
-        "status": "pending",
-        "activeForm": "Verifying context manifest"
-      },
-      {
-        "content": "Gather context for the task",
-        "status": "pending",
-        "activeForm": "Gathering context for the task"
+        "activeForm": "Pushing changes to remote"
       }
     ],
     "stashed": []
@@ -50,37 +65,11 @@
     "subagent": false,
     "noob": true,
     "bypass_mode": false,
-    "orchestrator_mode": true
+    "orchestrator_mode": false
   },
   "orchestration": {
-    "delegatable_todos": [
-      0,
-      1,
-      2,
-      3
-    ],
-    "pending_delegations": {
-      "0": {
-        "status": "pending_review",
-        "started": "2025-12-18T06:17:51.242Z",
-        "completed": "2025-12-18T06:18:21.418Z"
-      }
-    },
-    "review_queue": [
-      {
-        "todo_index": 0,
-        "todo_content": "Create task file from template with appropriate priority, type, and structure",
-        "status": "pending_review",
-        "timestamp": "2025-12-18T06:17:12.275Z"
-      },
-      {
-        "todo_index": 0,
-        "todo_content": "Create task file from template with appropriate priority, type, and structure",
-        "status": "pending_review",
-        "timestamp": "2025-12-18T06:18:21.419Z"
-      }
-    ],
-    "approved_results": []
+    "delegatable_todos": [],
+    "pending_delegations": {}
   },
   "metadata": {}
 }

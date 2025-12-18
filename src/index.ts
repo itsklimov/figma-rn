@@ -39,6 +39,9 @@ import {
 import { extractDesignTokens, type DesignTokens } from './design-tokens.js';
 import { autoGenerateColorMappings } from './auto-theme-mapper.js';
 
+// New clean architecture pipeline
+import { getScreenTool, executeGetScreen, formatGetScreenResponse } from './edge/tools/index.js';
+
 const FIGMA_TOKEN = process.env.FIGMA_TOKEN || '';
 
 if (!FIGMA_TOKEN) {
@@ -213,6 +216,11 @@ Just provide array of {figmaUrl, screenName} and get complete app structure.`,
   },
 
   // setup_project removed - config is now auto-detected on first use of any tool
+
+  // ───────────────────────────────────────────────────────────────────
+  // TOOL 3: get_screen - Clean architecture pipeline (Step 4)
+  // ───────────────────────────────────────────────────────────────────
+  getScreenTool,
 ];
 
 // Handle list_tools request
@@ -681,11 +689,37 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       // setup_project removed - config is now auto-detected on first use
 
+      // ═══════════════════════════════════════════════════════════════
+      // TOOL 3: get_screen (clean architecture pipeline)
+      // ═══════════════════════════════════════════════════════════════
+      case 'get_screen': {
+        const { figmaUrl, componentName, themeFilePath, outputDir } = args as {
+          figmaUrl: string;
+          componentName?: string;
+          themeFilePath?: string;
+          outputDir?: string;
+        };
+
+        console.error(`\n🎯 [GET_SCREEN] Processing ${figmaUrl}...`);
+
+        const result = await executeGetScreen(
+          { figmaUrl, componentName, themeFilePath, outputDir },
+          FIGMA_TOKEN
+        );
+
+        const response = formatGetScreenResponse(result);
+
+        return {
+          content: [{ type: 'text', text: response }],
+          isError: !result.success,
+        };
+      }
+
       default:
         return {
           content: [{
             type: 'text',
-            text: `Unknown tool: ${name}\n\nAvailable tools:\n- analyze_element\n- generate_screen\n- generate_flow`,
+            text: `Unknown tool: ${name}\n\nAvailable tools:\n- generate_screen\n- generate_flow\n- get_screen`,
           }],
           isError: true,
         };

@@ -12,6 +12,20 @@ export interface TokenMappings {
 }
 
 /**
+ * Create empty token mappings
+ * Used when no project theme is available
+ */
+export function createEmptyMappings(): TokenMappings {
+  return {
+    colors: {},
+    spacing: {},
+    radii: {},
+    typography: {},
+    shadows: {},
+  };
+}
+
+/**
  * Match a single value to project tokens
  * Returns theme path if matched, original value as string otherwise
  */

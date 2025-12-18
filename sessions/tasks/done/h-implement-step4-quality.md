@@ -1,7 +1,7 @@
 ---
 name: h-implement-step4-quality
 branch: feature/step4-quality
-status: pending
+status: completed
 created: 2025-12-17
 ---
 
@@ -51,24 +51,25 @@ src/edge/tools/
 ## Success Criteria
 
 ### Detection Layer (4.1 + 4.2)
-- [ ] `list-detector.ts` identifies repeating items in IR tree and returns `ListHint[]`
-- [ ] `repetition-detector.ts` identifies repeated blocks (>=2 occurrences) and returns `ComponentHint[]`
-- [ ] `runDetectors()` orchestrates all detectors and returns `DetectionResult`
+- [x] `list-detector.ts` identifies repeating items in IR tree and returns `ListHint[]`
+- [x] `repetition-detector.ts` identifies repeated blocks (>=2 occurrences) and returns `ComponentHint[]`
+- [x] `runDetectors()` orchestrates all detectors and returns `DetectionResult`
 
 ### Generation Enhancements (4.3 + 4.4)
-- [ ] `tokens-generator.ts` produces `generatedTokens.ts` when no project theme is provided
-- [ ] `jsx-builder.ts` adds a11y props (accessibilityRole/Label, hitSlop for small icons)
-- [ ] `list-generator.ts` produces FlatList with renderItem and Item type from `ListHint`
-- [ ] `component-builder.ts` consumes detection hints and produces multi-file output
+- [x] `tokens-generator.ts` produces `generatedTokens.ts` when no project theme is provided
+- [x] `jsx-builder.ts` adds a11y props (accessibilityRole/Label, hitSlop for small icons)
+- [x] `list-generator.ts` produces FlatList with renderItem and Item type from `ListHint`
+- [x] `component-builder.ts` consumes detection hints and produces multi-file output
 
 ### Integration
-- [ ] `get_screen` MCP tool exposes full pipeline (Figma URL → generated code)
-- [ ] Generated code compiles without TypeScript errors
+- [x] `get_screen` MCP tool exposes full pipeline (Figma URL → generated code)
+- [x] Generated code compiles without TypeScript errors
 - [ ] End-to-end test with real Figma design produces usable React Native component
+  - Note: Deferred to `h-implement-get-screen-pipeline` task (image paths, file I/O, screenshots needed)
 
 ### Quality
-- [ ] Unit tests for detection layer
-- [ ] Unit tests for new generation modules
+- [x] Unit tests for detection layer (14 tests)
+- [x] Unit tests for new generation modules (28 tests)
 
 ## Context Manifest
 <!-- Added by context-gathering agent -->
@@ -516,5 +517,56 @@ ellipsizeMode="tail"
 - See `.local/architecture-blueprint.md` for module structure
 
 ## Work Log
-<!-- Updated as work progresses -->
-- [2025-12-17] Task created
+
+### 2025-12-17
+
+#### Completed
+
+**Detection Layer Implementation**
+- Created `src/core/detection/types.ts` with DetectionResult, ListHint, ComponentHint interfaces
+- Implemented `src/core/detection/list-detector.ts` with repeating item detection (3+ similar children)
+- Implemented `src/core/detection/repetition-detector.ts` with repeated block detection (structural similarity)
+- Created `src/core/detection/index.ts` barrel export with runDetectors() orchestrator
+- Added 14 unit tests for detection layer (list detection, repetition detection, edge cases)
+
+**Generation Enhancements**
+- Enhanced `src/core/generation/jsx-builder.ts` with accessibility props:
+  - accessibilityRole/Label for buttons and images
+  - hitSlop for small icons (<44px touch targets)
+  - numberOfLines for text overflow handling
+- Created `src/core/generation/list-generator.ts` for FlatList code generation from ListHint
+- Created `src/core/generation/tokens-generator.ts` for fallback generatedTokens.ts file generation
+- Enhanced `src/core/generation/component-builder.ts` to consume detection hints and support multi-file output
+- Added 28 unit tests for new generation modules (list generation, tokens generation, multi-file output)
+
+**MCP Tool Integration**
+- Created `src/edge/tools/get-screen.ts` MCP tool exposing full pipeline (Figma URL to code)
+- Wired get_screen tool into `src/index.ts` MCP server with proper request handling
+- Tool integrates: fetch → normalize → layout → recognize → detect → generate flow
+
+**Quality Assurance**
+- Fixed division by zero edge case in list detector
+- Added null checks for defensive programming
+- Fixed quote escaping in JSX text generation
+- Added cycle detection to prevent infinite loops in tree traversal
+- All 253 tests passing (42 new, 211 existing)
+- TypeScript compilation successful with no errors
+
+#### Decisions
+- Detection layer runs after semantic recognition, before code generation (maintains pipeline separation)
+- List detection threshold set to 3+ items (balances false positives vs. useful detection)
+- A11y props added inline to jsx-builder rather than post-processing (cleaner architecture)
+- Multi-file output uses flat structure with extractedComponents array (extensible for future component extraction)
+- Deferred end-to-end Figma integration test to separate task due to file I/O and screenshot requirements
+
+#### Discovered
+- Quote escaping needed special attention for JSX text content with apostrophes
+- Cycle detection essential for tree traversal algorithms operating on IR tree
+- Hit slop calculation benefits from considering both icon size and parent container
+- Token generation requires consistent formatting to match project style conventions
+
+## Next Steps
+
+- Move to dedicated `h-implement-get-screen-pipeline` task for end-to-end testing with real Figma designs
+- Integration testing requires: image path handling, file I/O setup, screenshot validation
+- Consider component extraction implementation (repetition detector is ready, generator needed)

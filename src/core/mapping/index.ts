@@ -13,7 +13,7 @@ export type { TokenMappings } from './token-matcher.js';
 export { extractProjectTokens } from './theme-extractor.js';
 
 // Token matching
-export { matchTokens } from './token-matcher.js';
+export { matchTokens, createEmptyMappings } from './token-matcher.js';
 
 // Color utilities (for advanced use cases)
 export { hexToLab, labDistance, findClosestColor } from './color-matcher.js';

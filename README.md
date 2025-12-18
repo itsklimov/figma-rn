@@ -104,6 +104,32 @@ Generate auth flow:
 - ForgotPasswordScreen from https://www.figma.com/design/ABC?node-id=1-3
 ```
 
+### `get_screen` — New Architecture Pipeline
+
+**Note**: This is the new clean architecture implementation. Uses the modular pipeline (normalize → layout → recognize → detect → generate) instead of the legacy one-shot generator.
+
+Generate production-ready React Native code with quality improvements:
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `figmaUrl` | Yes | Figma URL with `node-id` parameter |
+| `componentName` | No | Component name (defaults to Figma node name) |
+| `themeFilePath` | No | Path to project theme file for token matching |
+| `outputDir` | No | Output directory (defaults to "components") |
+
+**Features**:
+- Automatic list detection → `FlatList` generation with type-safe `renderItem`
+- Accessibility props: `accessibilityRole`, `accessibilityLabel`, `hitSlop` for small icons
+- Token extraction and mapping to project theme
+- Multi-file output: Main component + extracted components + generated tokens
+- Unmapped tokens report
+
+**Example**:
+```
+Generate ProductCard from https://www.figma.com/design/ABC?node-id=123-456
+with theme from src/theme/index.ts
+```
+
 ## Automatic UI Pattern Detection
 
 The MCP server automatically detects UI patterns and generates appropriate React Native code:
