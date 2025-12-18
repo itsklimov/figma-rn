@@ -3,7 +3,7 @@
  * Supports both single-file and multi-file output with detection hints
  */
 
-import type { ScreenIR, DesignTokens } from '../types.js';
+import type { ScreenIR, DesignTokens, IRNode, StylesBundle } from '../types.js';
 import type { TokenMappings } from '../mapping/token-matcher.js';
 import type { DetectionResult, ComponentHint, ListHint } from '../detection/types.js';
 import { buildImports } from './imports-builder.js';
@@ -38,6 +38,8 @@ export interface GenerationOptions {
   hasProjectTheme?: boolean;
   /** Output directory for generated files */
   outputDir?: string;
+  /** Mapping from imageRef to local file path */
+  imagePathMap?: Map<string, string>;
 }
 
 /**
@@ -137,7 +139,7 @@ export function generateComponent(
   const imports = buildImports(screen.root);
 
   // 3. Build JSX from IR tree (indented for return statement)
-  const jsx = buildJSX(screen.root, 2);
+  const jsx = buildJSX(screen.root, 2, options?.imagePathMap);
 
   // 4. Build StyleSheet from StylesBundle with mappings
   const { code: stylesCode, unmapped } = buildStyles(
@@ -221,7 +223,13 @@ export function generateComponentMultiFile(
       // Find the first instance to use as template
       const templateNode = findNodeById(screen.root, hint.instanceIds[0]);
       if (templateNode) {
-        const componentCode = generateExtractedComponent(hint, templateNode);
+        const componentCode = generateExtractedComponent(
+          hint,
+          templateNode,
+          screen.stylesBundle,
+          mappings,
+          options?.imagePathMap
+        );
         extractedComponents.push({
           path: `${outputDir}/${hint.componentName}.tsx`,
           content: componentCode,
@@ -275,9 +283,14 @@ export function generateComponentMultiFile(
 
 /**
  * Generate code for an extracted component
- * Note: templateNode is reserved for future full implementation (currently generates placeholder)
  */
-function generateExtractedComponent(hint: ComponentHint, _templateNode: any): string {
+function generateExtractedComponent(
+  hint: ComponentHint,
+  templateNode: IRNode,
+  stylesBundle: StylesBundle,
+  mappings: TokenMappings,
+  imagePathMap?: Map<string, string>
+): string {
   const { componentName, propsVariations } = hint;
 
   // Generate props interface
@@ -291,21 +304,23 @@ function generateExtractedComponent(hint: ComponentHint, _templateNode: any): st
 
   const propsParam = propsEntries ? `props: ${componentName}Props` : '';
 
-  return `import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+  // Build imports from template node
+  const imports = buildImports(templateNode);
+
+  // Build JSX from template node
+  const jsx = buildJSX(templateNode, 2, imagePathMap);
+
+  // Build styles from template node
+  const { code: stylesCode } = buildStyles(templateNode, stylesBundle, mappings);
+
+  return `${imports}
 
 ${propsInterface}export function ${componentName}(${propsParam}) {
   return (
-    <View style={styles.container}>
-      {/* TODO: Implement ${componentName} */}
-    </View>
+${jsx}
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    // TODO: Add styles from original node
-  },
-});
+${stylesCode}
 `;
 }

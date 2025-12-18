@@ -14,6 +14,33 @@ import { matchTokens, createEmptyMappings, type TokenMappings } from '../../core
 import { extractProjectTokens } from '../../core/mapping/theme-extractor.js';
 import { generateComponentMultiFile, type MultiFileResult } from '../../core/generation/index.js';
 import type { ScreenIR } from '../../core/types.js';
+import { downloadAssets } from '../asset-downloader.js';
+import { resolveComponentName } from '../name-resolver.js';
+import { writeGeneratedFiles, type WriteResult } from '../file-writer.js';
+import { getOrCreateManifest, type ManifestCategory } from '../../figma-workspace.js';
+import { join } from 'path';
+import { mkdir } from 'fs/promises';
+
+/**
+ * Parse Figma URL to extract fileKey and nodeId
+ */
+function parseFigmaUrl(figmaUrl: string): { fileKey: string; nodeId: string } | null {
+  // Supported formats:
+  // - https://www.figma.com/file/{fileKey}/...?node-id={nodeId}
+  // - https://www.figma.com/design/{fileKey}/...?node-id={nodeId}
+
+  const fileKeyMatch = figmaUrl.match(/figma\.com\/(file|design)\/([a-zA-Z0-9]+)/);
+  const nodeIdMatch = figmaUrl.match(/node-id=([^&]+)/);
+
+  if (!fileKeyMatch || !nodeIdMatch) {
+    return null;
+  }
+
+  const fileKey = fileKeyMatch[2];
+  const nodeId = decodeURIComponent(nodeIdMatch[1]).replace(/-/g, ':');
+
+  return { fileKey, nodeId };
+}
 
 /**
  * Tool definition for MCP server
@@ -62,6 +89,19 @@ Returns:
         type: 'string',
         description: 'Output directory for generated files (default: "components")',
       },
+      projectRoot: {
+        type: 'string',
+        description: 'Project root directory for file writing (default: current working directory)',
+      },
+      writeFiles: {
+        type: 'boolean',
+        description: 'Whether to write files to disk (default: true)',
+      },
+      category: {
+        type: 'string',
+        description: 'Category for the component (screens, modals, sheets, components, icons) (default: "screens")',
+        enum: ['screens', 'modals', 'sheets', 'components', 'icons'],
+      },
     },
     required: ['figmaUrl'],
   },
@@ -75,6 +115,9 @@ export interface GetScreenArgs {
   componentName?: string;
   themeFilePath?: string;
   outputDir?: string;
+  projectRoot?: string;
+  writeFiles?: boolean;
+  category?: string;
 }
 
 /**
@@ -84,7 +127,35 @@ export interface GetScreenResult {
   success: boolean;
   screenIR?: ScreenIR;
   multiFileResult?: MultiFileResult;
+  writeResult?: WriteResult;
   error?: string;
+}
+
+/**
+ * Capture screenshot as buffer (helper function)
+ */
+async function captureScreenshotAsBuffer(
+  client: FigmaClient,
+  fileKey: string,
+  nodeId: string
+): Promise<Buffer | undefined> {
+  try {
+    const exportResults = await client.exportImages(fileKey, [nodeId], {
+      format: 'png',
+      scale: 2,
+    });
+
+    if (!exportResults[0]?.url) return undefined;
+
+    const response = await fetch(exportResults[0].url);
+    if (!response.ok) return undefined;
+
+    const arrayBuffer = await response.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  } catch (error) {
+    console.error('Failed to capture screenshot:', error);
+    return undefined;
+  }
 }
 
 /**
@@ -101,7 +172,16 @@ export async function executeGetScreen(
   const { figmaUrl, componentName, themeFilePath, outputDir } = args;
 
   try {
-    // 1. Create Figma client and fetch node
+    // 1. Parse Figma URL to get fileKey and nodeId
+    const parsed = parseFigmaUrl(figmaUrl);
+    if (!parsed) {
+      return {
+        success: false,
+        error: 'Invalid Figma URL format',
+      };
+    }
+
+    // 2. Create Figma client and fetch node
     const client = new FigmaClient(figmaToken);
     const result = await client.fetchNodeByUrl(figmaUrl);
 
@@ -127,13 +207,13 @@ export async function executeGetScreen(
     // Transform raw API response to FigmaNode
     const figmaNode = transformNode(nodeData.document);
 
-    // 2. Transform to ScreenIR
+    // 3. Transform to ScreenIR
     const screenIR = transformToScreenIR(figmaNode);
 
-    // 3. Run detection layer
+    // 4. Run detection layer
     const detectionResult = runDetectors(screenIR.root);
 
-    // 4. Load project tokens if theme file provided
+    // 5. Load project tokens if theme file provided
     let tokenMappings: TokenMappings = createEmptyMappings();
     let hasProjectTheme = false;
 
@@ -150,18 +230,73 @@ export async function executeGetScreen(
       }
     }
 
-    // 5. Generate multi-file output
+    // 6. Get project root (default to cwd)
+    const projectRoot = args.projectRoot || process.cwd();
+
+    // 7. Get manifest and resolve component name
+    const manifest = await getOrCreateManifest(projectRoot);
+    const category = (args.category as ManifestCategory) || 'screens';
+    const resolved = resolveComponentName(
+      manifest,
+      category,
+      nodeId,
+      componentName || screenIR.name
+    );
+
+    // 8. Create element folder path for assets and screenshot
+    const elementFolder = join(projectRoot, '.figma', category, resolved.name);
+    const assetsDir = join(elementFolder, 'assets');
+
+    // 9. Create element folder and assets directory before downloading
+    await mkdir(elementFolder, { recursive: true });
+    await mkdir(assetsDir, { recursive: true });
+
+    // 10. Download assets and build image path map
+    let assetResult = await downloadAssets(client, parsed.fileKey, screenIR.root, assetsDir);
+
+    // 11. Capture screenshot as buffer
+    let screenshotBuffer: Buffer | undefined;
+    try {
+      screenshotBuffer = await captureScreenshotAsBuffer(client, parsed.fileKey, nodeId);
+    } catch (error) {
+      console.error('Failed to capture screenshot:', error);
+      // Continue without screenshot
+    }
+
+    // 12. Generate multi-file output with imagePathMap
     const multiFileResult = generateComponentMultiFile(screenIR, tokenMappings, {
-      componentName: componentName || undefined,
+      componentName: resolved.name,
       detectionResult,
       hasProjectTheme,
       outputDir: outputDir || 'components',
+      imagePathMap: assetResult.pathMap,
     });
+
+    // 13. Write files if enabled (default: true)
+    let writeResult: WriteResult | undefined;
+    if (args.writeFiles !== false) {
+      try {
+        writeResult = await writeGeneratedFiles({
+          projectRoot,
+          figmaUrl,
+          category,
+          componentName: resolved.name,
+          multiFileResult,
+          assets: assetResult.assets,
+          screenshot: screenshotBuffer,
+          figmaName: screenIR.name,
+        });
+      } catch (error) {
+        console.error('Failed to write files:', error);
+        // Continue without writing files
+      }
+    }
 
     return {
       success: true,
       screenIR,
       multiFileResult,
+      writeResult,
     };
   } catch (error) {
     return {
@@ -226,6 +361,27 @@ export function formatGetScreenResponse(result: GetScreenResult): string {
       response += `**Radii:** ${unmappedTokens.radii.join(', ')}\n`;
     }
     response += '\n';
+  }
+
+  // File writing summary
+  if (result.writeResult?.success) {
+    response += `## Files Written\n\n`;
+    response += `| File | Path |\n`;
+    response += `|------|------|\n`;
+    response += `| Main Component | \`${result.writeResult.indexPath}\` |\n`;
+    for (const path of result.writeResult.extractedPaths) {
+      response += `| Extracted Component | \`${path}\` |\n`;
+    }
+    if (result.writeResult.tokensPath) {
+      response += `| Tokens | \`${result.writeResult.tokensPath}\` |\n`;
+    }
+    if (result.writeResult.screenshotPath) {
+      response += `| Screenshot | \`${result.writeResult.screenshotPath}\` |\n`;
+    }
+    if (result.writeResult.assetsCount > 0) {
+      response += `| Assets | ${result.writeResult.assetsCount} files in \`.figma/${result.writeResult.folder}/assets/\` |\n`;
+    }
+    response += `\n`;
   }
 
   // Summary

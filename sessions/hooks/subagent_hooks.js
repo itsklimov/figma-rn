@@ -320,16 +320,6 @@ if (STATE.flags.orchestrator_mode) {
   const contextPath = path.join(BATCH_DIR, "orchestration-context.json");
   fs.writeFileSync(contextPath, JSON.stringify(orchestrationContext, null, 2));
 
-  // Mark this delegation as pending in state
-  if (todoIndex !== null) {
-    editState((s) => {
-      s.orchestration.pending_delegations[todoIndex] = {
-        status: "executing",
-        started: new Date().toISOString(),
-      };
-    });
-  }
-
   // Create orchestrator prefix to inject into first transcript chunk
   const todoContent =
     todoIndex !== null ? STATE.todos.active[todoIndex]?.content : "unknown";
