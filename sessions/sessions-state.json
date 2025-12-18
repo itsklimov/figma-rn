@@ -1,10 +1,10 @@
 {
   "version": "1.0.0",
   "current_task": {
-    "name": "01-mapping-layer",
-    "file": "h-implement-step3-codegen/01-mapping-layer.md",
+    "name": "02-generation",
+    "file": "h-implement-step3-codegen/02-generation.md",
     "branch": null,
-    "status": "completed",
+    "status": "in-progress",
     "created": null,
     "started": null,
     "updated": null,
@@ -21,11 +21,6 @@
   "todos": {
     "active": [
       {
-        "content": "Remove hardcoded tokens from test scripts",
-        "status": "completed",
-        "activeForm": "Removing hardcoded tokens from test scripts"
-      },
-      {
         "content": "Verify all success criteria are checked off",
         "status": "completed",
         "activeForm": "Verifying all success criteria are checked off"
@@ -33,7 +28,7 @@
       {
         "content": "Run code-review agent and address any critical issues",
         "status": "completed",
-        "activeForm": "Addressing code review findings"
+        "activeForm": "Running code-review agent"
       },
       {
         "content": "Run logging agent to consolidate work logs",
@@ -48,7 +43,7 @@
       {
         "content": "Mark task file complete and move to tasks/done/",
         "status": "completed",
-        "activeForm": "Marking task file complete and archiving"
+        "activeForm": "Marking task complete and archiving"
       },
       {
         "content": "Commit changes (directory task - no merge until all subtasks complete)",
@@ -69,7 +64,22 @@
     "context_90": false,
     "subagent": false,
     "noob": true,
-    "bypass_mode": false
+    "bypass_mode": false,
+    "orchestrator_mode": true
+  },
+  "orchestration": {
+    "delegatable_todos": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "pending_delegations": {},
+    "review_queue": [],
+    "approved_results": []
   },
   "metadata": {}
 }
