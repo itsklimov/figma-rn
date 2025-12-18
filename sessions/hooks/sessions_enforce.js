@@ -443,6 +443,8 @@ if (toolName === "TodoWrite" && !STATE.flags.bypass_mode) {
             editState(s => {
                 s.todos.clearActive();
                 s.mode = Mode.NO;
+                s.flags.orchestrator_mode = false;
+                s.orchestration.clear();
             });
 
             // Construct message directed at Claude with prescribed format

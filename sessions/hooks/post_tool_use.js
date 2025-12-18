@@ -202,6 +202,8 @@ if (STATE.mode === Mode.GO && toolName === "TodoWrite" && STATE.todos.allComplet
             s.active_protocol = null;
             s.current_task.clearTask();
             s.todos.active = [];
+            s.flags.orchestrator_mode = false;
+            s.orchestration.clear();
         });
         console.error(listOpenTasks());
         process.exit(0);
@@ -234,6 +236,8 @@ if (STATE.mode === Mode.GO && toolName === "TodoWrite" && STATE.todos.allComplet
         editState(s => {
             s.todos.active = [];
             s.mode = Mode.NO;
+            s.flags.orchestrator_mode = false;
+            s.orchestration.clear();
         });
         console.error("You have returned to discussion mode. You may now discuss next steps with the user.\n\n");
         mod = true;
