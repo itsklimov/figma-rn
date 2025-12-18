@@ -1,17 +1,17 @@
 {
   "version": "1.0.0",
   "current_task": {
-    "name": "h-implement-get-screen-pipeline",
-    "file": "h-implement-get-screen-pipeline.md",
-    "branch": "feature/get-screen-pipeline",
-    "status": "completed",
-    "created": "2025-12-17",
-    "started": null,
+    "name": "h-fix-config-and-screen-name-handling",
+    "file": "h-fix-config-and-screen-name-handling.md",
+    "branch": "fix/config-and-screen-name-handling",
+    "status": "in-progress",
+    "created": "2025-12-18",
+    "started": "2025-12-18",
     "updated": null,
     "dependencies": null,
     "submodules": null
   },
-  "active_protocol": "task-completion",
+  "active_protocol": "task-startup",
   "api": {
     "startup_load": false,
     "completion": false,
@@ -21,66 +21,36 @@
   "todos": {
     "active": [
       {
-        "content": "Fix unused variable in file-writer.ts",
-        "status": "completed",
-        "activeForm": "Fixing unused variable in file-writer.ts"
-      },
-      {
-        "content": "Fix asset download directory creation timing",
-        "status": "completed",
-        "activeForm": "Fixing asset download directory creation timing"
-      },
-      {
-        "content": "Consolidate sanitization utilities to shared module",
-        "status": "completed",
-        "activeForm": "Consolidating sanitization utilities"
-      },
-      {
-        "content": "Add explicit path validation to sanitization",
-        "status": "completed",
-        "activeForm": "Adding explicit path validation"
-      },
-      {
-        "content": "Add download progress logging",
-        "status": "completed",
-        "activeForm": "Adding download progress logging"
-      },
-      {
-        "content": "Run logging agent to consolidate work logs",
-        "status": "completed",
-        "activeForm": "Running logging agent to consolidate work logs"
-      },
-      {
-        "content": "Run service-documentation agent to update CLAUDE.md files and other documentation",
-        "status": "completed",
-        "activeForm": "Running service-documentation agent"
-      },
-      {
-        "content": "Mark task file complete and move to tasks/done/",
-        "status": "completed",
-        "activeForm": "Marking task file complete and moving to tasks/done/"
-      },
-      {
-        "content": "Commit changes and merge to dev",
+        "content": "Check git status and handle any uncommitted changes",
         "status": "in_progress",
-        "activeForm": "Committing changes and merging to dev"
+        "activeForm": "Checking git status"
       },
       {
-        "content": "Push changes to remote",
+        "content": "Create/checkout task branch",
         "status": "pending",
-        "activeForm": "Pushing changes to remote"
+        "activeForm": "Creating task branch"
+      },
+      {
+        "content": "Verify context manifest for the task",
+        "status": "pending",
+        "activeForm": "Verifying context manifest"
+      },
+      {
+        "content": "Gather context for the task",
+        "status": "pending",
+        "activeForm": "Gathering context"
       }
     ],
     "stashed": []
   },
-  "model": "sonnet",
+  "model": "opus",
   "flags": {
     "context_85": false,
     "context_90": false,
     "subagent": false,
     "noob": true,
     "bypass_mode": false,
-    "orchestrator_mode": false
+    "orchestrator_mode": true
   },
   "metadata": {}
 }
