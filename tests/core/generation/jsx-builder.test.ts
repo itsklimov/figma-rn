@@ -83,13 +83,31 @@ describe('buildJSX', () => {
       semanticType: 'Image',
       boundingBox: baseBoundingBox,
       styleRef: 'style_1',
-      imageRef: './assets/avatar.png',
+      imageRef: 'abc123',
     };
 
-    const result = buildJSX(node, 0);
+    const imagePathMap = new Map([
+      ['abc123', './assets/avatar.png'],
+    ]);
+
+    const result = buildJSX(node, 0, imagePathMap);
     expect(result).toContain('<Image');
     expect(result).toContain('style={styles.avatar}');
     expect(result).toContain("require('./assets/avatar.png')");
+  });
+
+  it('should generate Image with TODO for unmapped imageRef', () => {
+    const node: ImageIR = {
+      id: '1:1',
+      name: 'avatar',
+      semanticType: 'Image',
+      boundingBox: baseBoundingBox,
+      styleRef: 'style_1',
+      imageRef: 'abc123unmapped',
+    };
+
+    const result = buildJSX(node, 0);
+    expect(result).toContain('TODO: Image ref: abc123unmapped');
   });
 
   it('should generate Image with TODO for missing imageRef', () => {
@@ -133,11 +151,15 @@ describe('buildJSX', () => {
       semanticType: 'Icon',
       boundingBox: baseBoundingBox,
       styleRef: 'style_1',
-      iconRef: './assets/icons/settings.png',
+      iconRef: 'def456',
       size: 24,
     };
 
-    const result = buildJSX(node, 0);
+    const imagePathMap = new Map([
+      ['def456', './assets/icons/settings.png'],
+    ]);
+
+    const result = buildJSX(node, 0, imagePathMap);
     expect(result).toContain('<Image');
     expect(result).toContain('style={styles.settingsIcon}');
     expect(result).toContain("require('./assets/icons/settings.png')");

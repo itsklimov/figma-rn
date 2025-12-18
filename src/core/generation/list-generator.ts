@@ -5,6 +5,7 @@
 import type { IRNode, ContainerIR, CardIR, TextIR, ButtonIR } from '../types.js';
 import type { ListHint } from '../detection/types.js';
 import { toValidIdentifier, escapeJSXText } from './utils.js';
+import { buildJSX } from './jsx-builder.js';
 
 /**
  * Result of FlatList generation
@@ -34,13 +35,15 @@ function inferPropsFromNode(node: IRNode): Record<string, string> {
     switch (n.semanticType) {
       case 'Text': {
         const textNode = n as TextIR;
-        const propName = prefix ? `${prefix}Text` : toValidIdentifier(n.name);
+        // Always use the node's own name for uniqueness
+        const propName = toValidIdentifier(n.name);
         props[propName] = 'string';
         break;
       }
       case 'Button': {
         const buttonNode = n as ButtonIR;
-        const propName = prefix ? `${prefix}Label` : 'label';
+        // Always use the node's own name for uniqueness
+        const propName = toValidIdentifier(n.name);
         props[propName] = 'string';
         break;
       }
@@ -48,7 +51,7 @@ function inferPropsFromNode(node: IRNode): Record<string, string> {
       case 'Card': {
         const container = n as ContainerIR | CardIR;
         for (const child of container.children) {
-          extractProps(child, toValidIdentifier(n.name));
+          extractProps(child, ''); // Don't pass prefix to avoid name collisions
         }
         break;
       }
@@ -207,6 +210,67 @@ function findNodeById(node: IRNode, id: string, visited: Set<string> = new Set()
 }
 
 /**
+ * Build a map from text content to prop names for replacement
+ */
+function buildTextToPropMap(node: IRNode, prefix = ''): Map<string, string> {
+  const map = new Map<string, string>();
+
+  function traverse(n: IRNode, p: string): void {
+    switch (n.semanticType) {
+      case 'Text': {
+        const textNode = n as TextIR;
+        // Always use the node's own name for uniqueness (matches inferPropsFromNode)
+        const propName = toValidIdentifier(n.name);
+        map.set(textNode.text, propName);
+        break;
+      }
+      case 'Button': {
+        const buttonNode = n as ButtonIR;
+        // Always use the node's own name for uniqueness (matches inferPropsFromNode)
+        const propName = toValidIdentifier(n.name);
+        map.set(buttonNode.label, propName);
+        break;
+      }
+      case 'Container':
+      case 'Card': {
+        const container = n as ContainerIR | CardIR;
+        for (const child of container.children) {
+          traverse(child, ''); // Don't pass prefix to avoid name collisions
+        }
+        break;
+      }
+    }
+  }
+
+  traverse(node, prefix);
+  return map;
+}
+
+/**
+ * Replace hardcoded text values with prop references in JSX
+ */
+function replaceTextWithProps(jsx: string, textToPropMap: Map<string, string>): string {
+  let result = jsx;
+
+  // Replace text content: <Text ...>hardcoded text</Text> -> <Text ...>{propName}</Text>
+  for (const [text, propName] of textToPropMap.entries()) {
+    const escapedText = escapeJSXText(text);
+    // Replace in Text components
+    result = result.replace(
+      new RegExp(`<Text([^>]*)>${escapedText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</Text>`, 'g'),
+      `<Text$1>{${propName}}</Text>`
+    );
+    // Replace in TouchableOpacity (for buttons)
+    result = result.replace(
+      new RegExp(`<Text([^>]*)>${escapedText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</Text>`, 'g'),
+      `<Text$1>{${propName}}</Text>`
+    );
+  }
+
+  return result;
+}
+
+/**
  * Generate a complete item component for extraction
  */
 export function generateItemComponent(
@@ -220,6 +284,15 @@ export function generateItemComponent(
   // Generate simple item component
   const propsDestructure = Object.keys(props).join(', ');
 
+  // Generate JSX from template item
+  let itemJSX = buildJSX(templateItem, 2);
+
+  // Build map of text content to prop names
+  const textToPropMap = buildTextToPropMap(templateItem);
+
+  // Replace hardcoded text with prop references
+  itemJSX = replaceTextWithProps(itemJSX, textToPropMap);
+
   return `${typeDefinition}
 
 interface ${componentName}Props {
@@ -229,9 +302,7 @@ interface ${componentName}Props {
 export function ${componentName}({ item }: ${componentName}Props) {
   const { ${propsDestructure} } = item;
   return (
-    <View style={styles.${toValidIdentifier(templateItem.name)}}>
-      {/* TODO: Implement item rendering */}
-    </View>
+${itemJSX}
   );
 }`;
 }

@@ -160,7 +160,6 @@ if (STATE.mode === Mode.GO && toolName === "TodoWrite" && STATE.todos.allComplet
             s.current_task.clearTask();
             s.todos.active = [];
             s.flags.orchestrator_mode = false;
-            s.orchestration.clear();
         });
         console.error(listOpenTasks());
         process.exit(0);
@@ -197,7 +196,6 @@ if (STATE.mode === Mode.GO && toolName === "TodoWrite" && STATE.todos.allComplet
             // Keep orchestrator_mode during task-startup (cleared on task completion or emergency stop)
             if (s.active_protocol !== SessionsProtocol.START) {
                 s.flags.orchestrator_mode = false;
-                s.orchestration.clear();
             }
         });
 

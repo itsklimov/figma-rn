@@ -352,7 +352,6 @@ async function main() {
     await editState((s) => {
         s.flags.clearFlags();
         s.todos.clearActive();
-        s.orchestration.clear();
         const restored = s.todos.restoreStashed();
         STATE = s;
 

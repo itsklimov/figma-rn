@@ -263,7 +263,6 @@ if (STATE.mode === Mode.GO && discussionPhraseDetected) {
         s.mode = Mode.NO;
         s.todos.clearActive();
         s.flags.orchestrator_mode = false;
-        s.orchestration.clear();
     });
     context += "[DAIC: EMERGENCY STOP] All tools locked. You are now in discussion mode. Re-align with your pair programmer.\n";
 }
@@ -273,7 +272,6 @@ if (STATE.mode === Mode.GO && discussionPhraseDetected) {
 if (STATE.flags.orchestrator_mode && prompt.toLowerCase().includes('exit orchestrator')) {
     editState(s => {
         s.flags.orchestrator_mode = false;
-        s.orchestration.clear();  // Clean up state
         // Keep implementation mode so user can execute directly
     });
     context += `[ORCHESTRATOR EXITED] You may now execute directly using Edit/Write tools.\n`;
