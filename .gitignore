@@ -52,3 +52,10 @@ TODO.local.md
 # Yarn
 .yarn/install-state.gz
 .pnp.*
+
+# cc-sessions runtime files
+sessions/package.json
+sessions/transcripts/
+sessions/.archived/
+sessions/bin/sessions.bat
+sessions/bin/sessions

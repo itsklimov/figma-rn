@@ -1,0 +1,62 @@
+{
+  "trigger_phrases": {
+    "implementation_mode": [
+      "dev:"
+    ],
+    "discussion_mode": [
+      "ch:"
+    ],
+    "task_creation": [
+      "init:"
+    ],
+    "task_startup": [
+      "plan:"
+    ],
+    "task_completion": [
+      "done:"
+    ],
+    "context_compaction": [
+      "sq:"
+    ]
+  },
+  "blocked_actions": {
+    "implementation_only_tools": [
+      "Edit",
+      "Write",
+      "MultiEdit",
+      "NotebookEdit"
+    ],
+    "bash_read_patterns": [
+      "ls",
+      "git diff",
+      "cat",
+      "grep",
+      "find"
+    ],
+    "bash_write_patterns": [],
+    "extrasafe": false
+  },
+  "git_preferences": {
+    "add_pattern": "all",
+    "default_branch": "dev",
+    "commit_style": "detailed",
+    "auto_merge": true,
+    "auto_push": true,
+    "has_submodules": false
+  },
+  "environment": {
+    "os": "macos",
+    "shell": "zsh",
+    "developer_name": "Nikolay"
+  },
+  "features": {
+    "branch_enforcement": true,
+    "task_detection": true,
+    "auto_ultrathink": true,
+    "icon_style": "nerd_fonts",
+    "context_warnings": {
+      "warn_85": false,
+      "warn_90": false
+    }
+  }
+}

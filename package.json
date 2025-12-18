@@ -60,12 +60,14 @@
     "ajv": "^8.12.0",
     "chroma-js": "^2.4.2",
     "cosmiconfig": "^9.0.0",
+    "figma-api": "^2.1.0-beta",
     "glob": "^10.3.10",
     "prettier": "^3.2.0",
     "string-similarity": "^4.0.4",
     "ts-morph": "^21.0.0"
   },
   "devDependencies": {
+    "@figma/rest-api-spec": "^0.35.0",
     "@types/chroma-js": "^2.4.0",
     "@types/node": "^20.0.0",
     "@types/string-similarity": "^4.0.0",

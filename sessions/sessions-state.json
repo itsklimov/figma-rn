@@ -1,0 +1,60 @@
+{
+  "version": "1.0.0",
+  "current_task": {
+    "name": "01-mapping-layer",
+    "file": "h-implement-step3-codegen/01-mapping-layer.md",
+    "branch": null,
+    "status": "in-progress",
+    "created": null,
+    "started": "2025-12-17",
+    "updated": null,
+    "dependencies": null,
+    "submodules": null
+  },
+  "active_protocol": "task-startup",
+  "api": {
+    "startup_load": false,
+    "completion": false,
+    "todos_clear": false
+  },
+  "mode": "implementation",
+  "todos": {
+    "active": [
+      {
+        "content": "Check git status and handle any uncommitted changes",
+        "status": "in_progress",
+        "activeForm": "Checking git status and handling uncommitted changes"
+      },
+      {
+        "content": "Create/checkout task branch",
+        "status": "pending",
+        "activeForm": "Creating/checking out task branch"
+      },
+      {
+        "content": "Verify context manifest for the task",
+        "status": "pending",
+        "activeForm": "Verifying context manifest"
+      },
+      {
+        "content": "Gather context for the task",
+        "status": "pending",
+        "activeForm": "Gathering context for the task"
+      },
+      {
+        "content": "Plan task for parallel agent execution",
+        "status": "pending",
+        "activeForm": "Planning task for parallel agent execution"
+      }
+    ],
+    "stashed": []
+  },
+  "model": "opus",
+  "flags": {
+    "context_85": false,
+    "context_90": false,
+    "subagent": false,
+    "noob": true,
+    "bypass_mode": false
+  },
+  "metadata": {}
+}
