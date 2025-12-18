@@ -107,7 +107,87 @@ if (toolName === "Task" && STATE.flags.subagent) {
             // Ignore errors
         }
     }
+}
+//!<
+
+//!> Orchestrator review queue capture
+if (toolName === "Task" && STATE.flags.orchestrator_mode) {
+    // Extract todo index from Task prompt
+    const taskPrompt = toolInput.prompt || '';
+    const todoMatch = taskPrompt.match(/Execute todo #(\d+)/i);
+    const todoIndex = todoMatch ? parseInt(todoMatch[1]) : null;
+
+    if (todoIndex !== null) {
+        editState(s => {
+            // Update pending delegation status
+            if (s.orchestration.pending_delegations[todoIndex]) {
+                s.orchestration.pending_delegations[todoIndex].status = 'pending_review';
+                s.orchestration.pending_delegations[todoIndex].completed = new Date().toISOString();
+            }
+            // Add to review queue
+            s.orchestration.review_queue.push({
+                todo_index: todoIndex,
+                todo_content: s.todos.active[todoIndex]?.content || '',
+                status: 'pending_review',
+                timestamp: new Date().toISOString()
+            });
+        });
+
+        const todoContent = STATE.todos.active[todoIndex]?.content || 'unknown';
+        const pendingCount = STATE.orchestration.review_queue.length;
+        const completedCount = STATE.orchestration.approved_results.length;
+        const totalTodos = STATE.todos.active.length;
+
+        console.error(`[REVIEW REQUIRED] Sub-agent completed todo #${todoIndex}: "${todoContent}"
+
+Review the output above and respond:
+  - "approve #${todoIndex}" - Accept the changes
+  - "reject #${todoIndex} [reason]" - Reject and clear
+  - "revise #${todoIndex} [notes]" - Request modifications
+
+Progress: ${completedCount}/${totalTodos} approved, ${pendingCount} pending review`);
+    }
     process.exit(0);
+}
+//!<
+
+//!> Show orchestrator instructions after TodoWrite activates orchestrator mode
+if (toolName === "TodoWrite") {
+    // Reload state to get the updated orchestrator_mode flag set by sessions_enforce.js
+    const freshState = loadState();
+    if (freshState.flags.orchestrator_mode && !freshState.todos.allComplete()) {
+        const todoList = freshState.todos.active.map((t, i) => `  #${i}: ${t.content}`).join('\n');
+        console.error(`[ORCHESTRATOR MODE ACTIVATED]
+You are the orchestrator. ALL work must be done by sub-agents.
+
+Your todos:
+${todoList}
+
+ORCHESTRATION WORKFLOW:
+1. ANALYZE: Review todos for dependencies and conflicts
+   - Which todos touch the same files/modules?
+   - Which can run in parallel (independent)?
+   - Which must be sequential (dependencies)?
+
+2. PLAN: Decide orchestration strategy
+   - Group related todos to avoid conflicts
+   - Identify parallel batches
+   - Example strategies:
+     * "Todos #0,#1 parallel (different files), then #2 (depends on both)"
+     * "All todos sequential (same module, must be ordered)"
+     * "Single agent for all (tightly coupled changes)"
+
+3. EXECUTE: Delegate via Task tool
+   - Use "Execute todo #N:" in prompt for tracking
+   - Choose appropriate subagent_type per task
+   - Spawn multiple Tasks in parallel when safe
+
+4. REVIEW: Approve/reject each sub-agent's output
+   - approve #N | reject #N [reason] | revise #N [notes]
+
+To exit and execute directly: say "exit orchestrator"
+`);
+    }
 }
 //!<
 

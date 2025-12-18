@@ -258,6 +258,71 @@ for (const file of existingFiles) {
 }
 //!<
 
+//!> Write orchestration context for sub-agent (if in orchestrator mode)
+let orchestratorPrefix = '';
+if (STATE.flags.orchestrator_mode) {
+    // Extract todo index from Task prompt
+    let todoIndex = null;
+    let taskPrompt = '';
+    const lastEntry = cleanTranscript[cleanTranscript.length - 1];
+    if (lastEntry && Array.isArray(lastEntry.content)) {
+        for (const block of lastEntry.content) {
+            if (block.type === 'tool_use' && block.name === 'Task') {
+                taskPrompt = (block.input || {}).prompt || '';
+                const todoMatch = taskPrompt.match(/Execute todo #(\d+)/i);
+                if (todoMatch) {
+                    todoIndex = parseInt(todoMatch[1]);
+                }
+            }
+        }
+    }
+
+    // Write orchestration context file
+    const orchestrationContext = {
+        mode: STATE.mode,
+        parent_orchestrator: true,
+        assigned_todo: todoIndex !== null ? {
+            index: todoIndex,
+            content: STATE.todos.active[todoIndex]?.content || null
+        } : null,
+        current_task: STATE.current_task ? {
+            name: STATE.current_task.name,
+            file: STATE.current_task.file,
+            branch: STATE.current_task.branch
+        } : null,
+        timestamp: new Date().toISOString()
+    };
+
+    const contextPath = path.join(BATCH_DIR, 'orchestration-context.json');
+    fs.writeFileSync(contextPath, JSON.stringify(orchestrationContext, null, 2));
+
+    // Mark this delegation as pending in state
+    if (todoIndex !== null) {
+        editState(s => {
+            s.orchestration.pending_delegations[todoIndex] = {
+                status: 'executing',
+                started: new Date().toISOString()
+            };
+        });
+    }
+
+    // Create orchestrator prefix to inject into first transcript chunk
+    const todoContent = todoIndex !== null ? STATE.todos.active[todoIndex]?.content : 'unknown';
+    orchestratorPrefix = `[ORCHESTRATOR CONTEXT]
+You are executing a delegated todo from the orchestrator.
+Mode: ${STATE.mode} (${STATE.mode === 'implementation' ? 'you may use write tools' : 'read-only'})
+${todoIndex !== null ? `Assigned todo: #${todoIndex}: ${todoContent}` : 'No specific todo assigned'}
+
+Execute ONLY this todo. Return a summary of:
+- What you changed
+- Files modified
+- How you verified it works
+---
+
+`;
+}
+//!<
+
 //!> Chunk and save transcript batches
 const MAX_BYTES = 24000;
 let usableContext = 160000;
@@ -333,11 +398,12 @@ for (const chunk of chunks) {
     }
 }
 
-// Save chunks to files
+// Save chunks to files (prepend orchestrator prefix to first chunk if present)
 chunks.forEach((chunk, idx) => {
     const partName = `current_transcript_${String(idx + 1).padStart(3, '0')}.txt`;
     const partPath = path.join(BATCH_DIR, partName);
-    fs.writeFileSync(partPath, chunk, 'utf8');
+    const content = (idx === 0 && orchestratorPrefix) ? orchestratorPrefix + chunk : chunk;
+    fs.writeFileSync(partPath, content, 'utf8');
 });
 //!<
 
