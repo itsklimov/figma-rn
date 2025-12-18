@@ -1,17 +1,17 @@
 {
   "version": "1.0.0",
   "current_task": {
-    "name": "h-implement-step4-quality",
-    "file": "h-implement-step4-quality.md",
-    "branch": "feature/step4-quality",
-    "status": "completed",
+    "name": "h-implement-get-screen-pipeline",
+    "file": "h-implement-get-screen-pipeline.md",
+    "branch": "feature/get-screen-pipeline",
+    "status": "in-progress",
     "created": "2025-12-17",
-    "started": null,
+    "started": "2025-12-17",
     "updated": null,
     "dependencies": null,
     "submodules": null
   },
-  "active_protocol": "task-completion",
+  "active_protocol": "task-startup",
   "api": {
     "startup_load": false,
     "completion": false,
@@ -21,51 +21,36 @@
   "todos": {
     "active": [
       {
-        "content": "Verify all success criteria are checked off",
-        "status": "completed",
-        "activeForm": "Verifying all success criteria are checked off"
-      },
-      {
-        "content": "Run code-review agent and address any critical issues",
-        "status": "completed",
-        "activeForm": "Running code-review agent"
-      },
-      {
-        "content": "Run logging agent to consolidate work logs",
-        "status": "completed",
-        "activeForm": "Running logging agent"
-      },
-      {
-        "content": "Run service-documentation agent to update CLAUDE.md files and other documentation",
-        "status": "completed",
-        "activeForm": "Running service-documentation agent"
-      },
-      {
-        "content": "Mark task file complete and move to tasks/done/",
-        "status": "completed",
-        "activeForm": "Marking task complete and archiving"
-      },
-      {
-        "content": "Commit changes and merge to dev",
+        "content": "Check git status and handle any uncommitted changes",
         "status": "in_progress",
-        "activeForm": "Committing and merging to dev"
+        "activeForm": "Checking git status and handling uncommitted changes"
       },
       {
-        "content": "Push changes to remote",
+        "content": "Create/checkout task branch",
         "status": "pending",
-        "activeForm": "Pushing changes to remote"
+        "activeForm": "Creating/checking out task branch"
+      },
+      {
+        "content": "Verify context manifest for the task",
+        "status": "pending",
+        "activeForm": "Verifying context manifest"
+      },
+      {
+        "content": "Gather context for the task",
+        "status": "pending",
+        "activeForm": "Gathering context for the task"
       }
     ],
     "stashed": []
   },
-  "model": "sonnet",
+  "model": "opus",
   "flags": {
     "context_85": false,
     "context_90": false,
     "subagent": false,
     "noob": true,
     "bypass_mode": false,
-    "orchestrator_mode": false
+    "orchestrator_mode": true
   },
   "orchestration": {
     "delegatable_todos": [],
