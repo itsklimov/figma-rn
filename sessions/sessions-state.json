@@ -43,7 +43,7 @@
     ],
     "stashed": []
   },
-  "model": "opus",
+  "model": "sonnet",
   "flags": {
     "context_85": false,
     "context_90": false,
