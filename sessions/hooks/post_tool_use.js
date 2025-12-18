@@ -110,47 +110,6 @@ if (toolName === "Task" && STATE.flags.subagent) {
 }
 //!<
 
-//!> Orchestrator review queue capture
-if (toolName === "Task" && STATE.flags.orchestrator_mode) {
-    // Extract todo index from Task prompt
-    const taskPrompt = toolInput.prompt || '';
-    const todoMatch = taskPrompt.match(/Execute todo #(\d+)/i);
-    const todoIndex = todoMatch ? parseInt(todoMatch[1]) : null;
-
-    if (todoIndex !== null) {
-        editState(s => {
-            // Update pending delegation status
-            if (s.orchestration.pending_delegations[todoIndex]) {
-                s.orchestration.pending_delegations[todoIndex].status = 'pending_review';
-                s.orchestration.pending_delegations[todoIndex].completed = new Date().toISOString();
-            }
-            // Add to review queue
-            s.orchestration.review_queue.push({
-                todo_index: todoIndex,
-                todo_content: s.todos.active[todoIndex]?.content || '',
-                status: 'pending_review',
-                timestamp: new Date().toISOString()
-            });
-        });
-
-        const todoContent = STATE.todos.active[todoIndex]?.content || 'unknown';
-        const pendingCount = STATE.orchestration.review_queue.length;
-        const completedCount = STATE.orchestration.approved_results.length;
-        const totalTodos = STATE.todos.active.length;
-
-        console.error(`[REVIEW REQUIRED] Sub-agent completed todo #${todoIndex}: "${todoContent}"
-
-Review the output above and respond:
-  - "approve #${todoIndex}" - Accept the changes
-  - "reject #${todoIndex} [reason]" - Reject and clear
-  - "revise #${todoIndex} [notes]" - Request modifications
-
-Progress: ${completedCount}/${totalTodos} approved, ${pendingCount} pending review`);
-    }
-    process.exit(0);
-}
-//!<
-
 //!> Show orchestrator instructions after TodoWrite activates orchestrator mode
 if (toolName === "TodoWrite") {
     // Reload state to get the updated orchestrator_mode flag set by sessions_enforce.js

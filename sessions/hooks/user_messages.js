@@ -269,75 +269,14 @@ if (STATE.mode === Mode.GO && discussionPhraseDetected) {
 }
 //!<
 
-//!> Orchestrator review commands
-if (STATE.flags.orchestrator_mode) {
-    const approveMatch = prompt.match(/approve\s*#?(\d+)/i);
-    const rejectMatch = prompt.match(/reject\s*#?(\d+)\s*(.*)?/i);
-    const reviseMatch = prompt.match(/revise\s*#?(\d+)\s*(.*)?/i);
-    const exitOrchMatch = prompt.toLowerCase().includes('exit orchestrator');
-
-    if (approveMatch) {
-        const todoIndex = parseInt(approveMatch[1]);
-        const todo = STATE.todos.active[todoIndex];
-        if (todo) {
-            editState(s => {
-                // Move from review queue to approved
-                const reviewItem = s.orchestration.review_queue.find(r => r.todo_index === todoIndex);
-                if (reviewItem) {
-                    reviewItem.status = 'approved';
-                    s.orchestration.approved_results.push(reviewItem);
-                    s.orchestration.review_queue = s.orchestration.review_queue.filter(r => r.todo_index !== todoIndex);
-                }
-                // Mark todo as complete
-                if (s.todos.active[todoIndex]) {
-                    s.todos.active[todoIndex].status = TodoStatus.COMPLETED;
-                }
-                // Check if all todos are complete
-                if (s.todos.allComplete()) {
-                    s.flags.orchestrator_mode = false;
-                    s.mode = Mode.NO;
-                    s.orchestration.clear();
-                }
-            });
-            const remaining = STATE.todos.active.filter(t => t.status !== TodoStatus.COMPLETED).length;
-            if (remaining === 0) {
-                context += `[APPROVED] Todo #${todoIndex} approved. All todos complete! Returning to discussion mode.\n`;
-            } else {
-                context += `[APPROVED] Todo #${todoIndex} approved. ${remaining} todo(s) remaining.\n`;
-            }
-        }
-    }
-
-    if (rejectMatch) {
-        const todoIndex = parseInt(rejectMatch[1]);
-        const reason = rejectMatch[2]?.trim() || 'No reason provided';
-        editState(s => {
-            s.orchestration.review_queue = s.orchestration.review_queue.filter(r => r.todo_index !== todoIndex);
-            delete s.orchestration.pending_delegations[todoIndex];
-        });
-        context += `[REJECTED] Todo #${todoIndex} rejected: ${reason}\nRe-delegate when ready.\n`;
-    }
-
-    if (reviseMatch) {
-        const todoIndex = parseInt(reviseMatch[1]);
-        const notes = reviseMatch[2]?.trim() || '';
-        editState(s => {
-            const reviewItem = s.orchestration.review_queue.find(r => r.todo_index === todoIndex);
-            if (reviewItem) {
-                reviewItem.status = 'changes_requested';
-                reviewItem.review_notes = notes;
-            }
-        });
-        context += `[CHANGES REQUESTED] Todo #${todoIndex} needs revision. Notes: ${notes || 'none'}\nRe-delegate with updated instructions.\n`;
-    }
-
-    if (exitOrchMatch) {
-        editState(s => {
-            s.flags.orchestrator_mode = false;
-            // Keep implementation mode so user can execute directly
-        });
-        context += `[ORCHESTRATOR EXITED] You may now execute directly using Edit/Write tools.\nNote: Pending sub-agent work may need manual cleanup.\n`;
-    }
+//!> Exit orchestrator command
+if (STATE.flags.orchestrator_mode && prompt.toLowerCase().includes('exit orchestrator')) {
+    editState(s => {
+        s.flags.orchestrator_mode = false;
+        s.orchestration.clear();  // Clean up state
+        // Keep implementation mode so user can execute directly
+    });
+    context += `[ORCHESTRATOR EXITED] You may now execute directly using Edit/Write tools.\n`;
 }
 //!<
 

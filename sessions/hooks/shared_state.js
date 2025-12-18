@@ -508,25 +508,17 @@ class OrchestrationState {
         this.delegatable_todos = data.delegatable_todos || [];
         // Current pending delegations: { todoIndex: { status, started, completed } }
         this.pending_delegations = data.pending_delegations || {};
-        // Results from sub-agents awaiting review
-        this.review_queue = data.review_queue || [];
-        // Completed and approved results
-        this.approved_results = data.approved_results || [];
     }
 
     clear() {
         this.delegatable_todos = [];
         this.pending_delegations = {};
-        this.review_queue = [];
-        this.approved_results = [];
     }
 
     toDict() {
         return {
             delegatable_todos: this.delegatable_todos,
-            pending_delegations: this.pending_delegations,
-            review_queue: this.review_queue,
-            approved_results: this.approved_results
+            pending_delegations: this.pending_delegations
         };
     }
 
