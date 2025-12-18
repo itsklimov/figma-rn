@@ -1,6 +1,6 @@
 ---
 name: 02-generation
-status: pending
+status: completed
 ---
 
 # Subtask: Generation Layer
@@ -9,15 +9,16 @@ status: pending
 
 Generate production-ready TSX + StyleSheet from ScreenIR (~410 LOC total).
 
-## Files to Create
+## Files Created
 
 ```
 src/core/generation/
 ├── index.ts              # Barrel exports
-├── component-builder.ts  # ~150 LOC - Orchestrate generation
-├── jsx-builder.ts        # ~100 LOC - IRNode → JSX string
-├── styles-builder.ts     # ~120 LOC - StylesBundle → StyleSheet
-└── imports-builder.ts    # ~40 LOC - Collect imports
+├── component-builder.ts  # Main orchestrator - generateComponent()
+├── jsx-builder.ts        # IRNode → JSX string
+├── styles-builder.ts     # StylesBundle → StyleSheet.create
+├── imports-builder.ts    # Collect RN component imports
+└── utils.ts              # Shared utilities (toValidIdentifier, escapeJSXText)
 ```
 
 ## Implementation Details
@@ -133,12 +134,12 @@ const styles = StyleSheet.create({
 
 ## Success Criteria
 
-- [ ] Generate valid TSX from ScreenIR
-- [ ] StyleSheet.create with mapped tokens
-- [ ] Semantic style naming
-- [ ] Single file output (component + styles)
-- [ ] TODO comments for unmatched tokens
-- [ ] Unit tests for each builder
+- [x] Generate valid TSX from ScreenIR
+- [x] StyleSheet.create with mapped tokens
+- [x] Semantic style naming
+- [x] Single file output (component + styles)
+- [x] TODO comments for unmatched tokens
+- [x] Unit tests for each builder
 
 ## Dependencies
 
