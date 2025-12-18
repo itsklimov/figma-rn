@@ -9,7 +9,7 @@ description: Feature implementation tasks for figma-rn MCP server
 ## Active Tasks
 
 ### High Priority
-- `h-implement-step3-codegen/` - Code generation from ScreenIR (mapping + generation layers)
+- `h-implement-step4-quality.md` - Quality improvements: detection layer, a11y, FlatList generation, get_screen tool
 
 ### Medium Priority
 
@@ -19,3 +19,4 @@ description: Feature implementation tasks for figma-rn MCP server
 
 ## Completed Tasks
 <!-- Move tasks here when completed, maintaining the format -->
+- `h-implement-step3-codegen/` - Code generation from ScreenIR (mapping + generation layers)
