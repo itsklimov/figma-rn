@@ -498,8 +498,10 @@ After the user approves with a trigger phrase, you may re-submit the updated tod
             console.error("[TodoWrite Error] Failed to store todos - check format");
             process.exit(2);
         }
-        // Only activate orchestrator mode for substantial work
-        if (s.mode === Mode.GO && isSubstantialWork(incomingTodos)) {
+        // Only activate orchestrator mode during task-startup protocol (implementation planning)
+        // Other protocols (task-creation, task-completion, context-compaction) → no enforcement
+        const isTaskStartup = s.active_protocol === 'task-startup';
+        if (s.mode === Mode.GO && isTaskStartup && isSubstantialWork(incomingTodos)) {
             s.flags.orchestrator_mode = true;
             s.orchestration.delegatable_todos = incomingTodos.map((_, i) => i);
         }
