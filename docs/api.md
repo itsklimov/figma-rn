@@ -285,6 +285,61 @@ console.log(`✓ Confidence: ${(result.summary.metadata.confidence * 100).toFixe
 
 ### Custom Configuration
 
+#### Project-level Configuration
+
+Place `.figmarc.json` in your project root:
+
+```json
+{
+  "framework": "react-native",
+  "codeStyle": {
+    "stylePattern": "StyleSheet",
+    "scaleFunction": "scale",
+    "importPrefix": "@/"
+  },
+  "theme": {
+    "location": "./theme/index.ts"
+  },
+  "mappings": {
+    "colors": {
+      "#7A54FF": "palette.primary",
+      "#FF5454": "palette.error"
+    },
+    "fonts": {
+      "SF Pro": "commonFonts.primary.regular"
+    }
+  }
+}
+```
+
+#### Folder-specific Configuration
+
+Override mappings for specific screens by placing `.figmarc.json` in element folders:
+
+```
+.figma/
+└── screens/
+    └── HomeScreen/
+        ├── .figmarc.json    ← Custom mappings for this screen only
+        ├── index.tsx
+        └── assets/
+```
+
+**Example `.figma/screens/HomeScreen/.figmarc.json`:**
+```json
+{
+  "mappings": {
+    "colors": {
+      "#FF5733": "theme.colors.brandRed"
+    }
+  }
+}
+```
+
+Folder config overrides project config. This allows per-screen customization while maintaining project-wide defaults.
+
+#### Programmatic Configuration
+
 ```typescript
 import { ProjectConfig } from './config-schema.js';
 

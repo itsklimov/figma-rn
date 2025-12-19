@@ -9,7 +9,6 @@ description: Bug fixes and corrections for figma-rn MCP server
 ## Active Tasks
 
 ### High Priority
-- `h-fix-config-and-screen-name-handling.md` - Fix folder config loading and LLM screen name propagation
 
 ### Medium Priority
 
@@ -19,3 +18,4 @@ description: Bug fixes and corrections for figma-rn MCP server
 
 ## Completed Tasks
 <!-- Move tasks here when completed, maintaining the format -->
+- `h-fix-config-and-screen-name-handling.md` - Fix folder config loading and LLM screen name propagation

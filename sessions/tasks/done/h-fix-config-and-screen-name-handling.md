@@ -1,7 +1,7 @@
 ---
 name: h-fix-config-and-screen-name-handling
 branch: fix/config-and-screen-name-handling
-status: pending
+status: completed
 created: 2025-12-18
 ---
 
@@ -15,11 +15,11 @@ Two related issues in the generation pipeline:
 2. **Screen name not respected**: When the LLM provides a screen name, the system doesn't listen for that name - it generates its own name but does so incorrectly.
 
 ## Success Criteria
-- [ ] Config files in folders are properly detected and loaded
-- [ ] Typography generation uses config file settings
-- [ ] Colors mapping generation uses config file settings
-- [ ] LLM-provided screen names are respected and used correctly
-- [ ] Generated output uses the correct screen name from LLM input
+- [x] Config files in folders are properly detected and loaded
+- [x] Typography generation uses config file settings
+- [x] Colors mapping generation uses config file settings
+- [x] LLM-provided screen names are respected and used correctly
+- [x] Generated output uses the correct screen name from LLM input
 
 ## Context Manifest
 <!-- Added by context-gathering agent -->
@@ -335,37 +335,40 @@ export function resolveComponentName(
 export function sanitizeComponentName(figmaName: string): string
 ```
 
----
-
-### Implementation Strategy
-
-#### For Issue 1 (Folder Config):
-
-1. **Create folder config loader**: Add function to look for `.figmarc.json` in element folder
-2. **Merge configs**: Project config -> workspace config -> folder config (folder wins)
-3. **Respect explicit mappings**: If folder config has `mappings.colors`, don't auto-generate
-4. **Modify code-generator-v2.ts**: Check for pre-existing mappings before auto-generating
-
-#### For Issue 2 (Screen Name):
-
-1. **In get-screen.ts**: Ensure `componentName` from args takes priority over `screenIR.name`
-2. **In component-builder.ts**: Verify `options.componentName` is always passed correctly
-3. **Trace the flow**: Ensure the LLM-provided name is passed through every function in the chain
-4. **Add logging**: Debug where name might be getting lost or transformed
-
-#### Files to Modify
-
-| File | Change |
-|------|--------|
-| `src/config-loader.ts` | Add `loadFolderConfig()` function |
-| `src/code-generator-v2.ts` | Merge folder config, respect explicit mappings |
-| `src/figma-workspace.ts` | Support folder-level config in workspace structure |
-| `src/edge/tools/get-screen.ts` | Ensure componentName from args takes priority |
-| `src/core/generation/component-builder.ts` | Verify componentName propagation |
-
 ## User Notes
 <!-- Any specific notes or requirements from the developer -->
 
 ## Work Log
-<!-- Updated as work progresses -->
-- [2025-12-18] Task created
+
+### 2025-12-19
+
+#### Completed
+
+**Issue 1 - Config files not being used:**
+- Added `loadFolderConfig()` to load `.figmarc.json` from element folders
+- Added `mergeConfigs()` for deep merging configs with override priority
+- Modified `code-generator-v2.ts` to merge mappings instead of overwriting
+- Integrated folder config loading in `one-shot-generator.ts`
+
+**Issue 2 - Screen names not respected:**
+- Fixed missing params (`projectRoot`, `writeFiles`, `category`) in `index.ts` call to `executeGetScreen`
+- Added debug logging to trace component name flow in `get-screen.ts`
+- Confirmed fallback logic `componentName || screenIR.name` works correctly
+
+**Code quality improvements:**
+- Used `path.join()` for cross-platform path handling
+- Improved type safety in `mergeConfigs()` with proper type aliases
+- Added detailed comments explaining merge priority and spread order
+- Standardized debug logging with `[DEBUG]` prefix
+
+#### Files Modified
+- `src/code-generator-v2.ts` - Mapping merge logic
+- `src/config-loader.ts` - Folder config and merge functions
+- `src/edge/tools/get-screen.ts` - Debug logging
+- `src/index.ts` - Missing parameters fix
+- `src/one-shot-generator.ts` - Folder config integration
+
+#### Decisions
+- Chose spread operator with auto-generated first, user config second for merge priority
+- Used generic iteration approach in `mergeConfigs()` to handle future mapping types
+- Added comprehensive JSDoc explaining validation expectations
