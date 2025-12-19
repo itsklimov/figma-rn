@@ -59,3 +59,4 @@ sessions/transcripts/
 sessions/.archived/
 sessions/bin/sessions.bat
 sessions/bin/sessions
+sessions/sessions-state.json

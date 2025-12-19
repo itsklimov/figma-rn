@@ -693,17 +693,28 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       // TOOL 3: get_screen (clean architecture pipeline)
       // ═══════════════════════════════════════════════════════════════
       case 'get_screen': {
-        const { figmaUrl, componentName, themeFilePath, outputDir } = args as {
+        const {
+          figmaUrl,
+          componentName,
+          themeFilePath,
+          outputDir,
+          projectRoot,
+          writeFiles,
+          category
+        } = args as {
           figmaUrl: string;
           componentName?: string;
           themeFilePath?: string;
           outputDir?: string;
+          projectRoot?: string;
+          writeFiles?: boolean;
+          category?: string;
         };
 
         console.error(`\n🎯 [GET_SCREEN] Processing ${figmaUrl}...`);
 
         const result = await executeGetScreen(
-          { figmaUrl, componentName, themeFilePath, outputDir },
+          { figmaUrl, componentName, themeFilePath, outputDir, projectRoot, writeFiles, category },
           FIGMA_TOKEN
         );
 

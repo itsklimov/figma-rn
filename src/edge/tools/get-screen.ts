@@ -171,6 +171,9 @@ export async function executeGetScreen(
 ): Promise<GetScreenResult> {
   const { figmaUrl, componentName, themeFilePath, outputDir } = args;
 
+  // Debug: Trace input args (prefix with [DEBUG] for filtering)
+  console.error(`[DEBUG] get_screen input: componentName="${args.componentName}" (${typeof args.componentName})`);
+
   try {
     // 1. Parse Figma URL to get fileKey and nodeId
     const parsed = parseFigmaUrl(figmaUrl);
@@ -236,12 +239,17 @@ export async function executeGetScreen(
     // 7. Get manifest and resolve component name
     const manifest = await getOrCreateManifest(projectRoot);
     const category = (args.category as ManifestCategory) || 'screens';
+
+    console.error(`[DEBUG] get_screen resolve: componentName="${componentName}", screenIR.name="${screenIR.name}"`);
+
     const resolved = resolveComponentName(
       manifest,
       category,
       nodeId,
       componentName || screenIR.name
     );
+
+    console.error(`[DEBUG] get_screen result: "${resolved.name}", isUpdate=${resolved.isUpdate}`);
 
     // 8. Create element folder path for assets and screenshot
     const elementFolder = join(projectRoot, '.figma', category, resolved.name);

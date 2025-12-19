@@ -15,7 +15,7 @@ import { detectVariantsAndStates, type VariantDetection } from './variant-state-
 import { extractAnimationHints, generateReanimatedCode, generateGestureHandlerCode, type AnimationHint } from './animation-extractor.js';
 import { inferDataModels, generateTypeDefinitions, generateReactQueryHooks, type DataModel } from './data-model-generator.js';
 import { generateReactNativeComponent } from './code-generator-v2.js';
-import { loadProjectConfig } from './config-loader.js';
+import { loadProjectConfig, loadFolderConfig, mergeConfigs } from './config-loader.js';
 import { detectComponentGroups, type ComponentGroupDetection } from './interactive-group-detector.js';
 import type { ProjectConfig } from './config-schema.js';
 
@@ -1027,7 +1027,16 @@ export async function generateCompleteScreen(
   }
 
   // 3. Load project config (if not provided)
-  const projectConfig = config || await loadProjectConfig() || undefined;
+  let projectConfig = config || await loadProjectConfig() || undefined;
+
+  // 3.1. Load and merge folder-specific config (if outputFolder exists)
+  if (outputFolder && projectConfig) {
+    const folderConfig = await loadFolderConfig(outputFolder);
+    if (folderConfig) {
+      projectConfig = mergeConfigs(projectConfig, folderConfig);
+      console.error(`[DEBUG] Merged folder config from ${outputFolder}`);
+    }
+  }
 
 
   // 4. Run ALL detectors in PARALLEL + image extraction + interactions

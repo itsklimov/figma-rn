@@ -73,11 +73,15 @@ export async function generateReactNativeComponent(
     const typographyMappings = await autoGenerateTypographyMappings(figmaTypography, typographyPath);
 
     if (!config.mappings) config.mappings = {};
-    config.mappings.colors = colorMappings;
-    config.mappings.spacing = spacingMappings;
-    config.mappings.radii = radiiMappings;
-    config.mappings.shadows = shadowMappings;
-    config.mappings.typography = typographyMappings;
+    // Merge: existing (user-provided) mappings take priority over auto-generated.
+    // Spread order: auto-generated first, then user config overwrites.
+    // This allows users to override specific mappings in .figmarc.json while
+    // still getting auto-generated mappings for values they haven't specified.
+    config.mappings.colors = { ...colorMappings, ...(config.mappings.colors || {}) };
+    config.mappings.spacing = { ...spacingMappings, ...(config.mappings.spacing || {}) };
+    config.mappings.radii = { ...radiiMappings, ...(config.mappings.radii || {}) };
+    config.mappings.shadows = { ...shadowMappings, ...(config.mappings.shadows || {}) };
+    config.mappings.typography = { ...typographyMappings, ...(config.mappings.typography || {}) };
 
     // DON'T save mappings to file - use in memory only
     // await updateConfigMappings({ colors: colorMappings }); // REMOVED
