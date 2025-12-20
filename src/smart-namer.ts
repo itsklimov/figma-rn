@@ -33,7 +33,7 @@ export function generateSmartStyleName(
   }
 
   // 3. Handle numbers (+3, 75/200, 4.6, (254))
-  if (/^[\d+\/.()]+$/.test(nodeName)) {
+  if (/^[\d+/.()]+$/.test(nodeName)) {
     if (context?.parentName?.toLowerCase().includes('badge')) return 'badgeCount';
     if (context?.parentName?.toLowerCase().includes('karma')) return 'karmaScore';
     if (context?.parentName?.toLowerCase().includes('rating')) return 'ratingValue';
@@ -118,7 +118,7 @@ export function isNumericValue(name: string): boolean {
     /^\d{1,2}:\d{2}$/.test(name) || // time
     /^\d+\s*000?\s*₽/.test(name) || // price
     /^\d+\s*₽/.test(name) || // price
-    /^[\d+\/.()]+$/.test(name) // numbers
+    /^[\d+/.()]+$/.test(name) // numbers
   );
 }
 

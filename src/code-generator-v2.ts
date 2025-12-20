@@ -1008,7 +1008,7 @@ function generateComponentGroupStyles(
   const itemHeight = firstChild?.absoluteBoundingBox?.height || firstChild?.height || 54;
 
   switch (group.pattern) {
-    case 'rating':
+    case 'rating': {
       // Star touchable area - use actual child dimensions
       stylesMap.set(`${containerStyleName}Star`, {
         width: applyScale(itemWidth),
@@ -1044,8 +1044,9 @@ function generateComponentGroupStyles(
       }
       stylesMap.set(`${containerStyleName}StarIconActive`, starActiveStyle);
       break;
+    }
 
-    case 'tabs':
+    case 'tabs': {
       // Tab item - extract actual styles
       const tabStyle: Record<string, any> = {
         paddingHorizontal: childStyle.paddingLeft || childStyle.paddingRight || applyScale(16),
@@ -1071,6 +1072,7 @@ function generateComponentGroupStyles(
         fontWeight: '600',
       });
       break;
+    }
 
     case 'segmented-control':
       stylesMap.set(`${containerStyleName}Segment`, {
