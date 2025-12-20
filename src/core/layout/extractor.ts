@@ -2,7 +2,13 @@
  * Layout extractor - extracts layout metadata from nodes
  */
 
-import type { NormalizedNode, LayoutNode, LayoutMeta, Padding } from '../types.js';
+import type {
+  NormalizedNode,
+  LayoutMeta,
+  LayoutNode,
+  Padding,
+  LayoutType,
+} from '../types.js';
 import { detectLayoutType, calculateRowGap, calculateColumnGap } from './detector.js';
 
 /**
@@ -199,7 +205,64 @@ export function inferCrossAxisAlign(
 /**
  * Extract complete layout metadata for a node
  */
-export function extractLayoutMeta(node: NormalizedNode): LayoutMeta {
+/**
+ * Extract sizing behavior (Fixed/Fill/Hug) for horizontal and vertical axes
+ */
+function extractSizing(
+  node: NormalizedNode, 
+  parentLayoutType: LayoutType | undefined
+): LayoutMeta['sizing'] {
+  const result: LayoutMeta['sizing'] = {
+    horizontal: 'fixed',
+    vertical: 'fixed'
+  };
+
+  // 1. "Fill Container" (layoutGrow = 1)
+  // Depends on parent direction
+  if (node.layoutGrow === 1 && parentLayoutType) {
+    if (parentLayoutType === 'row') {
+      result.horizontal = 'fill';
+    } else if (parentLayoutType === 'column') {
+      result.vertical = 'fill';
+    }
+  }
+
+  // 2. "Fill Container" (layoutAlign = STRETCH) on Cross Axis
+  if (node.layoutAlign === 'STRETCH' && parentLayoutType) {
+    if (parentLayoutType === 'row') {
+      result.vertical = 'fill';
+    } else if (parentLayoutType === 'column') {
+      result.horizontal = 'fill';
+    }
+  }
+
+  // 3. "Hug Contents" (primaryAxisSizingMode = AUTO) on Main Axis
+  // Depends on node's OWN direction (which we infer from layoutMode if present, or detectLayoutType?)
+  // Actually, primaryAxisSizingMode is a property of the FRAME itself.
+  // If I am a ROW, my primary axis is horizontal.
+  // We can use node.figmaLayout.mode or detectLayoutType(node)
+  
+  // Note: We need to know OUR layout type to map primary/counter to H/V.
+  // We can re-detect it or assume figmaLayout matches if present.
+  const myLayoutType = node.figmaLayout?.mode || (detectLayoutType(node) === 'row' ? 'horizontal' : 'vertical');
+
+  if (node.primaryAxisSizingMode === 'AUTO') {
+    if (myLayoutType === 'horizontal') result.horizontal = 'hug';
+    else result.vertical = 'hug';
+  }
+
+  if (node.counterAxisSizingMode === 'AUTO') {
+    if (myLayoutType === 'horizontal') result.vertical = 'hug';
+    else result.horizontal = 'hug';
+  }
+
+  return result;
+}
+
+/**
+ * Extract complete layout metadata for a node
+ */
+export function extractLayoutMeta(node: NormalizedNode, parentLayoutType?: LayoutType): LayoutMeta {
   const layoutType = detectLayoutType(node);
 
   // If Figma auto-layout is available, use its values
@@ -210,6 +273,8 @@ export function extractLayoutMeta(node: NormalizedNode): LayoutMeta {
       padding: node.figmaLayout.padding,
       mainAlign: normalizeMainAxisAlign(node.figmaLayout.mainAxisAlign),
       crossAlign: normalizeCrossAxisAlign(node.figmaLayout.crossAxisAlign),
+      sizing: extractSizing(node, parentLayoutType),
+      overflow: (node.overflowDirection && node.overflowDirection !== 'NONE') ? 'scroll' : undefined,
     };
   }
 
@@ -237,18 +302,25 @@ export function extractLayoutMeta(node: NormalizedNode): LayoutMeta {
     padding,
     mainAlign,
     crossAlign,
+    sizing: extractSizing(node, parentLayoutType),
+    overflow: (node.overflowDirection && node.overflowDirection !== 'NONE') ? 'scroll' : undefined,
   };
 }
 
 /**
  * Add layout information to a normalized node tree
  */
-export function addLayoutInfo(node: NormalizedNode): LayoutNode {
-  // Recursively process children first
-  const processedChildren = node.children.map(child => addLayoutInfo(child));
+export function addLayoutInfo(node: NormalizedNode, parentLayoutType?: LayoutType): LayoutNode {
+  // Extract layout metadata for this node FIRST to know its type
+  // But wait, children need parent type.
+  // So we calculate OUR layout first?
+  // `extractLayoutMeta` needs parent type to calculate OUR sizing.
+  // `addLayoutInfo` needs OUR type to pass to CHILDREN.
+  
+  const layout = extractLayoutMeta(node, parentLayoutType);
 
-  // Extract layout metadata for this node
-  const layout = extractLayoutMeta(node);
+  // Recursively process children, passing OUR layout type
+  const processedChildren = node.children.map(child => addLayoutInfo(child, layout.type));
 
   // Create the LayoutNode
   const layoutNode: LayoutNode = {
@@ -269,6 +341,12 @@ export function addLayoutInfo(node: NormalizedNode): LayoutNode {
   if (node.text) layoutNode.text = node.text;
   if (node.typography) layoutNode.typography = node.typography;
   if (node.figmaLayout) layoutNode.figmaLayout = node.figmaLayout;
+
+  // Copy Advanced Properties
+  if (node.constraints) layoutNode.constraints = node.constraints;
+  if ((node as any).boundVariables) (layoutNode as any).boundVariables = (node as any).boundVariables;
+  if ((node as any).styles) (layoutNode as any).styles = (node as any).styles;
+  if (node.scrollBehavior) (layoutNode as any).scrollBehavior = node.scrollBehavior;
 
   return layoutNode;
 }

@@ -12,8 +12,12 @@ import type {
   ButtonIR,
   CardIR,
   IconIR,
+  ComponentIR,
   LayoutMeta,
 } from '../types.js';
+
+import { extractProps } from '../generation/prop-extractor.js';
+import { toValidIdentifier, toPascalCase } from '../generation/utils.js';
 
 /**
  * Default icon size range
@@ -29,13 +33,27 @@ export function isText(node: LayoutNode): boolean {
 }
 
 /**
- * Check if a node is an image
+ * Check if a node is an image or a large vector/shape
+ * In v2, we treat all vectors as images (SVGs) if they aren't small icons.
  */
 export function isImage(node: LayoutNode): boolean {
-  // Check if any fill is an image
-  if (node.fills) {
-    return node.fills.some(fill => fill.type === 'image');
+  // Standard image fills
+  if (node.fills && node.fills.some(f => f.type === 'image')) {
+    return true;
   }
+
+  // Vector types are images (SVGs)
+  if (
+    node.type === 'VECTOR' ||
+    node.type === 'BOOLEAN_OPERATION' ||
+    node.type === 'STAR' ||
+    node.type === 'ELLIPSE' ||
+    node.type === 'REGULAR_POLYGON' ||
+    node.type === 'LINE'
+  ) {
+    return true;
+  }
+
   return false;
 }
 
@@ -49,8 +67,23 @@ export function isIcon(
   maxSize = ICON_MAX_SIZE
 ): boolean {
   const { width, height } = node.boundingBox;
+  // Vector types are almost always icons (SVGs)
+  // We check size constraints for classification (Icon vs Image)
+  // But they will be exported as SVG in both cases.
+  const isVectorType = 
+    node.type === 'VECTOR' ||
+    node.type === 'BOOLEAN_OPERATION' ||
+    node.type === 'STAR' ||
+    node.type === 'ELLIPSE' ||
+    node.type === 'REGULAR_POLYGON' ||
+    node.type === 'LINE';
 
-  // Must be small
+  // If not a vector, frame, group, or image, it's not an icon
+  if (!isVectorType && node.type !== 'FRAME' && node.type !== 'GROUP' && !isImage(node)) {
+    return false;
+  }
+
+  // Must be small for frames/images to be icons
   if (width > maxSize || height > maxSize) {
     return false;
   }
@@ -58,22 +91,10 @@ export function isIcon(
     return false;
   }
 
-  // Must be roughly square (aspect ratio close to 1)
+  // Must be roughly square (aspect ratio close to 1) for containers/images
   const aspectRatio = width / height;
   if (aspectRatio < 0.5 || aspectRatio > 2) {
     return false;
-  }
-
-  // Vector types are icons
-  if (
-    node.type === 'VECTOR' ||
-    node.type === 'BOOLEAN_OPERATION' ||
-    node.type === 'STAR' ||
-    node.type === 'ELLIPSE' ||
-    node.type === 'REGULAR_POLYGON' ||
-    node.type === 'LINE'
-  ) {
-    return true;
   }
 
   // Small images can be icons
@@ -168,10 +189,22 @@ export function isCard(node: LayoutNode): boolean {
 }
 
 /**
+ * Check if a node is a Figma Instance (Reusable Component)
+ */
+export function isComponent(node: LayoutNode): boolean {
+  return node.type === 'INSTANCE';
+}
+
+/**
  * Classify a single node into a semantic type
  */
 export function classifyNode(node: LayoutNode): SemanticType {
   // Order matters - check more specific types first
+
+  // Component (First priority if explicitly an instance)
+  if (isComponent(node)) {
+    return 'Component';
+  }
 
   // Text
   if (isText(node)) {
@@ -206,7 +239,36 @@ export function classifyNode(node: LayoutNode): SemanticType {
  * Generate a unique style reference ID
  */
 function generateStyleRef(node: LayoutNode): string {
-  return `style_${node.id.replace(/[^a-zA-Z0-9]/g, '_')}`;
+  // 1. Check if name is generic (trash)
+  // Matches: "Frame 1", "Group 2", "Rectangle", "Vector 4", "Line", etc.
+  // Also common Figma defaults like "Boolean Operation", "Union", "Subtract"
+  const isGeneric = /^(Frame|Group|Rectangle|Vector|Star|Ellipse|Line|Boolean|Union|Subtract|Intersect|Exclude|Component|Instance)\s*\d*$/i.test(node.name);
+
+  // 2. If name is meaningful, use it
+  if (!isGeneric && node.name.trim().length > 0) {
+    // Sanitize to camelCase
+    const semanticName = toValidIdentifier(node.name);
+    // Ensure we don't end up with empty string or purely numeric (utils handles this but double check)
+    if (semanticName && semanticName !== 'element' && !/^style\d+$/.test(semanticName)) {
+      return semanticName;
+    }
+  }
+
+  // 3. Fallback: use semantic type + index-like suffix from ID
+  // e.g. "container_123" instead of just "style_123"
+  // We use the last part of ID to keep it deterministic but shorter
+  const safeId = node.id.replace(/[^a-zA-Z0-9]/g, '_');
+  const shortId = safeId.split('_').pop() || safeId;
+  
+  // Use lowercased semantic type if available, otherwise 'element'
+  // We can't easily access the inferred semantic type here without cyclic deps or refactoring
+  // So we'll use a rough guess based on node type
+  let prefix = 'element';
+  if (node.type === 'TEXT') prefix = 'text';
+  else if (node.type === 'VECTOR') prefix = 'icon';
+  else if (node.children && node.children.length > 0) prefix = 'container';
+
+  return `${prefix}_${shortId}`;
 }
 
 /**
@@ -264,20 +326,43 @@ export function toIRNode(node: LayoutNode): IRNode {
   };
 
   switch (semanticType) {
-    case 'Text':
+    case 'Component': {
+      const children = node.children.map(child => toIRNode(child));
+      // Create a temporary node to extract props from
+      const tempNode = { ...baseProps, semanticType: 'Component', children } as IRNode;
+      const { props } = extractProps(tempNode);
+
+      return {
+        ...baseProps,
+        semanticType: 'Component',
+        componentId: (node as any).componentId || 'unknown',
+        componentName: toPascalCase(node.name),
+        props,
+        layout: node.layout,
+        children,
+      } as ComponentIR;
+    }
+
+    case 'Text': {
+      // Extract propName from node.name for text-to-props extraction
+      const textPropName = toValidIdentifier(node.name);
       return {
         ...baseProps,
         semanticType: 'Text',
         text: node.text ?? '',
+        propName: textPropName,
+        defaultValue: node.text ?? '',
       } as TextIR;
+    }
 
-    case 'Image':
+    case 'Image': {
       const imageRef = node.fills?.find(f => f.type === 'image');
       return {
         ...baseProps,
         semanticType: 'Image',
         imageRef: imageRef?.type === 'image' ? imageRef.imageRef : undefined,
       } as ImageIR;
+    }
 
     case 'Icon':
       return {

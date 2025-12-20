@@ -10,11 +10,11 @@ import type {
   Effect,
   CornerRadius,
   TypographyInfo,
-  LayoutInfo,
+  Constraints,
 } from '../api/types.js';
 
 // Re-export commonly used API types
-export type { BoundingBox, Padding, Fill, Stroke, Effect, CornerRadius, TypographyInfo };
+export type { BoundingBox, Padding, Fill, Stroke, Effect, CornerRadius, TypographyInfo, Constraints };
 
 // ============================================================================
 // 2.1 Normalized Tree Types
@@ -60,6 +60,27 @@ export interface NormalizedNode {
     mainAxisAlign: string;
     crossAxisAlign: string;
   };
+  
+  // Raw Figma layout props (needed for extractor)
+  primaryAxisSizingMode?: 'FIXED' | 'AUTO';
+  counterAxisSizingMode?: 'FIXED' | 'AUTO';
+  layoutAlign?: 'INHERIT' | 'STRETCH' | 'MIN' | 'CENTER' | 'MAX';
+  layoutGrow?: number;
+
+  // Layout sizing from parent context (how this node behaves in parent)
+  layoutSizing?: {
+    horizontal: 'FIXED' | 'FILL' | 'HUG';
+    vertical: 'FIXED' | 'FILL' | 'HUG';
+  };
+  // Prop binding
+  propName?: string;
+
+  // Constraints from Figma
+  constraints?: Constraints;
+
+  // Scrolling
+  overflowDirection?: 'NONE' | 'HORIZONTAL_SCROLLING' | 'VERTICAL_SCROLLING' | 'BOTH_SCROLLING';
+  scrollBehavior?: string;
 }
 
 // ============================================================================
@@ -80,6 +101,11 @@ export interface LayoutMeta {
   padding: Padding;
   mainAlign: 'start' | 'center' | 'end' | 'space-between' | 'space-around';
   crossAlign: 'start' | 'center' | 'end' | 'stretch' | 'baseline';
+  sizing: {
+    horizontal: 'fixed' | 'fill' | 'hug';
+    vertical: 'fixed' | 'fill' | 'hug';
+  };
+  overflow?: 'scroll' | 'hidden'; // derived from overflowDirection
 }
 
 /**
@@ -103,7 +129,8 @@ export type SemanticType =
   | 'Image'
   | 'Button'
   | 'Card'
-  | 'Icon';
+  | 'Icon'
+  | 'Component';
 
 /**
  * Base properties for all IR nodes
@@ -114,6 +141,7 @@ interface IRNodeBase {
   semanticType: SemanticType;
   boundingBox: BoundingBox;
   styleRef: string; // Reference to style in StylesBundle
+  propName?: string; // If set, this node's content is bound to a prop
 }
 
 /**
@@ -131,6 +159,8 @@ export interface ContainerIR extends IRNodeBase {
 export interface TextIR extends IRNodeBase {
   semanticType: 'Text';
   text: string;
+  /** Original text value (for prop default) */
+  defaultValue?: string;
 }
 
 /**
@@ -170,6 +200,18 @@ export interface IconIR extends IRNodeBase {
 }
 
 /**
+ * Component element - reusable UI component from Figma instance
+ */
+export interface ComponentIR extends IRNodeBase {
+  semanticType: 'Component';
+  componentId: string;
+  componentName: string;
+  props?: Record<string, { type: 'string' | 'image'; value: string; defaultValue: string }>;
+  layout: LayoutMeta;
+  children: IRNode[]; // Components can have children (overrides)
+}
+
+/**
  * Union of all IR node types
  */
 export type IRNode =
@@ -178,7 +220,8 @@ export type IRNode =
   | ImageIR
   | ButtonIR
   | CardIR
-  | IconIR;
+  | IconIR
+  | ComponentIR;
 
 // ============================================================================
 // 2.4 Styles Bundle Types
@@ -230,8 +273,15 @@ export interface ExtractedStyle {
   };
 
   // Sizing
-  width?: number;
-  height?: number;
+  width?: number | string;
+  height?: number | string;
+
+  // Positioning (Absolute)
+  position?: 'absolute' | 'relative';
+  left?: number | string;
+  right?: number | string;
+  top?: number | string;
+  bottom?: number | string;
 
   // Opacity
   opacity?: number;
