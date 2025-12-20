@@ -35,8 +35,9 @@ interface AssetNode {
  * Recursively extract image and icon nodes from IR tree
  */
 function extractAssetNodes(node: IRNode, assets: AssetNode[]): void {
+  // 1. Direct asset checks
   if (node.semanticType === 'Image') {
-    const imageRef = node.imageRef;
+    const imageRef = (node as any).imageRef;
     if (imageRef) {
       assets.push({
         nodeId: node.id,
@@ -46,7 +47,17 @@ function extractAssetNodes(node: IRNode, assets: AssetNode[]): void {
       });
     }
   } else if (node.semanticType === 'Icon') {
-    const iconRef = node.iconRef;
+    const iconRef = (node as any).iconRef;
+    if (iconRef) {
+      assets.push({
+        nodeId: node.id,
+        name: node.name,
+        ref: iconRef,
+        category: 'icon',
+      });
+    }
+  } else if (node.semanticType === 'Button') {
+    const iconRef = (node as any).iconRef;
     if (iconRef) {
       assets.push({
         nodeId: node.id,
@@ -57,8 +68,8 @@ function extractAssetNodes(node: IRNode, assets: AssetNode[]): void {
     }
   }
 
-  // Traverse children for Container and Card nodes
-  if (node.semanticType === 'Container' || node.semanticType === 'Card') {
+  // 2. Recursive traversal for any node with children
+  if ('children' in node && Array.isArray(node.children)) {
     for (const child of node.children) {
       extractAssetNodes(child, assets);
     }
@@ -139,6 +150,9 @@ export async function downloadAssets(
 
   // 4. Download icons (SVG format)
   if (iconNodes.length > 0) {
+    const iconDir = join(assetsDir, 'icons');
+    await mkdir(iconDir, { recursive: true });
+
     try {
       const iconIds = iconNodes.map((n) => n.nodeId);
       const exportResults = await client.exportImages(fileKey, iconIds, {
@@ -157,8 +171,8 @@ export async function downloadAssets(
 
         try {
           const filename = `${sanitizeFilename(node.name)}.svg`;
-          const localPath = join(assetsDir, filename);
-          const relativePath = `./assets/${filename}`;
+          const localPath = join(iconDir, filename);
+          const relativePath = `./assets/icons/${filename}`;
 
           await downloadAsset(exportResult.url, localPath);
 
@@ -177,17 +191,18 @@ export async function downloadAssets(
           pathMap.set(node.ref, relativePath);
         } catch (error) {
           console.error(`Failed to download icon ${node.name}:`, error);
-          // Continue with other assets
         }
       }
     } catch (error) {
       console.error('Failed to export icons from Figma API:', error);
-      // Continue with images
     }
   }
 
   // 5. Download images (PNG format)
   if (imageNodes.length > 0) {
+    const imageDir = join(assetsDir, 'images');
+    await mkdir(imageDir, { recursive: true });
+
     try {
       const imageIds = imageNodes.map((n) => n.nodeId);
       const exportResults = await client.exportImages(fileKey, imageIds, {
@@ -206,8 +221,8 @@ export async function downloadAssets(
 
         try {
           const filename = `${sanitizeFilename(node.name)}.png`;
-          const localPath = join(assetsDir, filename);
-          const relativePath = `./assets/${filename}`;
+          const localPath = join(imageDir, filename);
+          const relativePath = `./assets/images/${filename}`;
 
           await downloadAsset(exportResult.url, localPath);
 
@@ -226,7 +241,6 @@ export async function downloadAssets(
           pathMap.set(node.ref, relativePath);
         } catch (error) {
           console.error(`Failed to download image ${node.name}:`, error);
-          // Continue with other assets
         }
       }
     } catch (error) {

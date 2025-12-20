@@ -199,6 +199,17 @@ export function matchTokens(
 
   // Match spacing with fuzzy matching (closest neighbor)
   mappings.spacing = {};
+  
+  // IMPORTANT: Pre-populate with exact project spacing values
+  // This allows layout gap/padding values to be matched directly
+  if (project.spacing) {
+    for (const [value, path] of project.spacing) {
+      if (typeof value === 'number') {
+        mappings.spacing[value] = path;
+      }
+    }
+  }
+  
   for (const [id, value] of Object.entries(extracted.spacing)) {
     const matched = matchSpacing(value as number, project.spacing);
     // Support both ID key (for tests) and Value key (for generator)
@@ -208,6 +219,16 @@ export function matchTokens(
 
   // Match radii with fuzzy matching (tolerance-based)
   mappings.radii = {};
+  
+  // Pre-populate with exact project radii values  
+  if (project.radii) {
+    for (const [value, path] of project.radii) {
+      if (typeof value === 'number') {
+        mappings.radii[value] = path;
+      }
+    }
+  }
+  
   for (const [id, value] of Object.entries(extracted.radii)) {
     const matched = matchRadii(value, project.radii);
     // Support both ID key (for tests) and Value key (for generator)
@@ -215,7 +236,7 @@ export function matchTokens(
     mappings.radii[value] = matched;
   }
 
-  // Match typography (by serialized key comparison)
+  // Match typography (by serialized key comparison with wildcard support)
   mappings.typography = {};
   if (extracted.typography) {
     for (const [_, value] of Object.entries(extracted.typography)) {
@@ -227,23 +248,114 @@ export function matchTokens(
       const figmaLH = Math.round(value.lineHeight || 0);
       const figmaTypoKey = `${value.fontFamily || ''}-${figmaSize}-${figmaWeight}-${figmaLH}`;
       
-      // 2. Try exact match
-      let match = project.typography?.get(figmaTypoKey);
+      let match: string | undefined;
       
-      // 3. Fallback: Fuzzy match (Size + Weight bucket + LH tolerance)
+      // 2. Try wildcard font family match first (most reliable for cross-platform)
+      // Format: *-fontSize-weight-lineHeight
+      if (project.typography) {
+        const wildcardKey = `*-${figmaSize}-${figmaWeight}-${figmaLH}`;
+        match = project.typography.get(wildcardKey);
+       
+        // 3. Fuzzy match with percentage tolerance (15% gap)
+        if (!match) {
+          let bestMatch: string | undefined;
+          let bestScore = Infinity; // Lower is better
+          const TOLERANCE_PERCENT = 0.15; // 15%
+
+          for (const [pKey, pPath] of project.typography.entries()) {
+            const keyStr = String(pKey);
+            // Skip exact matches if we missed them above (or wildcards if we are looking for wildcards)
+            // But we iterate everything to find closest numeric match
+            
+            const parts = keyStr.split('-');
+            // Keys are typically: Family-Size-Weight-LH
+            // Wildcard keys: *-Size-Weight-LH
+            const pLH = parseInt(parts.pop() || '0');
+            const pWeight = parseInt(parts.pop() || '0');
+            const pSize = parseInt(parts.pop() || '0');
+            // Family is the rest
+            const pFamily = parts.join('-');
+
+            // Only compare if families match OR project key is wildcard
+            const figmaFamilySimple = (value.fontFamily || '').toLowerCase().replace(/\s/g, '');
+            const pFamilySimple = pFamily.replace(/\*/g, '').toLowerCase().replace(/\s/g, '');
+            
+            // Allow wildcard match or partial family match
+            const familyMatch = pFamily === '*' || 
+                                figmaFamilySimple.includes(pFamilySimple) || 
+                                pFamilySimple.includes(figmaFamilySimple);
+
+            if (!familyMatch) continue;
+
+            // Calculate percentage differences
+            const sizeDiff = Math.abs(pSize - figmaSize) / Math.max(figmaSize, 1);
+            const weightDiff = Math.abs(pWeight - figmaWeight) / Math.max(figmaWeight, 1);
+            const lhDiff = Math.abs(pLH - figmaLH) / Math.max(figmaLH, 1);
+
+            // Check individual thresholds (loose check)
+            if (sizeDiff > TOLERANCE_PERCENT) continue;
+            // For weight, 15% of 590 is ~88. 590-88=502. So 500 is just slightly out?
+            // User asked for "15% gap".
+            if (weightDiff > TOLERANCE_PERCENT) continue;
+            if (lhDiff > TOLERANCE_PERCENT) continue;
+
+            // Composite score (weighted)
+            // Weight size deviations more heavily
+            const score = sizeDiff * 2 + weightDiff * 1 + lhDiff * 1;
+
+            if (score < bestScore) {
+              bestScore = score;
+              bestMatch = pPath;
+            }
+          }
+          
+          if (bestMatch) {
+            match = bestMatch;
+          }
+        }
+        
+        // Original 3. Try with tolerance on lineHeight (±2px) - now 4.
+        if (!match) {
+          for (const lhOffset of [1, -1, 2, -2]) {
+            const tolerantKey = `*-${figmaSize}-${figmaWeight}-${figmaLH + lhOffset}`;
+            match = project.typography.get(tolerantKey);
+            if (match) break;
+          }
+        }
+        
+        // Original 4. Try with tolerance on fontSize (±1px) - now 5.
+        if (!match) {
+          for (const sizeOffset of [1, -1]) {
+            const tolerantKey = `*-${figmaSize + sizeOffset}-${figmaWeight}-${figmaLH}`;
+            match = project.typography.get(tolerantKey);
+            if (match) break;
+          }
+        }
+      }
+      
+      // Original 5. Try exact match with full font family (fallback) - now 6.
+      if (!match && project.typography) {
+        match = project.typography.get(figmaTypoKey);
+      }
+      
+      // Original 6. Fallback: Original fuzzy match (Size + Weight bucket + LH tolerance) - now 7.
       if (!match && project.typography) {
         const weightBucket = Math.floor(figmaWeight / 100) * 100;
         
         for (const [pKey, pPath] of project.typography.entries()) {
-          const [pFamily, pSize, pWeight, pLH] = String(pKey).split('-');
+          const keyStr = String(pKey);
+          // Skip wildcard entries (they're for lookup, not iteration)
+          if (keyStr.startsWith('*-')) continue;
+          
+          const [pFamily, pSize, pWeight, pLH] = keyStr.split('-');
           const pSizeNum = parseInt(pSize);
           const pWeightNum = parseInt(pWeight);
           const pLHNum = parseInt(pLH);
           const pWeightBucket = Math.floor(pWeightNum / 100) * 100;
           
-          const sizeMatch = Math.abs(pSizeNum - figmaSize) <= 1; // +/- 1px tolerance for size
+          const sizeMatch = Math.abs(pSizeNum - figmaSize) <= 1;
           const weightMatch = pWeightBucket === weightBucket;
-          const lhMatch = Math.abs(pLHNum - figmaLH) <= 2; // +/- 2px tolerance for line-height
+          const lhMatch = Math.abs(pLHNum - figmaLH) <= 2;
           
           if (sizeMatch && weightMatch && lhMatch) {
             match = pPath;
@@ -252,7 +364,17 @@ export function matchTokens(
         }
       }
 
-      // Key by the content hash/string, not the ID
+      // Use the raw (un-normalized) values for the key stored in the map
+      // This ensures styles-builder can find it using its raw input
+      // figmaWeight is normalized (600), rawWeight is (590) 
+      // We must construct the key exactly how styles-builder does: 
+      // `${fontFamily}-${fontSize}-${fontWeight}-${lineHeight}`
+      // styles-builder uses raw values! (We reverted the normalization there)
+      const rawKey = `${value.fontFamily || ''}-${figmaSize}-${rawWeight}-${figmaLH}`;
+      if (match) {
+        mappings.typography[rawKey] = match;
+      }
+      // Keep fuzzy key too just in case
       mappings.typography[figmaTypoKey] = match || figmaTypoKey;
     }
   }

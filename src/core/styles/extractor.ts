@@ -166,6 +166,8 @@ interface NodeVisualProps {
   right?: number | string;
   top?: number | string;
   bottom?: number | string;
+  // Layout Meta
+  layout?: import('../types.js').LayoutMeta;
 }
 
 /**
@@ -213,6 +215,53 @@ export function extractStyleFromProps(
   // Opacity
   if (props.opacity !== undefined && props.opacity !== 1) {
     style.opacity = props.opacity;
+  }
+
+  // Layout (Flexbox)
+  if (props.layout) {
+    const { layout } = props;
+    
+    if (layout.type === 'row' || layout.type === 'column' || layout.type === 'stack') {
+      style.flexDirection = layout.type === 'row' ? 'row' : 'column';
+      
+      if (layout.gap) style.gap = layout.gap;
+      if (layout.padding) style.padding = layout.padding;
+      
+      // Alignments
+      if (layout.mainAlign !== 'start') {
+        const map: Record<string, string> = {
+          'center': 'center',
+          'end': 'flex-end',
+          'space-between': 'space-between',
+          'space-around': 'space-around'
+        };
+        style.justifyContent = map[layout.mainAlign];
+      }
+      
+      if (layout.crossAlign !== 'start') {
+        const map: Record<string, string> = {
+          'center': 'center',
+          'end': 'flex-end',
+          'stretch': 'stretch',
+          'baseline': 'baseline'
+        };
+        style.alignItems = map[layout.crossAlign];
+      }
+
+      // Sizing (flex: 1 for fill)
+      // Note: This logic might be refined based on parent's layout type
+      if (layout.sizing.horizontal === 'fill' && layout.type === 'column') {
+         // horizontal fill in column -> stretch (handled by alignItems: stretch usually, or width: '100%')
+         // but if we want flex: 1, it only applies to main axis
+      }
+      
+      if (layout.type === 'row' && layout.sizing.horizontal === 'fill') style.flex = 1;
+      if (layout.type === 'column' && layout.sizing.vertical === 'fill') style.flex = 1;
+      
+      // If it's a "hug" container, we might want to remove explicit width/height
+      if (layout.sizing.horizontal === 'hug') delete style.width;
+      if (layout.sizing.vertical === 'hug') delete style.height;
+    }
   }
 
   return style;

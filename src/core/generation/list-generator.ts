@@ -4,8 +4,9 @@
 
 import type { IRNode, ContainerIR, CardIR, TextIR, ButtonIR } from '../types.js';
 import type { ListHint } from '../detection/types.js';
+import type { TokenMappings } from '../mapping/token-matcher.js';
 import { toValidIdentifier, escapeJSXText } from './utils.js';
-import { buildJSX } from './jsx-builder.js';
+
 
 /**
  * Result of FlatList generation
@@ -21,6 +22,10 @@ export interface FlatListResult {
   flatListJSX: string;
   /** Style name for list item */
   itemStyleName: string;
+  /** Static data array definition */
+  dataConstant: string;
+  /** Optional separator render function */
+  separatorFunction?: string;
 }
 
 /**
@@ -104,7 +109,7 @@ function generateFlatListJSX(
   const props = [
     `data={${toCamelCase(hint.itemType)}Data}`,
     'renderItem={renderItem}',
-    'keyExtractor={(item) => item.id}',
+    `keyExtractor={(item: ${hint.itemType}) => item.id}`,
     horizontal ? 'horizontal' : '',
     horizontal ? 'showsHorizontalScrollIndicator={false}' : 'showsVerticalScrollIndicator={false}',
     `style={styles.${styleName}}`,
@@ -130,6 +135,62 @@ function isContainerNode(node: IRNode): node is ContainerIR | CardIR {
 }
 
 /**
+ * Extract data values from an instance node based on prop structure
+ */
+function extractValuesFromNode(node: IRNode): Record<string, string> {
+  const values: Record<string, string> = {
+    id: node.id, // ID is always needed
+  };
+
+  function traverse(n: IRNode) {
+    switch (n.semanticType) {
+      case 'Text': {
+        const textNode = n as TextIR;
+        const propName = toValidIdentifier(n.name);
+        values[propName] = textNode.text;
+        break;
+      }
+      case 'Button': {
+        const buttonNode = n as ButtonIR;
+        const propName = toValidIdentifier(n.name);
+        values[propName] = buttonNode.label;
+        break;
+      }
+      case 'Container':
+      case 'Card': {
+        const container = n as ContainerIR | CardIR;
+        for (const child of container.children) {
+          traverse(child);
+        }
+        break;
+      }
+    }
+  }
+
+  traverse(node);
+  return values;
+}
+
+/**
+ * Generate the static data constant
+ */
+function generateDataConstant(
+  variableName: string,
+  items: IRNode[]
+): string {
+  const dataObjects = items.map(item => {
+    const values = extractValuesFromNode(item);
+    // Format as simplified object string
+    const props = Object.entries(values)
+      .map(([k, v]) => `    ${k}: '${v.replace(/'/g, "\\'")}'`) // escape quotes
+      .join(',\n');
+    return `  {\n${props}\n  }`;
+  });
+
+  return `const ${variableName} = [\n${dataObjects.join(',\n')}\n];`;
+}
+
+/**
  * Generate FlatList code from a ListHint
  *
  * @param hint - ListHint from detection layer
@@ -149,10 +210,13 @@ function isContainerNode(node: IRNode): node is ContainerIR | CardIR {
 export function generateFlatList(
   hint: ListHint,
   irTree: IRNode,
+  mappings: TokenMappings,
   indent: number = 0
 ): FlatListResult {
   // Find the container node with proper type validation
   const container = findNodeById(irTree, hint.containerId);
+
+  const dataVariableName = `${toCamelCase(hint.itemType)}Data`;
 
   // Validate that we found a container with children
   if (!container || !isContainerNode(container) || container.children.length === 0) {
@@ -163,6 +227,7 @@ export function generateFlatList(
       renderItemFunction: `const renderItem = ({ item }: { item: ${hint.itemType} }) => (\n  <View />\n);`,
       flatListJSX: `<FlatList data={[]} renderItem={renderItem} keyExtractor={(item) => item.id} />`,
       itemStyleName: 'item',
+      dataConstant: `const ${dataVariableName}: ${hint.itemType}[] = [];`,
     };
   }
 
@@ -172,19 +237,61 @@ export function generateFlatList(
   const typeDefinition = generateTypeInterface(hint.itemType, props);
   const itemStyleName = toValidIdentifier(templateItem.name);
 
+  // Generate Data Constant
+  // Verify we actually have children to generate data from
+  const dataConstant = generateDataConstant(dataVariableName, container.children);
+
   // Generate renderItem
+  const renderItemName = `render${hint.itemType}`;
   const renderItemFunction = generateRenderItem(hint, templateItem, indent);
+  
+  // Update renderItem name in function definition
+  const finalRenderItemFunction = renderItemFunction.replace(
+    'const renderItem =', 
+    `const ${renderItemName} =`
+  );
+
+  // Handle Spacing (Gap)
+  const gap = (container as any).layout?.gap || 0;
+  let separatorFunction = '';
+  let separatorProp = '';
+
+  if (gap > 0) {
+    const separatorName = `render${hint.itemType}Separator`;
+    const dim = hint.orientation === 'horizontal' ? 'width' : 'height';
+    
+    // Use mapping for gap if available
+    const spacingMappings = mappings?.spacing || {};
+    const matchedGap = spacingMappings[gap] || String(gap);
+    const gapValue = matchedGap === String(gap) ? gap : matchedGap;
+    
+    separatorFunction = `const ${separatorName} = () => <View style={{ ${dim}: ${gapValue} }} />;`;
+    separatorProp = `ItemSeparatorComponent={${separatorName}}`;
+  }
 
   // Generate FlatList JSX
   const containerStyleName = toValidIdentifier(container.name);
-  const flatListJSX = generateFlatListJSX(hint, containerStyleName, indent);
+  // Need to update generateFlatListJSX to accept renderItemName
+  let flatListJSX = generateFlatListJSX(hint, containerStyleName, indent).replace(
+    'renderItem={renderItem}',
+    `renderItem={${renderItemName}}`
+  );
+  
+  if (separatorProp) {
+    flatListJSX = flatListJSX.replace(
+      '/>',
+      `  ${separatorProp}\n${'  '.repeat(indent)}/>`
+    );
+  }
 
   return {
     imports: ['FlatList'],
     typeDefinition,
-    renderItemFunction,
+    renderItemFunction: finalRenderItemFunction,
+    separatorFunction,
     flatListJSX,
     itemStyleName,
+    dataConstant,
   };
 }
 
@@ -273,9 +380,13 @@ function replaceTextWithProps(jsx: string, textToPropMap: Map<string, string>): 
 /**
  * Generate a complete item component for extraction
  */
+/**
+ * Generate a complete item component for extraction
+ */
 export function generateItemComponent(
   hint: ListHint,
-  templateItem: IRNode
+  templateItem: IRNode,
+  buildJSX: (node: IRNode, indent: number) => string
 ): string {
   const props = inferPropsFromNode(templateItem);
   const typeDefinition = generateTypeInterface(hint.itemType, props);
@@ -285,6 +396,7 @@ export function generateItemComponent(
   const propsDestructure = Object.keys(props).join(', ');
 
   // Generate JSX from template item
+  // Use the passed buildJSX function
   let itemJSX = buildJSX(templateItem, 2);
 
   // Build map of text content to prop names

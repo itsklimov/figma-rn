@@ -354,26 +354,30 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             generateHooks: options.generateHooks ?? true,
             detectAnimations: options.detectAnimations ?? false,
             outputFolder,  // Direct save to local folder
-            config: figmaConfig.theme?.colorsFile ? {
-              framework: 'react-native',
+            config: figmaConfig.tokenFiles.length > 0 ? {
+              framework: figmaConfig.framework,
               projectRoot: root,
-              codeStyle: figmaConfig.codeStyle,
+              codeStyle: {
+                stylePattern: figmaConfig.stylePattern,
+                scaleFunction: figmaConfig.utils?.scale || 'scale',
+                importPrefix: figmaConfig.importPrefix,
+              },
               theme: {
-                // Absolute path to colors file
-                location: `${root}/${figmaConfig.theme.colorsFile}`,
-                type: figmaConfig.theme.type,
-                // Path to main theme file for spacing/radii/shadows
-                mainThemeLocation: figmaConfig.theme.mainThemeFile
-                  ? `${root}/${figmaConfig.theme.mainThemeFile}`
-                  : undefined,
-                // Path to typography file for spread syntax
-                typographyFile: figmaConfig.theme.typographyFile,
+                // Use first token file as theme location
+                location: `${root}/${figmaConfig.tokenFiles[0]}`,
+                type: 'object-export',
+                // Use first token file for main theme as well
+                mainThemeLocation: `${root}/${figmaConfig.tokenFiles[0]}`,
               },
               // Mappings will be generated on-the-fly in code-generator-v2.ts
               mappings: {},
             } : {
-              framework: 'react-native',
-              codeStyle: figmaConfig.codeStyle,
+              framework: figmaConfig.framework,
+              codeStyle: {
+                stylePattern: figmaConfig.stylePattern,
+                scaleFunction: figmaConfig.utils?.scale || 'scale',
+                importPrefix: figmaConfig.importPrefix,
+              },
               // Mappings will be generated on-the-fly in code-generator-v2.ts
               mappings: {},
             },
@@ -698,7 +702,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           componentName,
           themeFilePath,
           outputDir,
-          projectRoot,
           writeFiles,
           category
         } = args as {
@@ -706,7 +709,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           componentName?: string;
           themeFilePath?: string;
           outputDir?: string;
-          projectRoot?: string;
           writeFiles?: boolean;
           category?: string;
         };
@@ -714,7 +716,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         console.error(`\n🎯 [GET_SCREEN] Processing ${figmaUrl}...`);
 
         const result = await executeGetScreen(
-          { figmaUrl, componentName, themeFilePath, outputDir, projectRoot, writeFiles, category },
+          { figmaUrl, componentName, themeFilePath, outputDir, writeFiles, category },
           FIGMA_TOKEN
         );
 

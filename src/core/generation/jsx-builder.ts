@@ -3,8 +3,10 @@
  * Includes accessibility props for production-ready components
  */
 
-import type { IRNode, IconIR } from '../types.js';
+import type { IRNode, IconIR, StylesBundle, ExtractedStyle, RepeaterIR } from '../types.js';
+import type { TokenMappings } from '../mapping/token-matcher.js';
 import { toValidIdentifier, escapeJSXText } from './utils.js';
+import { mapColor } from './styles-builder.js';
 
 /** Minimum touch target size for comfortable interaction */
 const MIN_TOUCH_TARGET = 44;
@@ -29,6 +31,13 @@ function calculateHitSlop(size: number): number {
  * Converts naming conventions to readable text and escapes quotes for JSX
  */
 function deriveA11yLabel(nodeName: string): string {
+  // Ignore generic names which are not useful for a11y
+  const genericNames = ['vector', 'group', 'frame', 'rectangle', 'ellipse', 'star', 'line', 'union', 'subtract', 'intersect', 'exclude'];
+  const sanitizedName = nodeName.toLowerCase().replace(/\s*\d*$/, '').trim();
+  if (genericNames.includes(sanitizedName)) {
+    return '';
+  }
+
   // Convert camelCase/PascalCase/kebab-case to readable text
   return nodeName
     .replace(/([a-z])([A-Z])/g, '$1 $2')
@@ -39,25 +48,100 @@ function deriveA11yLabel(nodeName: string): string {
 }
 
 /**
+ * Generate LinearGradient props from ExtractedStyle.backgroundGradient
+ */
+function buildGradientProps(
+  gradient: NonNullable<ExtractedStyle['backgroundGradient']>, 
+  spaces: string,
+  mappings?: TokenMappings
+): string {
+  const { colors, positions, angle } = gradient;
+  
+  // Map colors to tokens if mappings provided
+  const mappedColors = mappings 
+    ? colors.map(hex => mapColor(hex, mappings).value)
+    : colors.map(hex => `'${hex}'`);
+  
+  // Convert angle to start/end points (simplified linear gradient)
+  // Default: vertical top-to-bottom
+  let start = { x: 0.5, y: 0 };
+  let end = { x: 0.5, y: 1 };
+  
+  if (angle !== undefined) {
+    // Convert angle to start/end (0 = top-to-bottom, 90 = left-to-right)
+    const rad = (angle * Math.PI) / 180;
+    start = { x: 0.5 - Math.sin(rad) * 0.5, y: 0.5 - Math.cos(rad) * 0.5 };
+    end = { x: 0.5 + Math.sin(rad) * 0.5, y: 0.5 + Math.cos(rad) * 0.5 };
+  }
+
+  return `${spaces}  colors={[${mappedColors.join(', ')}]}
+${spaces}  locations={${JSON.stringify(positions)}}
+${spaces}  start={{ x: ${start.x.toFixed(2)}, y: ${start.y.toFixed(2)} }}
+${spaces}  end={{ x: ${end.x.toFixed(2)}, y: ${end.y.toFixed(2)} }}`;
+}
+
+/**
  * Build JSX string from IR node tree
  *
  * @param node - IR node to transform
  * @param indent - Current indentation level
  * @param imagePathMap - Optional mapping from imageRef to local file path
+ * @param jsxOverrides - Optional overrides for specific node IDs
+ * @param stylesBundle - Optional styles bundle to check for gradients
  * @returns JSX string
  */
-export function buildJSX(node: IRNode, indent: number = 0, imagePathMap?: Map<string, string>): string {
+export function buildJSX(
+  node: IRNode,
+  indent: number = 0,
+  imagePathMap?: Map<string, string>,
+  jsxOverrides?: Map<string, string>,
+  stylesBundle?: StylesBundle,
+  mappings?: TokenMappings
+): string {
+  // Check for overrides (e.g. valid FlatList for a container)
+  if (jsxOverrides?.has(node.id)) {
+    const spaces = '  '.repeat(indent);
+    return `${spaces}${jsxOverrides.get(node.id)!}`;
+  }
+
   const spaces = '  '.repeat(indent);
   const styleName = deriveStyleName(node);
+  
+  // Check if this node has a gradient background
+  const style = stylesBundle?.styles[node.styleRef];
+  const hasGradient = style?.backgroundGradient != null;
 
   switch (node.semanticType) {
     case 'Container':
     case 'Card': {
-      if (node.children.length === 0) {
+      // Handle gradient wrapping for containers
+      if (hasGradient && style?.backgroundGradient) {
+        const gradientProps = buildGradientProps(style.backgroundGradient, spaces, mappings);
+        const children = node.children || [];
+        if (children.length === 0) {
+          return `${spaces}<LinearGradient
+${gradientProps}
+${spaces}  style={styles.${styleName}}
+${spaces}/>`;
+        }
+        const childrenJSX = children
+          .map((child) => buildJSX(child, indent + 1, imagePathMap, jsxOverrides, stylesBundle, mappings))
+          .join('\n');
+        return `${spaces}<LinearGradient
+${gradientProps}
+${spaces}  style={styles.${styleName}}
+${spaces}>
+${childrenJSX}
+${spaces}</LinearGradient>`;
+      }
+
+      // Regular View
+      const children = node.children || [];
+      if (children.length === 0) {
         return `${spaces}<View style={styles.${styleName}} />`;
       }
-      const childrenJSX = node.children
-        .map((child) => buildJSX(child, indent + 1, imagePathMap))
+      const childrenJSX = children
+        .map((child) => buildJSX(child, indent + 1, imagePathMap, jsxOverrides, stylesBundle, mappings))
         .join('\n');
       return `${spaces}<View style={styles.${styleName}}>
 ${childrenJSX}
@@ -65,37 +149,70 @@ ${spaces}</View>`;
     }
 
     case 'Text': {
-      const escapedText = escapeJSXText(node.text);
-      return `${spaces}<Text style={styles.${styleName}}>${escapedText}</Text>`;
+      const content = node.propName ? `{${node.propName}}` : escapeJSXText(node.text);
+      return `${spaces}<Text style={styles.${styleName}}>${content}</Text>`;
     }
 
     case 'Image': {
+      // Use propName if available (parameterized image)
+      if (node.propName) {
+        return `${spaces}<Image
+${spaces}  source={${node.propName}}
+${spaces}  style={styles.${styleName}}
+${spaces}  accessibilityRole="image"
+${spaces}/>`;
+      }
+      
       // Use imageRef if available, with mapping to local path
       let source: string;
+      let isSvg = false;
       if (node.imageRef && imagePathMap?.has(node.imageRef)) {
-        source = `require('${imagePathMap.get(node.imageRef)}')`;
+        const path = imagePathMap.get(node.imageRef)!;
+        source = `require('${path}')`;
+        isSvg = path.toLowerCase().endsWith('.svg');
       } else if (node.imageRef) {
         source = `{ uri: '' } /* TODO: Image ref: ${node.imageRef} */`;
       } else {
         source = `{ uri: '' } /* TODO: Add image source */`;
       }
+      
+      const component = isSvg ? 'SvgIcon' : 'Image';
       const a11yLabel = deriveA11yLabel(node.name);
-      return `${spaces}<Image
+      const a11yProp = a11yLabel ? `\n${spaces}  accessibilityLabel="${a11yLabel}"` : '';
+      
+      return `${spaces}<${component}
 ${spaces}  source={${source}}
 ${spaces}  style={styles.${styleName}}
-${spaces}  accessibilityRole="image"
-${spaces}  accessibilityLabel="${a11yLabel}"
+${spaces}  accessibilityRole="image"${a11yProp}
 ${spaces}/>`;
     }
 
     case 'Button': {
       const escapedLabel = escapeJSXText(node.label);
+      const btn = node as any; // Cast to access iconRef for now
+      
+      let iconJSX = '';
+      if (btn.iconRef) {
+        let isSvg = false;
+        let iconSource: string;
+        if (imagePathMap?.has(btn.iconRef)) {
+          const path = imagePathMap.get(btn.iconRef)!;
+          iconSource = `require('${path}')`;
+          isSvg = path.toLowerCase().endsWith('.svg');
+        } else {
+          iconSource = `{ uri: '' } /* TODO: Button icon: ${btn.iconRef} */`;
+        }
+        
+        const component = isSvg ? 'SvgIcon' : 'Image';
+        iconJSX = `\n${spaces}  <${component} source={${iconSource}} style={styles.${styleName}Icon} />`;
+      }
+
       return `${spaces}<TouchableOpacity
 ${spaces}  style={styles.${styleName}}
 ${spaces}  onPress={() => {}}
 ${spaces}  accessibilityRole="button"
 ${spaces}  accessibilityLabel="${escapedLabel}"
-${spaces}>
+${spaces}>${iconJSX}
 ${spaces}  <Text style={styles.${styleName}Text}>${escapedLabel}</Text>
 ${spaces}</TouchableOpacity>`;
     }
@@ -104,8 +221,11 @@ ${spaces}</TouchableOpacity>`;
       // Use iconRef if available, with mapping to local path
       const iconNode = node as IconIR;
       let iconSource: string;
+      let isSvg = false;
       if (iconNode.iconRef && imagePathMap?.has(iconNode.iconRef)) {
-        iconSource = `require('${imagePathMap.get(iconNode.iconRef)}')`;
+        const path = imagePathMap.get(iconNode.iconRef)!;
+        iconSource = `require('${path}')`;
+        isSvg = path.toLowerCase().endsWith('.svg');
       } else if (iconNode.iconRef) {
         iconSource = `{ uri: '' } /* TODO: Icon ref: ${iconNode.iconRef} */`;
       } else {
@@ -116,12 +236,36 @@ ${spaces}</TouchableOpacity>`;
       const hitSlopProp = hitSlop > 0
         ? `\n${spaces}  hitSlop={{ top: ${hitSlop}, bottom: ${hitSlop}, left: ${hitSlop}, right: ${hitSlop} }}`
         : '';
+      
+      const component = isSvg ? 'SvgIcon' : 'Image';
+      const a11yProp = a11yLabel ? `\n${spaces}  accessibilityLabel="${a11yLabel}"` : '';
+
       return `${spaces}<TouchableOpacity
-${spaces}  accessibilityRole="button"
-${spaces}  accessibilityLabel="${a11yLabel}"${hitSlopProp}
+${spaces}  accessibilityRole="button"${a11yProp}${hitSlopProp}
 ${spaces}>
-${spaces}  <Image source={${iconSource}} style={styles.${styleName}} />
+${spaces}  <${component} source={${iconSource}} style={styles.${styleName}} />
 ${spaces}</TouchableOpacity>`;
+    }
+
+    case 'Component': {
+      const componentName = (node as any).componentName;
+      const comp = node as any; // Cast to access props
+      const props = comp.props || {};
+      const propEntries = Object.keys(props);
+      
+      if (propEntries.length > 0) {
+        const attributes = propEntries.map(p => `${p}={${p}}`).join(' ');
+        return `${spaces}<${componentName} ${attributes} />`;
+      }
+      
+      return `${spaces}<${componentName} />`;
+    }
+
+    case 'Repeater': {
+      const repeater = node as RepeaterIR;
+      return `${spaces}{${repeater.dataPropName}.map((item, index) => (
+${spaces}  <${repeater.itemComponentName} key={index} {...item} />
+${spaces}))}`;
     }
 
     default: {
@@ -145,10 +289,13 @@ export function collectStyleNames(node: IRNode): string[] {
     // Button generates additional text style
     if (n.semanticType === 'Button') {
       names.push(`${styleName}Text`);
+      if ((n as any).iconRef) {
+        names.push(`${styleName}Icon`);
+      }
     }
 
     // Recurse into children
-    if (n.semanticType === 'Container' || n.semanticType === 'Card') {
+    if (n.semanticType === 'Container' || n.semanticType === 'Card' || n.semanticType === 'Component') {
       for (const child of n.children) {
         collect(child);
       }

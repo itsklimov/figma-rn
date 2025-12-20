@@ -28,7 +28,9 @@ describe('Code Compilation', () => {
   });
 
   afterAll(async () => {
-    await client.stop();
+    if (client) {
+      await client.stop();
+    }
   });
 
   beforeEach(async () => {

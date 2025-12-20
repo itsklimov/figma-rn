@@ -339,6 +339,8 @@ export interface FigmaNode {
   layoutAlign?: 'MIN' | 'MAX' | 'CENTER' | 'STRETCH' | 'INHERIT';
   /** Flex grow in parent auto-layout ("Fill Container") */
   layoutGrow?: number;
+  /** Whether the node is absolutely positioned within an auto-layout frame */
+  layoutPositioning?: 'AUTO' | 'ABSOLUTE';
   /** Scrolling behavior */
   overflowDirection?: 'NONE' | 'HORIZONTAL_SCROLLING' | 'VERTICAL_SCROLLING' | 'BOTH_SCROLLING';
   /** explicit scroll behavior property */

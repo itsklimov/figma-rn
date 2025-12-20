@@ -16,4 +16,4 @@ export { extractProjectTokens } from './theme-extractor.js';
 export { matchTokens, createEmptyMappings } from './token-matcher.js';
 
 // Color utilities (for advanced use cases)
-export { hexToLab, labDistance, findClosestColor } from './color-matcher.js';
+export { colorToLab, labDistance, findClosestColor } from './color-matcher.js';

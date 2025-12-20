@@ -33,8 +33,8 @@ export interface ProjectConfig {
     /** Path to fonts within theme (e.g., 'fonts' or 'typography.fonts') */
     fontPath?: string;
 
-    /** Path to typography file */
-    typographyFile?: string;
+    /** Path(s) to typography file(s) */
+    typographyFile?: string | string[];
   };
 
   /** Components configuration */
@@ -166,8 +166,11 @@ export const projectConfigSchema = {
           nullable: true
         },
         typographyFile: {
-          type: 'string',
-          nullable: true
+          oneOf: [
+            { type: 'string' },
+            { type: 'array', items: { type: 'string' } },
+            { type: 'null' }
+          ]
         }
       },
       additionalProperties: false

@@ -115,6 +115,7 @@ function toNormalizedNode(node: FigmaNode): NormalizedNode {
   if (node.counterAxisSizingMode) normalizedNode.counterAxisSizingMode = node.counterAxisSizingMode;
   if (node.layoutAlign) normalizedNode.layoutAlign = node.layoutAlign;
   if (node.layoutGrow !== undefined) normalizedNode.layoutGrow = node.layoutGrow;
+  if (node.layoutPositioning) normalizedNode.layoutPositioning = node.layoutPositioning;
   if (node.overflowDirection) normalizedNode.overflowDirection = node.overflowDirection;
 
   // Copy Advanced Properties

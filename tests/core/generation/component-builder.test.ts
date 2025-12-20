@@ -12,6 +12,7 @@ describe('generateComponent', () => {
     padding: { top: 0, right: 0, bottom: 0, left: 0 },
     mainAlign: 'start' as const,
     crossAlign: 'start' as const,
+    sizing: { horizontal: 'fixed' as const, vertical: 'fixed' as const },
   };
 
   const emptyMappings: TokenMappings = {
@@ -80,7 +81,7 @@ describe('generateComponent', () => {
     expect(result.code).toContain('Text');
 
     // Check component definition
-    expect(result.code).toContain('export function ProductCard()');
+    expect(result.code).toContain('export function ProductCard(');
 
     // Check JSX structure
     expect(result.code).toContain('<View style={styles.container}>');
@@ -154,7 +155,7 @@ describe('generateComponent', () => {
 
     const result = generateComponent(screen, emptyMappings);
 
-    expect(result.code).toContain('export function UserProfileCard()');
+    expect(result.code).toContain('export function UserProfileCard(');
   });
 
   it('should return unmapped tokens report', () => {
@@ -286,6 +287,7 @@ describe('generateComponentMultiFile', () => {
     padding: { top: 0, right: 0, bottom: 0, left: 0 },
     mainAlign: 'start' as const,
     crossAlign: 'start' as const,
+    sizing: { horizontal: 'fixed' as const, vertical: 'fixed' as const },
   };
 
   const emptyMappings: TokenMappings = {
@@ -324,7 +326,7 @@ describe('generateComponentMultiFile', () => {
     const result = generateComponentMultiFile(screen, emptyMappings);
 
     expect(result.mainComponent.path).toBe('components/ProductScreen.tsx');
-    expect(result.mainComponent.content).toContain('export function ProductScreen');
+    expect(result.mainComponent.content).toContain('export function ProductScreen(');
   });
 
   it('should generate tokens file when no project theme', () => {

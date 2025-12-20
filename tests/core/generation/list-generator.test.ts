@@ -11,6 +11,7 @@ describe('generateFlatList', () => {
     padding: { top: 0, right: 0, bottom: 0, left: 0 },
     mainAlign: 'start' as const,
     crossAlign: 'start' as const,
+    sizing: { horizontal: 'fixed' as const, vertical: 'fixed' as const },
   };
 
   it('should generate FlatList with type definition', () => {
@@ -55,7 +56,7 @@ describe('generateFlatList', () => {
     expect(result.imports).toContain('FlatList');
     expect(result.typeDefinition).toContain('interface ProductItem');
     expect(result.typeDefinition).toContain('id: string');
-    expect(result.renderItemFunction).toContain('renderItem');
+    expect(result.renderItemFunction).toContain('renderProductItem');
     expect(result.renderItemFunction).toContain('ProductItem');
     expect(result.flatListJSX).toContain('<FlatList');
     expect(result.flatListJSX).toContain('keyExtractor');
@@ -213,6 +214,7 @@ describe('generateItemComponent', () => {
     padding: { top: 0, right: 0, bottom: 0, left: 0 },
     mainAlign: 'start' as const,
     crossAlign: 'start' as const,
+    sizing: { horizontal: 'fixed' as const, vertical: 'fixed' as const },
   };
 
   it('should generate item component with props', () => {
@@ -242,7 +244,7 @@ describe('generateItemComponent', () => {
       itemType: 'ProductCard',
     };
 
-    const result = generateItemComponent(hint, templateItem);
+    const result = generateItemComponent(hint, templateItem, (node) => '<View />');
 
     expect(result).toContain('interface ProductCard');
     expect(result).toContain('interface ProductCardComponentProps');
