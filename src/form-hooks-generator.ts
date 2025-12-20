@@ -520,7 +520,7 @@ export function generateFormHook(detection: FormDetection, formName: string): st
 
   fields.forEach((field) => {
     // Normalize and generate unique field name
-    let baseName = normalizeStyleName(field.name);
+    const baseName = normalizeStyleName(field.name);
     const count = usedNames.get(baseName) || 0;
     let fieldName = baseName;
     if (count > 0) {
@@ -581,7 +581,7 @@ export function generateZodSchema(detection: FormDetection): string {
 
   fields.forEach((field) => {
     // Normalize and generate unique field name
-    let baseName = normalizeStyleName(field.name);
+    const baseName = normalizeStyleName(field.name);
     const count = usedNames.get(baseName) || 0;
     let fieldName = baseName;
     if (count > 0) {

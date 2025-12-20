@@ -3,7 +3,7 @@
  * Creates temporary directory for each test
  */
 
-import { mkdtemp, rm, readFile, readdir, stat } from 'fs/promises';
+import { mkdtemp, rm, readFile, writeFile, mkdir, readdir, stat } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { existsSync } from 'fs';
@@ -19,6 +19,10 @@ export interface TempWorkspace {
   exists: (relativePath: string) => boolean;
   /** Read file */
   readFile: (relativePath: string) => Promise<string>;
+  /** Write file */
+  writeFile: (relativePath: string, content: string) => Promise<void>;
+  /** Create directory */
+  mkdir: (relativePath: string) => Promise<void>;
   /** Read JSON file */
   readJson: <T = unknown>(relativePath: string) => Promise<T>;
   /** List files in directory */
@@ -63,6 +67,16 @@ export async function createTempWorkspace(prefix = 'figma-test-'): Promise<TempW
     async readFile(relativePath: string) {
       const filePath = join(root, relativePath);
       return readFile(filePath, 'utf-8');
+    },
+
+    async writeFile(relativePath: string, content: string) {
+      const filePath = join(root, relativePath);
+      await writeFile(filePath, content, 'utf-8');
+    },
+
+    async mkdir(relativePath: string) {
+      const dirPath = join(root, relativePath);
+      await mkdir(dirPath, { recursive: true });
     },
 
     async readJson<T = unknown>(relativePath: string): Promise<T> {

@@ -54,7 +54,7 @@ describe('URL Parsing', () => {
 
     it('should handle URL with encoded node-id', async () => {
       // URL with encoded node-id (123%3A456 instead of 123:456)
-      const encodedUrl = `https://www.figma.com/design/${TEST_FILE_KEY}/test?node-id=4212%3A63544&m=dev`;
+      const encodedUrl = `https://www.figma.com/design/${TEST_FILE_KEY}/test?node-id=2532%3A25721&m=dev`;
 
       const result = await client.generateScreen({
         figmaUrl: encodedUrl,
@@ -66,9 +66,9 @@ describe('URL Parsing', () => {
     });
 
     it('should handle URL with hyphen in node-id', async () => {
-      // URL with hyphen (4212-63544) - standard format
+      // URL with hyphen (2549-48620) - standard format
       const result = await client.generateScreen({
-        figmaUrl: createFigmaUrl('4212-63544'),
+        figmaUrl: createFigmaUrl('2532-25721'),
         screenName: 'HyphenUrl',
         projectRoot: workspace.root,
       });
@@ -188,7 +188,7 @@ describe('URL Parsing', () => {
     it('should normalize nodeId with hyphen to colon', async () => {
       // Generate with hyphen
       await client.generateScreen({
-        figmaUrl: createFigmaUrl('4212-63544'),
+        figmaUrl: createFigmaUrl('2532-25721'),
         screenName: 'NormalizeTest',
         projectRoot: workspace.root,
       });
@@ -210,7 +210,7 @@ describe('URL Parsing', () => {
       ];
 
       // Should have key with colon, not hyphen
-      const hasColonKey = allKeys.some(key => key.includes(':') && key.includes('4212') && key.includes('63544'));
+      const hasColonKey = allKeys.some(key => key.includes(':') && key.includes('2532') && key.includes('25721'));
       expect(hasColonKey).toBe(true);
     });
   });
