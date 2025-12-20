@@ -110,6 +110,19 @@ function toNormalizedNode(node: FigmaNode): NormalizedNode {
     normalizedNode.opacity = node.opacity;
   }
 
+  // Copy sizing modes
+  if (node.primaryAxisSizingMode) normalizedNode.primaryAxisSizingMode = node.primaryAxisSizingMode;
+  if (node.counterAxisSizingMode) normalizedNode.counterAxisSizingMode = node.counterAxisSizingMode;
+  if (node.layoutAlign) normalizedNode.layoutAlign = node.layoutAlign;
+  if (node.layoutGrow !== undefined) normalizedNode.layoutGrow = node.layoutGrow;
+  if (node.overflowDirection) normalizedNode.overflowDirection = node.overflowDirection;
+
+  // Copy Advanced Properties
+  if (node.constraints) normalizedNode.constraints = node.constraints;
+  if (node.boundVariables) (normalizedNode as any).boundVariables = node.boundVariables;
+  if (node.styles) (normalizedNode as any).styles = node.styles;
+  if (node.scrollBehavior) (normalizedNode as any).scrollBehavior = node.scrollBehavior;
+
   // Copy text properties
   if (node.text) {
     normalizedNode.text = node.text;

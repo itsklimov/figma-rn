@@ -221,6 +221,40 @@ export interface ComponentProperty {
 }
 
 /**
+ * Variable alias for bound variables
+ */
+export interface VariableAlias {
+  type: 'VARIABLE_ALIAS';
+  id: string;
+}
+
+/**
+ * Bound variables (Design Tokens)
+ */
+export interface BoundVariables {
+  [key: string]: VariableAlias | VariableAlias[];
+}
+
+/**
+ * Style references (Typography, Color, etc.)
+ */
+export interface StyleReferences {
+  fill?: string;
+  stroke?: string;
+  text?: string;
+  effect?: string;
+  grid?: string;
+}
+
+/**
+ * Constraints for resizing
+ */
+export interface Constraints {
+  horizontal: 'LEFT' | 'RIGHT' | 'CENTER' | 'LEFT_RIGHT' | 'SCALE';
+  vertical: 'TOP' | 'BOTTOM' | 'CENTER' | 'TOP_BOTTOM' | 'SCALE';
+}
+
+/**
  * Node types in Figma
  */
 export type NodeType =
@@ -228,6 +262,7 @@ export type NodeType =
   | 'CANVAS'
   | 'FRAME'
   | 'GROUP'
+  | 'SECTION'
   | 'VECTOR'
   | 'BOOLEAN_OPERATION'
   | 'STAR'
@@ -289,16 +324,29 @@ export interface FigmaNode {
   /** Export settings */
   exportSettings?: ImageExportOptions[];
   /** Constraints for resizing behavior */
-  constraints?: {
-    horizontal: 'MIN' | 'MAX' | 'CENTER' | 'STRETCH' | 'SCALE';
-    vertical: 'MIN' | 'MAX' | 'CENTER' | 'STRETCH' | 'SCALE';
-  };
+  constraints?: Constraints;
   /** Absolute transform matrix */
   transform?: number[][];
   /** Plugin data */
   pluginData?: Record<string, any>;
   /** Shared plugin data */
   sharedPluginData?: Record<string, Record<string, any>>;
+  /** Layout sizing mode for primary axis (auto-layout) */
+  primaryAxisSizingMode?: 'FIXED' | 'AUTO';
+  /** Layout sizing mode for counter axis (auto-layout) */
+  counterAxisSizingMode?: 'FIXED' | 'AUTO';
+  /** Alignment in parent auto-layout (cross-axis, "Align Self") */
+  layoutAlign?: 'MIN' | 'MAX' | 'CENTER' | 'STRETCH' | 'INHERIT';
+  /** Flex grow in parent auto-layout ("Fill Container") */
+  layoutGrow?: number;
+  /** Scrolling behavior */
+  overflowDirection?: 'NONE' | 'HORIZONTAL_SCROLLING' | 'VERTICAL_SCROLLING' | 'BOTH_SCROLLING';
+  /** explicit scroll behavior property */
+  scrollBehavior?: string;
+  /** Bound variables (tokens) */
+  boundVariables?: BoundVariables;
+  /** Style references */
+  styles?: StyleReferences;
 }
 
 /**

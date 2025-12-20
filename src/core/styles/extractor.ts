@@ -21,6 +21,7 @@ function colorToHex(color: { hex: string }): string {
   return color.hex;
 }
 
+
 /**
  * Extract background style from fills
  */
@@ -157,8 +158,14 @@ interface NodeVisualProps {
   cornerRadius?: CornerRadius;
   opacity?: number;
   typography?: TypographyInfo;
-  width: number;
-  height: number;
+  width: number | string;
+  height: number | string;
+  // Positioning
+  position?: 'absolute' | 'relative';
+  left?: number | string;
+  right?: number | string;
+  top?: number | string;
+  bottom?: number | string;
 }
 
 /**
@@ -193,8 +200,15 @@ export function extractStyleFromProps(
   if (typography) style.typography = typography;
 
   // Size
-  if (props.width) style.width = props.width;
-  if (props.height) style.height = props.height;
+  if (props.width !== undefined) style.width = props.width;
+  if (props.height !== undefined) style.height = props.height;
+  
+  // Positioning
+  if (props.position) style.position = props.position;
+  if (props.left !== undefined) style.left = props.left;
+  if (props.right !== undefined) style.right = props.right;
+  if (props.top !== undefined) style.top = props.top;
+  if (props.bottom !== undefined) style.bottom = props.bottom;
 
   // Opacity
   if (props.opacity !== undefined && props.opacity !== 1) {
@@ -237,8 +251,8 @@ function collectSpacing(styles: Record<string, ExtractedStyle>): Record<string, 
   const values = new Set<number>();
 
   for (const style of Object.values(styles)) {
-    if (style.width) values.add(style.width);
-    if (style.height) values.add(style.height);
+    if (typeof style.width === 'number') values.add(style.width);
+    if (typeof style.height === 'number') values.add(style.height);
     if (style.borderWidth) values.add(style.borderWidth);
     if (style.shadow?.blur) values.add(style.shadow.blur);
   }

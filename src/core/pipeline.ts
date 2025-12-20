@@ -19,8 +19,10 @@ import type {
 } from './types.js';
 import { normalizeTree } from './normalize/index.js';
 import { addLayoutInfo } from './layout/index.js';
+import { mapConstraints } from './layout/constraint-mapper.js';
 import { recognizeSemantics } from './recognize/index.js';
 import { extractStyleFromProps, extractTokens, createEmptyStylesBundle } from './styles/index.js';
+import { BoundingBox } from '../api/types.js';
 
 /**
  * Properties needed for style extraction
@@ -34,6 +36,11 @@ interface NodeVisualProps {
   typography?: TypographyInfo;
   width: number;
   height: number;
+  // Advanced properties
+  boundVariables?: any;
+  styles?: any;
+  constraints?: any;
+  scrollBehavior?: string;
 }
 
 /**
@@ -42,7 +49,19 @@ interface NodeVisualProps {
 function buildVisualPropsMap(node: LayoutNode): Map<string, NodeVisualProps> {
   const map = new Map<string, NodeVisualProps>();
 
-  function walk(n: LayoutNode): void {
+  function walk(n: LayoutNode, parentBounds?: BoundingBox): void {
+    let absoluteProps = {};
+    
+    // Apply constraints if available and we have parent context
+    // This allows for responsive absolute positioning
+    if (n.constraints && parentBounds) {
+      // Cast to FigmaNode as mapConstraints expects it, but we only need compatible shape
+      const constraints = mapConstraints(n as unknown as FigmaNode, parentBounds);
+      if (constraints) {
+        absoluteProps = constraints;
+      }
+    }
+    
     map.set(n.id, {
       fills: n.fills,
       strokes: n.strokes,
@@ -52,10 +71,15 @@ function buildVisualPropsMap(node: LayoutNode): Map<string, NodeVisualProps> {
       typography: n.typography,
       width: n.boundingBox.width,
       height: n.boundingBox.height,
+      boundVariables: (n as any).boundVariables,
+      styles: (n as any).styles,
+      constraints: (n as any).constraints,
+      scrollBehavior: (n as any).scrollBehavior,
+      ...absoluteProps
     });
 
     for (const child of n.children) {
-      walk(child);
+      walk(child, n.boundingBox);
     }
   }
 
@@ -89,6 +113,8 @@ function collectStyles(
   return styles;
 }
 
+import { defaultConventions } from '../api/config.js';
+
 /**
  * Stage 1: Normalize
  * Filter out hidden/irrelevant nodes and unwrap useless groups
@@ -97,7 +123,11 @@ export function normalize(
   node: FigmaNode,
   options?: PipelineOptions
 ): NormalizedNode | null {
-  return normalizeTree(node, options?.ignorePatterns);
+  const ignorePatterns = options?.ignorePatterns || [
+    ...defaultConventions.ignorePatterns,
+    ...defaultConventions.annotationPatterns,
+  ];
+  return normalizeTree(node, ignorePatterns);
 }
 
 /**
@@ -164,12 +194,16 @@ export function transformToScreenIR(
         semanticType: 'Container',
         boundingBox: { x: 0, y: 0, width: 0, height: 0 },
         styleRef: 'style_empty',
-        layout: {
+          layout: {
           type: 'column',
           gap: 0,
           padding: { top: 0, right: 0, bottom: 0, left: 0 },
           mainAlign: 'start',
           crossAlign: 'start',
+          sizing: {
+            horizontal: 'fixed',
+            vertical: 'fixed',
+          },
         },
         children: [],
       },
