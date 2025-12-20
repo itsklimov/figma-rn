@@ -195,8 +195,7 @@ export async function generateCompleteFlow(
     (r): r is { screen: FlowScreen; error: string } => !!r.error
   );
 
-  console.error(
-  );
+  console.error(`[FLOW] Fetched ${successfulFetches.length} screens, ${failedFetches.length} failed`);
   if (failedFetches.length > 0) {
     failedFetches.forEach((f) => {
       console.error(`[FLOW]   - ${f.screen.screenName}: ${f.error}`);
@@ -225,8 +224,7 @@ export async function generateCompleteFlow(
 
     await updateConfigMappings({ colors: colorMappings });
 
-    console.error(
-    );
+    console.error(`[FLOW] Generated ${Object.keys(colorMappings).length} color mappings`);
   }
 
   // PHASE 3: Parallel screen code generation with pattern detection
@@ -239,8 +237,7 @@ export async function generateCompleteFlow(
   );
 
   const successfulScreens = screenResults.filter((r) => r.status === 'success');
-  console.error(
-  );
+  console.error(`[FLOW] Generated ${successfulScreens.length} successful screens`);
 
   // PHASE 4: Navigation generation based on screen analysis
 
@@ -296,6 +293,7 @@ export async function generateCompleteFlow(
     );
 
   } else {
+    // Shared types skipped
   }
 
   // PHASE 6: Generate index.ts barrel export
@@ -306,6 +304,7 @@ export async function generateCompleteFlow(
     const successfulScreenNames = successfulScreens.map((s) => s.screenName);
     indexFileCode = generateBarrelExport(successfulScreenNames);
   } else {
+    // Index file skipped
   }
 
   // Calculate statistics
@@ -360,6 +359,7 @@ async function fetchAllFigmaNodes(
       const node = response.nodes[nodeId]?.document;
 
       if (!node) {
+        console.error(`[FLOW] Node not found for screen ${screen.screenName}`);
       }
 
 
@@ -629,6 +629,7 @@ function parseFigmaUrl(figmaUrl: string): { fileKey: string; nodeId: string } {
 
   const nodeMatch = figmaUrl.match(/node-id=([^&]+)/);
   if (!nodeMatch) {
+    throw new Error(`Invalid Node ID in Figma URL: ${figmaUrl}`);
   }
   const nodeId = nodeMatch[1].replace(/-/g, ':');
 

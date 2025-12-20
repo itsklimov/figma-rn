@@ -257,6 +257,7 @@ async function detectImportPrefix(
         }
       }
     } catch {
+      // tsconfig.json not found or invalid
     }
 
     const babelConfigPath = join(projectRoot, 'babel.config.js');
@@ -278,6 +279,7 @@ async function detectImportPrefix(
         if (tildeMatch) return '~';
       }
     } catch {
+      // babel.config.js not found or invalid
     }
 
     return undefined;

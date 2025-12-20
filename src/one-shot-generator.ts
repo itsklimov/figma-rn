@@ -478,7 +478,7 @@ function extractImageNodes(node: any, config?: ProjectConfig): ExtractedImage[] 
   const seenComponentIds = new Set<string>();
 
   // Icon pattern: Icon*, ic/*, ic, *_icon, *-icon, star*, chevron*, arrow*
-  const iconPattern = /^Icon|^ic[\/\-_]|^ic$|[_\-]icon|star|chevron|arrow/i;
+  const iconPattern = /^Icon|^ic[/_-]|^ic$|[_-]icon|star|chevron|arrow/i;
 
   // Image pattern: photo*, img*, image*, *_image
   const imagePattern = /^photo|^img$|^image|_image$/i;
@@ -966,6 +966,7 @@ function calculateOverallConfidence(detections: DetectionResults): number {
   }
 
   if (confidences.length === 0) {
+    return 0.5; // Default confidence
   }
 
   // Return maximum confidence
@@ -1001,6 +1002,7 @@ export async function generateCompleteScreen(
   // 1. Parse Figma URL
   const parsedUrl = parseFigmaUrl(figmaUrl);
   if (!parsedUrl) {
+    throw new Error(`Invalid Figma URL: ${figmaUrl}`);
   }
 
   const { fileKey, nodeId } = parsedUrl;
@@ -1024,6 +1026,7 @@ export async function generateCompleteScreen(
       }
     }
   } catch (error) {
+    console.warn(`Failed to fetch Figma styles: ${error instanceof Error ? error.message : String(error)}`);
   }
 
   // 3. Load project config (if not provided)

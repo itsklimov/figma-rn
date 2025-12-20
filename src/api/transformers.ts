@@ -266,6 +266,31 @@ export function transformComponentProperties(raw: any): Record<string, Component
 }
 
 /**
+ * Extract bound variables (tokens)
+ */
+export function transformBoundVariables(raw: any): any {
+  return raw.boundVariables || null;
+}
+
+/**
+ * Extract constraints
+ */
+export function transformConstraints(raw: any): any {
+  if (!raw.constraints) return undefined;
+  return {
+    horizontal: raw.constraints.horizontal,
+    vertical: raw.constraints.vertical,
+  };
+}
+
+/**
+ * Extract validation/style references
+ */
+export function transformStyles(raw: any): any {
+  return raw.styles || null;
+}
+
+/**
  * Main recursive transformer for Figma nodes
  */
 export function transformNode(raw: any, parentBounds?: BoundingBox): FigmaNode {
@@ -337,6 +362,30 @@ export function transformNode(raw: any, parentBounds?: BoundingBox): FigmaNode {
   if (componentProperties) {
     node.componentProperties = componentProperties;
   }
+
+
+
+  // Layout sizing constraints
+  if (raw.primaryAxisSizingMode) node.primaryAxisSizingMode = raw.primaryAxisSizingMode;
+  if (raw.counterAxisSizingMode) node.counterAxisSizingMode = raw.counterAxisSizingMode;
+  if (raw.layoutAlign) node.layoutAlign = raw.layoutAlign;
+  if (raw.layoutGrow !== undefined) node.layoutGrow = raw.layoutGrow;
+
+  // New Advanced Properties
+  if (raw.boundVariables) node.boundVariables = raw.boundVariables;
+  if (raw.styles) node.styles = raw.styles;
+  if (raw.scrollBehavior) node.scrollBehavior = raw.scrollBehavior;
+  
+  // Constraints
+  if (raw.constraints) {
+    node.constraints = {
+      horizontal: raw.constraints.horizontal,
+      vertical: raw.constraints.vertical,
+    };
+  }
+
+  // Scrolling
+  if (raw.overflowDirection) node.overflowDirection = raw.overflowDirection;
 
   // Children
   if (raw.children && Array.isArray(raw.children)) {

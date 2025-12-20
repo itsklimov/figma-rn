@@ -718,10 +718,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           FIGMA_TOKEN
         );
 
-        const response = formatGetScreenResponse(result);
+        const content = formatGetScreenResponse(result);
 
         return {
-          content: [{ type: 'text', text: response }],
+          content,
           isError: !result.success,
         };
       }
