@@ -166,6 +166,15 @@ export function generateComponent(
     
     // Destructured props with defaults
     const destructureParts = Object.entries(rootProps).map(([name, config]: [string, any]) => {
+      if (config.type === 'image') {
+        // Resolve image default
+        const hash = config.defaultValue;
+        if (options?.imagePathMap?.has(hash)) {
+          return `${name} = require("${options.imagePathMap.get(hash)}")`;
+        }
+        // Fallback for missing images - use object to match ImageSourcePropType or valid URI
+        return `${name} = { uri: "https://via.placeholder.com/150?text=${name}" }`;
+      }
       const defaultVal = config.defaultValue ? ` = "${config.defaultValue.replace(/"/g, '\\"')}"` : '';
       return `${name}${defaultVal}`;
     });
@@ -181,16 +190,19 @@ export function generateComponent(
     renderItems: [] as string[],
     subComponents: [] as string[],
     repeaterContent: [] as string[],
+    // Track component names generated for lists to avoid duplication
+    generatedComponentNames: new Set<string>(),
   };
 
   // 2.6 Process Repeaters (Update tree and collect parts)
   const repeaters = collectRepeaters(screen.root);
   const usedRepeaterNames = new Set<string>();
   for (const repeater of repeaters) {
-    const { dataConstant, itemComponent, typeDefinition } = generateRepeaterParts(repeater, mappings, options, usedRepeaterNames);
+    const { dataConstant, itemComponent, typeDefinition, itemComponentName } = generateRepeaterParts(repeater, mappings, options, usedRepeaterNames);
     listExtras.data.push(dataConstant);
     listExtras.types.push(typeDefinition);
     listExtras.subComponents.push(itemComponent);
+    listExtras.generatedComponentNames.add(itemComponentName);
   }
 
   // 7. Collect and generate sub-components
@@ -199,12 +211,17 @@ export function generateComponent(
   const subComponentsCodeParts: string[] = [];
   
   for (const comp of components) {
+    // Skip if this component was already generated as part of a repeater
+    if (listExtras.generatedComponentNames.has(comp.componentName)) {
+      continue;
+    }
     const code = generateSubComponent(comp, mappings, options);
     if (code.includes('ImageSourcePropType')) {
       needsImageSourcePropType = true;
     }
     subComponentsCodeParts.push(code);
   }
+
   
   const subComponentsCode = subComponentsCodeParts.join('\n\n');
 
@@ -278,27 +295,8 @@ export function generateComponent(
     ...listExtras.subComponents
   ].filter(Boolean);
   
-  // Extract component names used in JSX (matches <ComponentName or <ComponentName>)
-  const usedComponentNames = new Set<string>();
-  const componentRefPattern = /<([A-Z][a-zA-Z0-9]*)/g;
-  let match;
-  while ((match = componentRefPattern.exec(jsx)) !== null) {
-    usedComponentNames.add(match[1]);
-  }
-  // Also check in renderItem functions
-  for (const fn of listExtras.renderItems) {
-    while ((match = componentRefPattern.exec(fn)) !== null) {
-      usedComponentNames.add(match[1]);
-    }
-  }
-  
-  // Filter sub-components to only include used ones
-  const allSubComponents = allGeneratedComponents.filter(code => {
-    // Extract function name from "function ComponentName(" or "export function ComponentName("
-    const funcMatch = code.match(/(?:export\s+)?function\s+([A-Z][a-zA-Z0-9]*)\s*\(/);
-    if (!funcMatch) return true; // Keep if we can't parse the name
-    return usedComponentNames.has(funcMatch[1]);
-  }).join('\n\n');
+  // 8. Assemble final component file in standard order:
+  const allSubComponents = allGeneratedComponents.join('\n\n');
 
   // 8. Assemble final component file in standard order:
   // 1. Imports
@@ -472,7 +470,7 @@ function generateRepeaterParts(
   });
   const typeDefinition = `interface ${repeater.itemComponentName}Props {\n${propLines.join('\n')}\n}`;
 
-  return { dataConstant, itemComponent, typeDefinition };
+  return { dataConstant, itemComponent, typeDefinition, itemComponentName: repeater.itemComponentName };
 }
 
 /**
@@ -535,6 +533,13 @@ function generateSubComponent(
     
     // Destructured props for the signature
     const destructureParts = Object.entries(extractedProps).map(([name, config]: [string, any]) => {
+      if (config.type === 'image') {
+        const hash = config.defaultValue;
+        if (options?.imagePathMap?.has(hash)) {
+          return `${name} = require("${options.imagePathMap.get(hash)}")`;
+        }
+        return `${name} = { uri: "https://via.placeholder.com/150?text=${name}" }`;
+      }
       const defaultVal = config.defaultValue ? ` = "${config.defaultValue.replace(/"/g, '\\"')}"` : '';
       return `${name}${defaultVal}`;
     });
