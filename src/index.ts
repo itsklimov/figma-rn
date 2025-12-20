@@ -13,8 +13,9 @@ import {
   ListToolsRequestSchema,
   Tool,
 } from '@modelcontextprotocol/sdk/types.js';
-import { join } from 'path';
+// import { join } from 'path';
 
+/*
 // Core ONE-SHOT generation modules
 import { generateCompleteScreen, saveGeneratedFiles, extractCategorizationSignals, categorizeBySignals, type CategorizationSignals } from './one-shot-generator.js';
 import { generateCompleteFlow } from './flow-generator.js';
@@ -38,6 +39,7 @@ import {
 } from './figma-workspace.js';
 import { extractDesignTokens, type DesignTokens } from './design-tokens.js';
 import { autoGenerateColorMappings } from './auto-theme-mapper.js';
+*/
 
 // New clean architecture pipeline
 import { getScreenTool, executeGetScreen, formatGetScreenResponse } from './edge/tools/index.js';
@@ -79,11 +81,15 @@ const tools: Tool[] = [
   // ───────────────────────────────────────────────────────────────────
   // TOOL 1: generate_screen - ONE Figma URL → Complete production code
   // ───────────────────────────────────────────────────────────────────
+  /*
+  // ───────────────────────────────────────────────────────────────────
+  // TOOL 1: generate_screen - ONE Figma URL → Complete production code
+  // ───────────────────────────────────────────────────────────────────
   {
     name: 'generate_screen',
     description: `🎯 ONE-SHOT: Generate complete React Native screen from Figma URL.
 
-AUTO-DETECTS and generates appropriate code for:
+AUTO-DETECTS and generate appropriate code for:
 • Lists → FlatList with renderItem, keyExtractor, pagination
 • Forms → react-hook-form + Zod validation + typed fields
 • Bottom Sheets → @gorhom/bottom-sheet with snap points
@@ -147,7 +153,12 @@ NAMING:
       required: ['figmaUrl'],
     },
   },
+  */
 
+  // ───────────────────────────────────────────────────────────────────
+  // TOOL 2: generate_flow - Multiple URLs → Complete app with navigation
+  // ───────────────────────────────────────────────────────────────────
+  /*
   // ───────────────────────────────────────────────────────────────────
   // TOOL 2: generate_flow - Multiple URLs → Complete app with navigation
   // ───────────────────────────────────────────────────────────────────
@@ -214,6 +225,7 @@ Just provide array of {figmaUrl, screenName} and get complete app structure.`,
       required: ['screens'],
     },
   },
+  */
 
   // setup_project removed - config is now auto-detected on first use of any tool
 
@@ -234,6 +246,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   try {
     switch (name) {
+      // ═══════════════════════════════════════════════════════════════
+      // TOOL 1: generate_screen
+      // ═══════════════════════════════════════════════════════════════
+      /*
       // ═══════════════════════════════════════════════════════════════
       // TOOL 1: generate_screen
       // ═══════════════════════════════════════════════════════════════
@@ -587,9 +603,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           content: [{ type: 'text', text: response }],
         };
       }
+      */
 
       // ═══════════════════════════════════════════════════════════════
       // TOOL 3: generate_flow
+      // ═══════════════════════════════════════════════════════════════
+      /*
+      // ═══════════════════════════════════════════════════════════════
+      // TOOL 2: generate_flow
       // ═══════════════════════════════════════════════════════════════
       case 'generate_flow': {
         const { screens, options = {} } = args as {
@@ -690,6 +711,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           content: [{ type: 'text', text: response }],
         };
       }
+      */
 
       // setup_project removed - config is now auto-detected on first use
 
