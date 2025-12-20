@@ -1,8 +1,25 @@
 /**
  * Imports Builder - Collect required imports from IR tree
+ * Uses discovered project config for hook and theme imports
  */
 
-import type { IRNode } from '../types.js';
+import type { IRNode, StylesBundle } from '../types.js';
+
+/**
+ * Configuration for import generation
+ */
+export interface ImportConfig {
+  /** Import prefix from tsconfig (e.g., '@app') */
+  importPrefix: string;
+  /** Path to useTheme hook if discovered */
+  useThemeHookPath?: string;
+  /** Path to theme/styles directory */
+  themeImportPath?: string;
+  /** Style pattern: useTheme uses hooks, StyleSheet uses direct imports */
+  stylePattern: 'useTheme' | 'StyleSheet';
+  /** Has project theme tokens */
+  hasProjectTheme: boolean;
+}
 
 /**
  * Collect RN components needed based on IR tree
@@ -34,17 +51,93 @@ function collectComponents(node: IRNode, set: Set<string>): void {
 }
 
 /**
+ * Check if any node in tree has a gradient background
+ */
+function hasGradients(node: IRNode, stylesBundle?: StylesBundle): boolean {
+  if (stylesBundle) {
+    const style = stylesBundle.styles[node.styleRef];
+    if (style?.backgroundGradient) return true;
+  }
+
+  if ('children' in node) {
+    return node.children.some(child => hasGradients(child, stylesBundle));
+  }
+  return false;
+}
+
+/**
+ * Generate theme/hook import based on config
+ */
+function generateThemeImport(config: ImportConfig): string | null {
+  if (!config.hasProjectTheme) return null;
+  
+  const imports: string[] = [];
+
+  // 1. Hook import
+  if (config.stylePattern === 'useTheme' && config.useThemeHookPath) {
+    const cleanPath = config.useThemeHookPath
+      .replace(/^(src|app)\//, '')
+      .replace(/\.(ts|tsx|js|jsx)$/, '');
+    imports.push(`import { useTheme } from '${config.importPrefix}/${cleanPath}';`);
+  }
+  
+  // 2. Static theme import (for module-level StyleSheet.create)
+  if (config.themeImportPath) {
+    imports.push(`import { theme } from '${config.themeImportPath}';`);
+  } else {
+    imports.push(`import { theme } from '${config.importPrefix}/styles';`);
+  }
+  
+  return imports.join('\n');
+}
+
+/**
  * Build import statements from IR tree
  */
-export function buildImports(root: IRNode): string {
+export function buildImports(
+  root: IRNode, 
+  extraImports: string[] = [],
+  stylesBundle?: StylesBundle,
+  config?: ImportConfig
+): string {
   const rnComponents = new Set<string>(['StyleSheet']);
 
   collectComponents(root, rnComponents);
+  
+  // Add extra imports (like ImageSourcePropType)
+  extraImports.forEach(i => rnComponents.add(i));
 
   const sorted = Array.from(rnComponents).sort();
 
-  return [
+  const lines = [
     `import React from 'react';`,
     `import { ${sorted.join(', ')} } from 'react-native';`,
-  ].join('\n');
+  ];
+
+  // Add LinearGradient if needed
+  if (hasGradients(root, stylesBundle)) {
+    lines.push(`import { LinearGradient } from 'expo-linear-gradient';`);
+  }
+
+  // Add theme/hook import based on config
+  if (config) {
+    const themeImport = generateThemeImport(config);
+    if (themeImport) {
+      lines.push(themeImport);
+    }
+  }
+
+  // Add SvgIcon if needed (checking extraImports or manually here)
+  if (rnComponents.has('SvgIcon')) {
+    // SvgIcon is likely a custom component in the project
+    // We remove it from RN imports and add it as a separate import
+    rnComponents.delete('SvgIcon');
+    const sortedRN = Array.from(rnComponents).sort();
+    lines[1] = `import { ${sortedRN.join(', ')} } from 'react-native';`;
+    const prefix = config?.importPrefix || '@app';
+    lines.push(`import { SvgIcon } from '${prefix}/components';`);
+  }
+
+  return lines.join('\n');
 }
+

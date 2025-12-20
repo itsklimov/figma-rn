@@ -66,6 +66,7 @@ export interface NormalizedNode {
   counterAxisSizingMode?: 'FIXED' | 'AUTO';
   layoutAlign?: 'INHERIT' | 'STRETCH' | 'MIN' | 'CENTER' | 'MAX';
   layoutGrow?: number;
+  layoutPositioning?: 'AUTO' | 'ABSOLUTE';
 
   // Layout sizing from parent context (how this node behaves in parent)
   layoutSizing?: {
@@ -130,7 +131,8 @@ export type SemanticType =
   | 'Button'
   | 'Card'
   | 'Icon'
-  | 'Component';
+  | 'Component'
+  | 'Repeater';
 
 /**
  * Base properties for all IR nodes
@@ -212,6 +214,17 @@ export interface ComponentIR extends IRNodeBase {
 }
 
 /**
+ * Repeater element - detected from repeating sibling patterns
+ */
+export interface RepeaterIR extends IRNodeBase {
+  semanticType: 'Repeater';
+  itemComponentName: string; // The name of the item component (e.g. 'MasterCard')
+  dataPropName: string; // The name of the prop containing the array (e.g. 'masters')
+  children: IRNode[]; // The original children (to extract data from)
+  layout: LayoutMeta; // The layout of the items (row/col)
+}
+
+/**
  * Union of all IR node types
  */
 export type IRNode =
@@ -221,7 +234,8 @@ export type IRNode =
   | ButtonIR
   | CardIR
   | IconIR
-  | ComponentIR;
+  | ComponentIR
+  | RepeaterIR;
 
 // ============================================================================
 // 2.4 Styles Bundle Types
@@ -285,6 +299,15 @@ export interface ExtractedStyle {
 
   // Opacity
   opacity?: number;
+
+  // Layout (Flexbox)
+  flexDirection?: 'row' | 'column';
+  justifyContent?: string;
+  alignItems?: string;
+  alignSelf?: string;
+  gap?: number;
+  padding?: Padding;
+  flex?: number;
 }
 
 /**

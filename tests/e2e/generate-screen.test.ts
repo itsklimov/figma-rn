@@ -106,8 +106,8 @@ describe('generate_screen', () => {
 
       // Validate component structure
       const validation = await validateGeneratedComponent(workspace, category, componentName);
+      expect(validation.errors).toEqual([]);
       expect(validation.valid).toBe(true);
-      expect(validation.errors).toHaveLength(0);
       expect(validation.files.indexTsx).toBe(true);
       expect(validation.files.metaJson).toBe(true);
     });
@@ -359,6 +359,11 @@ describe('generate_screen', () => {
       });
 
       const responseText = result.content[0].text;
+
+      // Debug output
+      if (!responseText.includes('Design Tokens') && !responseText.includes('tokens')) {
+         console.log('Response text tokens check failed. Content snippet:', responseText.substring(0, 500));
+      }
 
       // Check for tokens section
       // May contain colors or typography

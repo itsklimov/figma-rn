@@ -13,6 +13,7 @@ import type {
   CardIR,
   IconIR,
   ComponentIR,
+  RepeaterIR,
   LayoutMeta,
 } from '../types.js';
 
@@ -312,6 +313,75 @@ function inferButtonVariant(node: LayoutNode): ButtonIR['variant'] {
 }
 
 /**
+ * Detect and group repeating sibling patterns into RepeaterIR nodes
+ */
+function processChildrenWithRepeaters(children: LayoutNode[]): IRNode[] {
+  if (children.length < 2) {
+    return children.map(child => toIRNode(child));
+  }
+
+  const result: IRNode[] = [];
+  let i = 0;
+
+  while (i < children.length) {
+    const startIdx = i;
+    const current = children[i];
+    const baseName = current.name.replace(/\d+$/, '').trim();
+    
+    // Look for contiguous siblings with same base name OR same componentId
+    let count = 1;
+    while (i + count < children.length) {
+      const next = children[i + count];
+      const nextBaseName = next.name.replace(/\d+$/, '').trim();
+      
+      const sameName = baseName.length > 2 && baseName === nextBaseName;
+      const sameComponent = (current as any).componentId && (current as any).componentId === (next as any).componentId;
+      const sameTypeAndStructure = current.type === next.type && current.children.length === next.children.length;
+
+      if ((sameName || sameComponent) && sameTypeAndStructure) {
+        count++;
+      } else {
+        break;
+      }
+    }
+
+    if (count >= 2) {
+      // Create a RepeaterIR
+      const repeatedItems = children.slice(startIdx, startIdx + count);
+      const itemsIR = repeatedItems.map(item => toIRNode(item));
+      
+      const itemComponentName = toPascalCase(baseName);
+      const dataPropName = toValidIdentifier(baseName).toUpperCase() + '_DATA';
+
+      result.push({
+        id: `repeater_${current.id}`,
+        name: `${baseName} (Repeater)`,
+        semanticType: 'Repeater',
+        itemComponentName,
+        dataPropName,
+        children: itemsIR,
+        // Inherit layout from items if they are in a flow, 
+        // but repeaters usually just follow their parent flow.
+        // We'll use a dummy layout or the first item's layout meta if relevant.
+        layout: itemsIR[0] && 'layout' in itemsIR[0] ? (itemsIR[0] as any).layout : {
+          type: 'column', gap: 0, padding: {top:0,right:0,bottom:0,left:0}, 
+          mainAlign: 'start', crossAlign: 'start', sizing: {horizontal:'fixed', vertical:'fixed'}
+        },
+        styleRef: `style_${toValidIdentifier(baseName)}_repeater`,
+        boundingBox: current.boundingBox, // roughly
+      } as RepeaterIR);
+      
+      i += count;
+    } else {
+      result.push(toIRNode(current));
+      i++;
+    }
+  }
+
+  return result;
+}
+
+/**
  * Convert a LayoutNode to an IRNode
  */
 export function toIRNode(node: LayoutNode): IRNode {
@@ -386,7 +456,7 @@ export function toIRNode(node: LayoutNode): IRNode {
         ...baseProps,
         semanticType: 'Card',
         layout: node.layout,
-        children: node.children.map(child => toIRNode(child)),
+        children: processChildrenWithRepeaters(node.children),
       } as CardIR;
 
     case 'Container':
@@ -395,7 +465,7 @@ export function toIRNode(node: LayoutNode): IRNode {
         ...baseProps,
         semanticType: 'Container',
         layout: node.layout,
-        children: node.children.map(child => toIRNode(child)),
+        children: processChildrenWithRepeaters(node.children),
       } as ContainerIR;
   }
 }

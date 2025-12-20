@@ -7,6 +7,7 @@ import type { FigmaNode } from '../api/types.js';
 import type {
   NormalizedNode,
   LayoutNode,
+  LayoutType,
   IRNode,
   ScreenIR,
   StylesBundle,
@@ -41,6 +42,7 @@ interface NodeVisualProps {
   styles?: any;
   constraints?: any;
   scrollBehavior?: string;
+  layout?: import('./types.js').LayoutMeta;
 }
 
 /**
@@ -49,12 +51,16 @@ interface NodeVisualProps {
 function buildVisualPropsMap(node: LayoutNode): Map<string, NodeVisualProps> {
   const map = new Map<string, NodeVisualProps>();
 
-  function walk(n: LayoutNode, parentBounds?: BoundingBox): void {
+  function walk(n: LayoutNode, parentBounds?: BoundingBox, parentLayout?: LayoutType): void {
     let absoluteProps = {};
     
-    // Apply constraints if available and we have parent context
-    // This allows for responsive absolute positioning
-    if (n.constraints && parentBounds) {
+    // Apply constraints only if:
+    // 1. Parent is absolute/stack OR node is explicitly ABSOLUTE positioned
+    // 2. We have parent context for calculation
+    const isInsideFlow = parentLayout === 'row' || parentLayout === 'column';
+    const isExplicitlyAbsolute = (n as any).layoutPositioning === 'ABSOLUTE';
+
+    if (n.constraints && parentBounds && (!isInsideFlow || isExplicitlyAbsolute)) {
       // Cast to FigmaNode as mapConstraints expects it, but we only need compatible shape
       const constraints = mapConstraints(n as unknown as FigmaNode, parentBounds);
       if (constraints) {
@@ -75,11 +81,12 @@ function buildVisualPropsMap(node: LayoutNode): Map<string, NodeVisualProps> {
       styles: (n as any).styles,
       constraints: (n as any).constraints,
       scrollBehavior: (n as any).scrollBehavior,
+      layout: n.layout,
       ...absoluteProps
     });
 
     for (const child of n.children) {
-      walk(child, n.boundingBox);
+      walk(child, n.boundingBox, n.layout.type);
     }
   }
 

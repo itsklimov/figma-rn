@@ -341,6 +341,7 @@ export function addLayoutInfo(node: NormalizedNode, parentLayoutType?: LayoutTyp
   if (node.text) layoutNode.text = node.text;
   if (node.typography) layoutNode.typography = node.typography;
   if (node.figmaLayout) layoutNode.figmaLayout = node.figmaLayout;
+  if (node.layoutPositioning) (layoutNode as any).layoutPositioning = node.layoutPositioning;
 
   // Copy Advanced Properties
   if (node.constraints) layoutNode.constraints = node.constraints;

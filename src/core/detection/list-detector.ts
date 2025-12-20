@@ -1,33 +1,28 @@
 /**
  * List Detector - Identify repeating items for FlatList generation
  *
- * Detects containers with 3+ similar children that should become FlatList.
- * Similarity is determined by matching semantic structure and similar dimensions.
+ * Detects containers that should become FlatList based on:
+ * 1. Intent: Explicit scrolling enabled (overflow: scroll)
+ * 2. Scale: 3+ structurally similar items
  */
 
 import type { IRNode, ContainerIR, CardIR, LayoutMeta } from '../types.js';
 import type { ListHint } from './types.js';
 
 /**
- * Minimum items to consider a list.
- * 3 items ensures we're detecting actual lists, not just paired elements.
+ * Minimum items to consider a list if NO scrolling is detected.
  */
 const MIN_LIST_ITEMS = 3;
 
 /**
  * Dimension similarity tolerance (10%).
- * Allows for minor sizing variations while still detecting consistent items.
  */
 const SIZE_TOLERANCE = 0.1;
 
-/**
- * Minimum dimension value to prevent division by zero.
- * Uses 0.01 instead of 0 to handle edge cases with zero-sized nodes.
- */
 const MIN_DIMENSION = 0.01;
 
 /**
- * Type guard for container-like nodes (Container or Card)
+ * Type guard for container-like nodes
  */
 function isContainerLike(node: IRNode): node is ContainerIR | CardIR {
   return node.semanticType === 'Container' || node.semanticType === 'Card';
@@ -35,7 +30,6 @@ function isContainerLike(node: IRNode): node is ContainerIR | CardIR {
 
 /**
  * Check if two nodes have similar dimensions
- * Uses safe math to prevent division by zero
  */
 function hasSimilarSize(a: IRNode, b: IRNode): boolean {
   const widthA = Math.max(a.boundingBox.width, MIN_DIMENSION);
@@ -50,67 +44,57 @@ function hasSimilarSize(a: IRNode, b: IRNode): boolean {
 
 /**
  * Check if two nodes have the same semantic structure
- * Compares semantic type, child count, and child types for containers
  */
 function hasSameStructure(a: IRNode, b: IRNode): boolean {
-  // Must have same semantic type
   if (a.semanticType !== b.semanticType) return false;
 
-  // For containers/cards, check children structure
   if (isContainerLike(a) && isContainerLike(b)) {
-    // Must have same number of children
     if (a.children.length !== b.children.length) return false;
-
-    // Each child must have same semantic type
     for (let i = 0; i < a.children.length; i++) {
       if (a.children[i].semanticType !== b.children[i].semanticType) {
         return false;
       }
     }
   }
-
   return true;
 }
 
 /**
- * Generate a short hash from node ID for uniqueness
+ * Generate a short hash from node ID
  */
 function shortHash(id: string): string {
   let hash = 0;
   for (let i = 0; i < id.length; i++) {
     const char = id.charCodeAt(i);
     hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32-bit integer
+    hash = hash & hash;
   }
   return Math.abs(hash).toString(36).slice(0, 4);
 }
 
 /**
  * Infer a type name from a node's structure
- * Adds hash suffix to generic names to prevent collisions
  */
 function inferTypeName(node: IRNode): string {
-  // Use node name if it's meaningful
+  // Use component name if it's a component
+  if (node.semanticType === 'Component') {
+    return (node as any).componentName;
+  }
+
   const name = node.name
     .replace(/[^a-zA-Z0-9]/g, '')
-    .replace(/^\d+/, ''); // Remove leading numbers
+    .replace(/^\d+/, '');
 
   if (name.length >= 3) {
-    // PascalCase the name
     return name.charAt(0).toUpperCase() + name.slice(1) + 'Item';
   }
 
-  // Fallback based on semantic type - add hash for uniqueness
   const hash = shortHash(node.id);
   switch (node.semanticType) {
-    case 'Card':
-      return `CardItem${hash}`;
-    case 'Container':
-      return `ListItem${hash}`;
-    case 'Button':
-      return `ButtonItem${hash}`;
-    default:
-      return `Item${hash}`;
+    case 'Card': return `CardItem${hash}`;
+    case 'Container': return `ListItem${hash}`;
+    case 'Button': return `ButtonItem${hash}`;
+    default: return `Item${hash}`;
   }
 }
 
@@ -127,16 +111,36 @@ function getOrientation(layout: LayoutMeta): 'horizontal' | 'vertical' {
 function detectListInContainer(container: ContainerIR | CardIR): ListHint | null {
   const { children, layout } = container;
 
-  // Need minimum items
-  if (children.length < MIN_LIST_ITEMS) return null;
+  if (children.length === 0) return null;
 
-  // All children should be similar to the first one
+  // Rule 1: Scrolling Intent (overflow = scroll)
+  // If explicitly scrollable, we treat it as a list even if it has few items
+  // (Assuming the children represent the items or the template)
+  const isScrollable = layout.overflow === 'scroll';
+  
+  // Rule 2: Scale (repetition)
+  // If not explicitly scrollable, we need enough repetition to justify a list
+  if (!isScrollable && children.length < MIN_LIST_ITEMS) {
+    return null;
+  }
+
+  // Verify Similarity
+  // Even if scrollable, a FlatList requires similar items.
+  // If we have > 1 item, check they are consistent.
+  // If we have 1 item and it's scrollable, assumes it's the template.
+  
   const firstChild = children[0];
-  const allSimilar = children.every(child =>
-    hasSameStructure(child, firstChild) && hasSimilarSize(child, firstChild)
-  );
-
-  if (!allSimilar) return null;
+  
+  if (children.length > 1) {
+    const allSimilar = children.every(child =>
+      hasSameStructure(child, firstChild) && hasSimilarSize(child, firstChild)
+    );
+    if (!allSimilar) {
+      // If scrollable but heterogeneous, it's a ScrollView, not a FlatList
+      // We return null here because this detector is specifically for FlatLists
+      return null;
+    }
+  }
 
   return {
     containerId: container.id,
@@ -146,40 +150,22 @@ function detectListInContainer(container: ContainerIR | CardIR): ListHint | null
   };
 }
 
-/**
- * Recursively detect lists in an IR tree
- * Stops recursion when a list is detected to avoid detecting list items as separate lists
- */
 function detectListsRecursive(node: IRNode, results: ListHint[]): void {
-  // Only check containers and cards for list patterns
   if (!isContainerLike(node)) return;
 
   const hint = detectListInContainer(node);
   if (hint) {
     results.push(hint);
-    // Stop recursion here - detected list items shouldn't be analyzed further
-    // This prevents false positives where list items themselves are detected as lists
-    return;
+    return; // Don't recurse into list items
   }
 
-  // No list pattern found - recurse into children to find nested lists
-  for (const child of node.children) {
-    detectListsRecursive(child, results);
+  if ('children' in node) {
+    for (const child of node.children) {
+      detectListsRecursive(child, results);
+    }
   }
 }
 
-/**
- * Detect repeating items that should become FlatList
- *
- * @param root - Root IR node to analyze
- * @returns List of detected list patterns
- *
- * @example
- * ```typescript
- * const hints = detectLists(screenIR.root);
- * // hints: [{ containerId: '1:5', itemIds: ['1:6', '1:7', '1:8'], orientation: 'vertical', itemType: 'ProductItem' }]
- * ```
- */
 export function detectLists(root: IRNode): ListHint[] {
   const results: ListHint[] = [];
   detectListsRecursive(root, results);

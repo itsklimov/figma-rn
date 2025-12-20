@@ -40,6 +40,8 @@ export interface WriteOptions {
   screenshot?: Buffer;
   /** Figma name (may differ from componentName) */
   figmaName?: string;
+  /** Previous name (if renamed) for cleanup */
+  previousName?: string;
 }
 
 /**
@@ -106,6 +108,7 @@ export async function writeGeneratedFiles(options: WriteOptions): Promise<WriteR
     assets = [],
     screenshot,
     figmaName,
+    previousName,
   } = options;
 
   try {
@@ -133,6 +136,7 @@ export async function writeGeneratedFiles(options: WriteOptions): Promise<WriteR
       {
         assets: assetInfos,
         figmaName,
+        previousName,
         // Note: tokensExtracted is computed inside registerGeneration from tokens
         // We don't have access to the DesignTokens object here, so we omit it
       }
@@ -153,8 +157,8 @@ export async function writeGeneratedFiles(options: WriteOptions): Promise<WriteR
       extractedPaths.push(join(generationResult.folder, filename));
     }
 
-    // 3. Save tokens file if present
-    if (multiFileResult.tokens) {
+    // 3. Save tokens file if present and not empty
+    if (multiFileResult.tokens && multiFileResult.tokens.content.trim().length > 0) {
       const tokensFilename = 'tokens.ts';
       const tokensFilePath = join(elementFolder, tokensFilename);
 

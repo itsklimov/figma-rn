@@ -370,6 +370,7 @@ export function transformNode(raw: any, parentBounds?: BoundingBox): FigmaNode {
   if (raw.counterAxisSizingMode) node.counterAxisSizingMode = raw.counterAxisSizingMode;
   if (raw.layoutAlign) node.layoutAlign = raw.layoutAlign;
   if (raw.layoutGrow !== undefined) node.layoutGrow = raw.layoutGrow;
+  if (raw.layoutPositioning) node.layoutPositioning = raw.layoutPositioning;
 
   // New Advanced Properties
   if (raw.boundVariables) node.boundVariables = raw.boundVariables;

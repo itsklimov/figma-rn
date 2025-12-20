@@ -23,7 +23,11 @@ function formatDim(val: string | number, scaleFn?: string): string {
    if (typeof val === 'number') {
      return applyScaling(formatInteger(val), scaleFn);
    }
-   return val; // Return string directly (e.g. "50%")
+   // Ensure strings (like "100%") are quoted in the output
+   if (typeof val === 'string' && !val.startsWith("'") && !val.startsWith('"')) {
+     return `'${val}'`;
+   }
+   return String(val);
 }
 
 
@@ -33,10 +37,10 @@ function formatDim(val: string | number, scaleFn?: string): string {
  */
 export function mapColor(hex: string, mappings: TokenMappings): { value: string; mapped: boolean } {
   const colorMappings = mappings.colors || {};
+  const upperHex = hex.toUpperCase();
 
-
-  // Direct lookup
-  const mapped = colorMappings[hex];
+  // Try case-insensitive lookup
+  const mapped = colorMappings[hex] || colorMappings[upperHex] || colorMappings[hex.toLowerCase()];
   if (mapped && mapped !== hex) {
     return { value: mapped, mapped: true };
   }
@@ -292,15 +296,18 @@ function buildStyleProps(
     const mappedTypo = typoMappings[typoKey];
 
     if (mappedTypo && mappedTypo !== typoKey) {
+      // Spread includes fontFamily, fontSize, fontWeight, lineHeight, letterSpacing
       lines.push(`    ...${mappedTypo},`);
     } else {
+      // Fallback: output individual properties
       if (fontFamily) lines.push(`    fontFamily: '${fontFamily}',`);
       if (fontSize) lines.push(`    fontSize: ${sc(formatInteger(fontSize))},`);
       if (fontWeight) lines.push(`    fontWeight: '${fontWeight}',`);
       if (lineHeight) lines.push(`    lineHeight: ${sc(formatInteger(lineHeight))},`);
+      // Only output letterSpacing when NOT using spread (spread includes it)
+      if (letterSpacing) lines.push(`    letterSpacing: ${formatFloat(letterSpacing)},`);
     }
 
-    if (letterSpacing) lines.push(`    letterSpacing: ${formatFloat(letterSpacing)},`);
     if (textAlign && textAlign !== 'left') lines.push(`    textAlign: '${textAlign}',`);
     if (color) {
       const { value, mapped } = mapColor(color, mappings);

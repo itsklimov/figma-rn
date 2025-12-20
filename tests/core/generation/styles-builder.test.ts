@@ -11,6 +11,7 @@ describe('buildStyles', () => {
     padding: { top: 0, right: 0, bottom: 0, left: 0 },
     mainAlign: 'start' as const,
     crossAlign: 'start' as const,
+    sizing: { horizontal: 'fixed' as const, vertical: 'fixed' as const },
   };
 
   const emptyMappings: TokenMappings = {
@@ -68,6 +69,7 @@ describe('buildStyles', () => {
         padding: { top: 8, right: 16, bottom: 8, left: 16 },
         mainAlign: 'space-between',
         crossAlign: 'center',
+        sizing: { horizontal: 'fixed' as const, vertical: 'fixed' as const },
       },
       children: [],
     };

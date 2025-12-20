@@ -95,7 +95,7 @@ describe('token-matcher', () => {
       expect(result.spacing.spacing_0).toBe('theme.spacing.md');
     });
 
-    it('should keep original spacing when no match', () => {
+    it('should match spacing with closest neighbor logic', () => {
       const extracted: DesignTokens = {
         colors: {},
         spacing: { spacing_0: 18 },
@@ -103,14 +103,15 @@ describe('token-matcher', () => {
         typography: {},
         shadows: {},
       };
-
+  
       const project: ProjectTokens = {
         spacing: new Map([[16, 'theme.spacing.md']]),
       };
-
+  
       const result = matchTokens(extracted, project);
-
-      expect(result.spacing.spacing_0).toBe('18');
+  
+      // 18 is within ±2px tolerance of 16
+      expect(result.spacing.spacing_0).toBe('theme.spacing.md');
     });
 
     it('should match radii with exact match', () => {
