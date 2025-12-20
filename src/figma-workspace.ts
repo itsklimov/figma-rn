@@ -20,7 +20,8 @@
  * └── icons/                # Standalone icons (SVG files)
  */
 
-import { mkdir, writeFile, readFile, access, appendFile } from 'fs/promises';
+import { mkdir, writeFile, readFile, access, appendFile, rm } from 'fs/promises';
+import { existsSync } from 'fs';
 import { join, dirname, basename } from 'path';
 // existsSync removed - now using glob for recursive search
 import { glob } from 'glob';
@@ -100,7 +101,7 @@ export interface ElementMeta {
   };
   /** Asset list (legacy, for backwards compatibility) */
   assets: AssetInfo[];
-  /** Full node hierarchy */
+  /** Full node hierarchy - bulky, only included if requested */
   hierarchy?: HierarchyNode;
   /** Hidden nodes in design */
   hiddenNodes?: string[];
@@ -125,14 +126,22 @@ export interface ElementMeta {
     /** Destination ID (for navigation) */
     destinationId?: string;
   }>;
-  /** Extracted scrolls */
-  scrolls?: Array<{
-    /** Node ID */
+  /** Detected component groups (ratings, tabs, etc.) */
+  componentGroups?: Array<{
+    /** Parent node ID */
     nodeId: string;
-    /** Node name */
+    /** Parent node name */
     nodeName: string;
-    /** Scroll direction */
-    direction: 'HORIZONTAL' | 'VERTICAL' | 'BOTH';
+    /** Group type */
+    type: 'interactive-group';
+    /** Pattern type */
+    pattern: 'rating' | 'tabs' | 'segmented-control' | 'stepper' | 'toggle-group' | 'pagination' | 'unknown';
+    /** Number of items */
+    childCount: number;
+    /** Suggested component */
+    inferredComponent: string;
+    /** Confidence */
+    confidence: number;
   }>;
 }
 
@@ -181,24 +190,37 @@ export interface Manifest {
 
 /**
  * Project configuration for Figma generation
+ * This is a project knowledge base - stores paths to all useful files
  */
 export interface FigmaConfig {
   version: string;
   projectRoot: string;
-  theme?: {
-    colorsFile?: string;      // e.g., "src/styles/theme/colors.ts"
-    typographyFile?: string;  // e.g., "src/styles/theme/typography.ts"
-    spacingFile?: string;     // e.g., "src/styles/theme/spacing.ts"
-    shadowsFile?: string;     // e.g., "src/styles/theme/shadows.ts"
-    radiiFile?: string;       // e.g., "src/styles/theme/radii.ts"
-    mainThemeFile?: string;   // e.g., "src/styles/theme/index.ts"
-    type: 'object-export' | 'styled-components' | 'nativewind';
+  
+  // Token sources - simple list of all files containing tokens
+  tokenFiles: string[];
+  
+  // Hooks that can be used in generated code
+  hooks: {
+    useTheme?: string;    // Path to useTheme hook
+    useStyles?: string;   // Path to useStyles hook
   };
-  codeStyle: {
-    stylePattern: 'useTheme' | 'StyleSheet';
-    scaleFunction: string;
-    importPrefix: string;
+  
+  // Utility functions
+  utils: {
+    scale?: string;       // Path to scale/responsive function
   };
+  
+  // Components directory
+  componentsDir?: string;
+  
+  // Import configuration
+  importPrefix: string;   // e.g., "@app" from tsconfig paths
+  
+  // Framework detection
+  framework: 'expo' | 'react-native' | 'ignite';
+  
+  // Style pattern detection
+  stylePattern: 'useTheme' | 'StyleSheet';
 }
 
 /**
@@ -698,6 +720,9 @@ export async function saveFigmaConfig(projectRoot: string, config: FigmaConfig):
 /**
  * Get or create configuration
  */
+/**
+ * Get or create configuration
+ */
 export async function getOrCreateFigmaConfig(projectRoot: string): Promise<FigmaConfig> {
   let config = await loadFigmaConfig(projectRoot);
 
@@ -712,144 +737,249 @@ export async function getOrCreateFigmaConfig(projectRoot: string): Promise<Figma
 }
 
 /**
- * Generate configuration with theme auto-detection
+ * Re-evaluates project configuration by re-scanning the project.
+ * Always does a full replace - no complex merge logic.
+ */
+export async function refreshFigmaConfig(projectRoot: string): Promise<FigmaConfig> {
+  console.error('🔄 Re-evaluating project configuration...');
+  const config = await generateFigmaConfig(projectRoot);
+  await saveFigmaConfig(projectRoot, config);
+  console.error('✅ Configuration refreshed');
+  return config;
+}
+
+/**
+ * Load and merge all project tokens based on configuration
+ */
+export async function loadAllProjectTokens(projectRoot: string): Promise<any> {
+  const config = await getOrCreateFigmaConfig(projectRoot);
+  if (config.tokenFiles.length === 0) {
+    console.error('⚠️ No token files found in config');
+    return null;
+  }
+
+  const { extractProjectTokens, mergeProjectTokens } = await import('./core/mapping/theme-extractor.js');
+  
+  console.log(`📦 Loading tokens from ${config.tokenFiles.length} file(s)...`);
+  
+  const tokenSets = await Promise.all(
+    config.tokenFiles.map(async (file) => {
+      try {
+        return await extractProjectTokens(join(projectRoot, file));
+      } catch (e) {
+        console.error(`⚠️ Failed to load tokens from ${file}:`, e);
+        return {};
+      }
+    })
+  );
+
+  return mergeProjectTokens(tokenSets);
+}
+
+/**
+ * Generate configuration by scanning the project
  */
 async function generateFigmaConfig(projectRoot: string): Promise<FigmaConfig> {
   console.error('🔍 Scanning project for theme files...');
 
-  let colorsFile: string | undefined;
-  let typographyFile: string | undefined;
-  let spacingFile: string | undefined;
-  let shadowsFile: string | undefined;
-  let radiiFile: string | undefined;
-  let mainThemeFile: string | undefined;
+  const ignorePatterns = ['**/node_modules/**', '**/dist/**', '**/build/**', '**/.figma/**', '**/test/**', '**/tests/**'];
+  const tokenFiles: string[] = [];
+  const hooks: FigmaConfig['hooks'] = {};
+  const utils: FigmaConfig['utils'] = {};
+  let framework: FigmaConfig['framework'] = 'react-native';
+  let stylePattern: FigmaConfig['stylePattern'] = 'StyleSheet';
+  let importPrefix = '@app';
+  let componentsDir: string | undefined;
 
-  // Recursively search for colors file in any subdirectory
-  // Pattern searches for colors.ts in typical locations: **/styles/**/colors.ts, **/theme/**/colors.ts, etc.
-  const colorFiles = await glob('**/@(styles|theme|constants)/**/colors.{ts,js}', {
-    cwd: projectRoot,
-    ignore: ['**/node_modules/**', '**/dist/**', '**/build/**', '**/.figma/**', '**/test/**', '**/tests/**'],
-    nodir: true,
-    absolute: false,
-  });
+  // ============================================================================
+  // 1. DISCOVER TOKEN FILES
+  // ============================================================================
+  const tokenPatterns = [
+    // Consolidated/generated files (highest priority)
+    '**/@(styles|theme)/generated/tokens.{ts,js}',
+    '**/@(styles|theme)/compiled/tokens.{ts,js}',
+    '**/styles/tokens.{ts,js}',
+    '**/design-tokens.{ts,js}',
+    // Individual token files
+    '**/@(styles|theme|constants|tokens)/**/@(colors|palette)*.{ts,js}',
+    '**/@(styles|theme|constants|tokens)/**/@(typography|fonts)*.{ts,js}',
+    '**/@(styles|theme|constants|tokens)/**/@(spacing|space)*.{ts,js}',
+    '**/@(styles|theme|constants|tokens)/**/@(shadows|shadow)*.{ts,js}',
+    '**/@(styles|theme|constants|tokens)/**/@(radii|radius)*.{ts,js}',
+    // Theme index files
+    '**/@(styles|theme)/index.{ts,js}',
+    '**/@(styles|theme)/theme.{ts,js}',
+  ];
 
-  if (colorFiles.length > 0) {
-    // Priority: prefer files with 'theme' in path
-    const themeColorFile = colorFiles.find(f => f.includes('/theme/'));
-    colorsFile = themeColorFile || colorFiles[0];
-    console.error(`   📦 Found colors: ${colorsFile}`);
-    if (colorFiles.length > 1) {
-      console.error(`   ⚠️  Multiple color files found (${colorFiles.length}), using: ${colorsFile}`);
+  for (const pattern of tokenPatterns) {
+    const matches = await glob(pattern, {
+      cwd: projectRoot,
+      ignore: ignorePatterns,
+      nodir: true,
+      absolute: false,
+    });
+    
+    for (const match of matches) {
+      if (!tokenFiles.includes(match)) {
+        // Prefer generated files first
+        if (match.includes('generated')) {
+          tokenFiles.unshift(match);
+        } else {
+          tokenFiles.push(match);
+        }
+      }
     }
   }
 
-  // Recursively search for typography file
-  const typographyFiles = await glob('**/@(styles|theme|constants)/**/@(typography|fonts).{ts,js}', {
-    cwd: projectRoot,
-    ignore: ['**/node_modules/**', '**/dist/**', '**/build/**', '**/.figma/**', '**/test/**', '**/tests/**'],
-    nodir: true,
-    absolute: false,
-  });
+  // Log found token files
+  if (tokenFiles.length > 0) {
+    console.error(`   📦 Found ${tokenFiles.length} token file(s):`);
+    tokenFiles.slice(0, 5).forEach(f => console.error(`      - ${f}`));
+    if (tokenFiles.length > 5) console.error(`      ... and ${tokenFiles.length - 5} more`);
+  }
 
-  if (typographyFiles.length > 0) {
-    const themeTypoFile = typographyFiles.find(f => f.includes('/theme/'));
-    typographyFile = themeTypoFile || typographyFiles[0];
-    console.error(`   📝 Found typography: ${typographyFile}`);
-    if (typographyFiles.length > 1) {
-      console.error(`   ⚠️  Multiple typography files found (${typographyFiles.length}), using: ${typographyFile}`);
+  // ============================================================================
+  // 2. DISCOVER HOOKS
+  // ============================================================================
+  const hookPatterns = [
+    // Dedicated hook files
+    '**/hooks/useTheme.{ts,tsx}',
+    '**/hooks/use-theme.{ts,tsx}',
+    '**/useTheme.{ts,tsx}',
+    '**/hooks/useStyles.{ts,tsx}',
+    '**/hooks/use-styles.{ts,tsx}',
+    // Context files that often export hooks
+    '**/context/ThemeContext.{ts,tsx}',
+    '**/contexts/ThemeContext.{ts,tsx}',
+    '**/*ThemeContext.{ts,tsx}',
+    '**/theme/context.{ts,tsx}',
+  ];
+
+  for (const pattern of hookPatterns) {
+    const matches = await glob(pattern, {
+      cwd: projectRoot,
+      ignore: ignorePatterns,
+      nodir: true,
+      absolute: false,
+    });
+    
+    if (matches.length > 0) {
+      const match = matches[0];
+      const matchLower = match.toLowerCase();
+      // Check for useTheme hook or ThemeContext (which exports useTheme)
+      if ((matchLower.includes('usetheme') || matchLower.includes('themecontext')) && !hooks.useTheme) {
+        hooks.useTheme = match;
+        console.error(`   🪝 Found useTheme hook: ${match}`);
+      } else if (matchLower.includes('usestyles') && !hooks.useStyles) {
+        hooks.useStyles = match;
+        console.error(`   🪝 Found useStyles hook: ${match}`);
+      }
     }
   }
 
-  // Recursively search for spacing file
-  const spacingFiles = await glob('**/@(styles|theme|constants)/**/@(spacing|metrics|dimensions).{ts,js}', {
-    cwd: projectRoot,
-    ignore: ['**/node_modules/**', '**/dist/**', '**/build/**', '**/.figma/**', '**/test/**', '**/tests/**'],
-    nodir: true,
-    absolute: false,
-  });
+  // ============================================================================
+  // 3. DISCOVER UTILS (scale functions)
+  // ============================================================================
+  const utilPatterns = [
+    '**/utils/scale.{ts,js}',
+    '**/utils/responsive.{ts,js}',
+    '**/utils/scaling.{ts,js}',
+    '**/scale.{ts,js}',
+    '**/moderateScale.{ts,js}',
+  ];
 
-  if (spacingFiles.length > 0) {
-    const themeSpacingFile = spacingFiles.find(f => f.includes('/theme/'));
-    spacingFile = themeSpacingFile || spacingFiles[0];
-    console.error(`   📏 Found spacing: ${spacingFile}`);
-    if (spacingFiles.length > 1) {
-      console.error(`   ⚠️  Multiple spacing files found (${spacingFiles.length}), using: ${spacingFile}`);
+  for (const pattern of utilPatterns) {
+    const matches = await glob(pattern, {
+      cwd: projectRoot,
+      ignore: ignorePatterns,
+      nodir: true,
+      absolute: false,
+    });
+    
+    if (matches.length > 0 && !utils.scale) {
+      utils.scale = matches[0];
+      console.error(`   🛠️ Found scale util: ${utils.scale}`);
+      break;
     }
   }
 
-  // Recursively search for shadows file
-  const shadowFiles = await glob('**/@(styles|theme|constants)/**/@(shadows|elevation).{ts,js}', {
-    cwd: projectRoot,
-    ignore: ['**/node_modules/**', '**/dist/**', '**/build/**', '**/.figma/**', '**/test/**', '**/tests/**'],
-    nodir: true,
-    absolute: false,
-  });
-
-  if (shadowFiles.length > 0) {
-    const themeShadowFile = shadowFiles.find(f => f.includes('/theme/'));
-    shadowsFile = themeShadowFile || shadowFiles[0];
-    console.error(`   🌓 Found shadows: ${shadowsFile}`);
-    if (shadowFiles.length > 1) {
-      console.error(`   ⚠️  Multiple shadow files found (${shadowFiles.length}), using: ${shadowsFile}`);
-    }
+  // ============================================================================
+  // 4. DETECT FRAMEWORK
+  // ============================================================================
+  try {
+    const packageJsonPath = join(projectRoot, 'package.json');
+    const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf-8'));
+    const deps = { ...packageJson.dependencies, ...packageJson.devDependencies };
+    
+    if (deps['expo']) framework = 'expo';
+    else if (deps['ignite-cli']) framework = 'ignite';
+  } catch {
+    // Default to react-native
   }
 
-  // Recursively search for radii file
-  const radiiFiles = await glob('**/@(styles|theme|constants)/**/@(radii|borderRadius).{ts,js}', {
-    cwd: projectRoot,
-    ignore: ['**/node_modules/**', '**/dist/**', '**/build/**', '**/.figma/**', '**/test/**', '**/tests/**'],
-    nodir: true,
-    absolute: false,
-  });
-
-  if (radiiFiles.length > 0) {
-    const themeRadiiFile = radiiFiles.find(f => f.includes('/theme/'));
-    radiiFile = themeRadiiFile || radiiFiles[0];
-    console.error(`   ⬜ Found radii: ${radiiFile}`);
-    if (radiiFiles.length > 1) {
-      console.error(`   ⚠️  Multiple radii files found (${radiiFiles.length}), using: ${radiiFile}`);
+  // ============================================================================
+  // 5. DETECT IMPORT PREFIX FROM TSCONFIG
+  // ============================================================================
+  try {
+    const tsconfigPath = join(projectRoot, 'tsconfig.json');
+    const tsconfig = JSON.parse(await readFile(tsconfigPath, 'utf-8'));
+    const paths = tsconfig?.compilerOptions?.paths;
+    
+    if (paths) {
+      const prefixes = ['@app/*', '@/*', '~/*', '@src/*'];
+      for (const prefix of prefixes) {
+        if (paths[prefix]) {
+          importPrefix = prefix.replace('/*', '');
+          console.error(`   📍 Import prefix: ${importPrefix}`);
+          break;
+        }
+      }
     }
+  } catch {
+    // Default import prefix
   }
 
-  // Recursively search for main theme file
-  const mainThemeFiles = await glob('**/@(styles|theme)/**/@(defaultTheme|theme|index).{ts,js}', {
-    cwd: projectRoot,
-    ignore: ['**/node_modules/**', '**/dist/**', '**/build/**', '**/.figma/**', '**/test/**', '**/tests/**'],
-    nodir: true,
-    absolute: false,
-  });
-
-  if (mainThemeFiles.length > 0) {
-    // Priority: prefer files with 'theme' in path and not index.ts
-    const themeMainFile = mainThemeFiles.find(f => f.includes('/theme/') && !f.endsWith('/index.ts'));
-    const anyThemeFile = mainThemeFiles.find(f => f.includes('/theme/'));
-    mainThemeFile = themeMainFile || anyThemeFile || mainThemeFiles[0];
-    console.error(`   🎨 Found main theme: ${mainThemeFile}`);
-    if (mainThemeFiles.length > 1) {
-      console.error(`   ⚠️  Multiple main theme files found (${mainThemeFiles.length}), using: ${mainThemeFile}`);
-    }
-  }
-
-  // Load existing manifest for settings
+  // ============================================================================
+  // 6. DETECT STYLE PATTERN
+  // ============================================================================
   const manifest = await loadManifest(projectRoot);
+  if (manifest?.config.stylePattern) {
+    stylePattern = manifest.config.stylePattern as 'useTheme' | 'StyleSheet';
+  } else if (hooks.useTheme) {
+    stylePattern = 'useTheme';
+  }
+
+  // ============================================================================
+  // 7. DETECT COMPONENTS DIRECTORY
+  // ============================================================================
+  const componentPatterns = [
+    'src/components',
+    'app/components',
+    'components',
+  ];
+
+  for (const pattern of componentPatterns) {
+    try {
+      const stat = await import('fs/promises').then(fs => fs.stat(join(projectRoot, pattern)));
+      if (stat.isDirectory()) {
+        componentsDir = pattern;
+        break;
+      }
+    } catch {
+      continue;
+    }
+  }
 
   return {
     version: '1.0.0',
     projectRoot,
-    theme: colorsFile || typographyFile || spacingFile || shadowsFile || radiiFile || mainThemeFile ? {
-      colorsFile,
-      typographyFile,
-      spacingFile,
-      shadowsFile,
-      radiiFile,
-      mainThemeFile,
-      type: 'object-export',
-    } : undefined,
-    codeStyle: {
-      stylePattern: (manifest?.config.stylePattern as 'useTheme' | 'StyleSheet') || 'StyleSheet',
-      scaleFunction: manifest?.config.scaleFunction || 'scale',
-      importPrefix: manifest?.config.importPrefix || '@app',
-    },
+    tokenFiles,
+    hooks,
+    utils,
+    importPrefix,
+    framework,
+    stylePattern,
+    componentsDir,
   };
 }
 
@@ -1000,7 +1130,9 @@ export async function registerGeneration(
     totalNodes?: number;
     instanceCount?: number;
     interactions?: ElementMeta['interactions'];
-    scrolls?: ElementMeta['scrolls'];
+    componentGroups?: ElementMeta['componentGroups'];
+    includeHierarchy?: boolean;
+    previousName?: string;
   } = {}
 ): Promise<GenerationResult> {
   // Get manifest
@@ -1015,7 +1147,18 @@ export async function registerGeneration(
 
   // Remove from other category if exists
   if (existing && existing.category !== category) {
-    delete manifest[existing.category][normalizedUrl];
+    delete manifest[existing.category][nodeId];
+  }
+
+  // Handle cleanup if renamed
+  if (options.previousName && options.previousName !== name) {
+    const oldFolder = join(projectRoot, FIGMA_DIR, CATEGORY_FOLDERS[category], options.previousName);
+    try {
+      console.error(`🗑️ Cleaning up old component folder: ${oldFolder}`);
+      await rm(oldFolder, { recursive: true, force: true });
+    } catch (e) {
+      console.error(`⚠️ Failed to cleanup old folder ${oldFolder}:`, e);
+    }
   }
 
   // Create element folder
@@ -1054,8 +1197,13 @@ export async function registerGeneration(
       ? options.tokens.colors.length + options.tokens.typography.length + options.tokens.shadows.length
       : 0,
     interactions: options.interactions,
-    scrolls: options.scrolls,
+    componentGroups: options.componentGroups,
   };
+
+  // Only include hierarchy if explicitly requested or if it's a small one
+  if (options.includeHierarchy || (options.hierarchy && options.totalNodes && options.totalNodes < 100)) {
+    meta.hierarchy = options.hierarchy;
+  }
 
   await saveElementMeta(elementFolder, meta);
 

@@ -456,7 +456,7 @@ export function extractActionSheetActions(node: any): ActionSheetAction[] {
         let icon = '';
         let destructive = false;
 
-        function extractText(node: any): void {
+        const extractText = (node: any): void => {
           if (node.type === 'TEXT' && node.characters) {
             label = node.characters;
 
@@ -492,7 +492,7 @@ export function extractActionSheetActions(node: any): ActionSheetAction[] {
           if (node.children) {
             node.children.forEach(extractText);
           }
-        }
+        };
 
         extractText(n);
 

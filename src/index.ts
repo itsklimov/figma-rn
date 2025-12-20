@@ -39,6 +39,9 @@ import {
 import { extractDesignTokens, type DesignTokens } from './design-tokens.js';
 import { autoGenerateColorMappings } from './auto-theme-mapper.js';
 
+// New clean architecture pipeline
+import { getScreenTool, executeGetScreen, formatGetScreenResponse } from './edge/tools/index.js';
+
 const FIGMA_TOKEN = process.env.FIGMA_TOKEN || '';
 
 if (!FIGMA_TOKEN) {
@@ -213,6 +216,11 @@ Just provide array of {figmaUrl, screenName} and get complete app structure.`,
   },
 
   // setup_project removed - config is now auto-detected on first use of any tool
+
+  // ───────────────────────────────────────────────────────────────────
+  // TOOL 3: get_screen - Clean architecture pipeline (Step 4)
+  // ───────────────────────────────────────────────────────────────────
+  getScreenTool,
 ];
 
 // Handle list_tools request
@@ -346,26 +354,30 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             generateHooks: options.generateHooks ?? true,
             detectAnimations: options.detectAnimations ?? false,
             outputFolder,  // Direct save to local folder
-            config: figmaConfig.theme?.colorsFile ? {
-              framework: 'react-native',
+            config: figmaConfig.tokenFiles.length > 0 ? {
+              framework: figmaConfig.framework,
               projectRoot: root,
-              codeStyle: figmaConfig.codeStyle,
+              codeStyle: {
+                stylePattern: figmaConfig.stylePattern,
+                scaleFunction: figmaConfig.utils?.scale || 'scale',
+                importPrefix: figmaConfig.importPrefix,
+              },
               theme: {
-                // Absolute path to colors file
-                location: `${root}/${figmaConfig.theme.colorsFile}`,
-                type: figmaConfig.theme.type,
-                // Path to main theme file for spacing/radii/shadows
-                mainThemeLocation: figmaConfig.theme.mainThemeFile
-                  ? `${root}/${figmaConfig.theme.mainThemeFile}`
-                  : undefined,
-                // Path to typography file for spread syntax
-                typographyFile: figmaConfig.theme.typographyFile,
+                // Use first token file as theme location
+                location: `${root}/${figmaConfig.tokenFiles[0]}`,
+                type: 'object-export',
+                // Use first token file for main theme as well
+                mainThemeLocation: `${root}/${figmaConfig.tokenFiles[0]}`,
               },
               // Mappings will be generated on-the-fly in code-generator-v2.ts
               mappings: {},
             } : {
-              framework: 'react-native',
-              codeStyle: figmaConfig.codeStyle,
+              framework: figmaConfig.framework,
+              codeStyle: {
+                stylePattern: figmaConfig.stylePattern,
+                scaleFunction: figmaConfig.utils?.scale || 'scale',
+                importPrefix: figmaConfig.importPrefix,
+              },
               // Mappings will be generated on-the-fly in code-generator-v2.ts
               mappings: {},
             },
@@ -472,7 +484,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             totalNodes: result.totalNodes,
             instanceCount: result.instanceCount,
             interactions: result.interactions,
-            scrolls: result.scrolls,
+            componentGroups: result.componentGroups,
           }
         );
 
@@ -681,11 +693,46 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       // setup_project removed - config is now auto-detected on first use
 
+      // ═══════════════════════════════════════════════════════════════
+      // TOOL 3: get_screen (clean architecture pipeline)
+      // ═══════════════════════════════════════════════════════════════
+      case 'get_screen': {
+        const {
+          figmaUrl,
+          componentName,
+          themeFilePath,
+          outputDir,
+          writeFiles,
+          category
+        } = args as {
+          figmaUrl: string;
+          componentName?: string;
+          themeFilePath?: string;
+          outputDir?: string;
+          writeFiles?: boolean;
+          category?: string;
+        };
+
+        console.error(`\n🎯 [GET_SCREEN] Processing ${figmaUrl}...`);
+
+        const result = await executeGetScreen(
+          { figmaUrl, componentName, themeFilePath, outputDir, writeFiles, category },
+          FIGMA_TOKEN
+        );
+
+        const content = formatGetScreenResponse(result);
+
+        return {
+          content,
+          isError: !result.success,
+        };
+      }
+
       default:
         return {
           content: [{
             type: 'text',
-            text: `Unknown tool: ${name}\n\nAvailable tools:\n- analyze_element\n- generate_screen\n- generate_flow`,
+            text: `Unknown tool: ${name}\n\nAvailable tools:\n- generate_screen\n- generate_flow\n- get_screen`,
           }],
           isError: true,
         };

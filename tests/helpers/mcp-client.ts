@@ -252,6 +252,22 @@ export class MCPClient {
   }
 
   /**
+   * Calls a generic tool
+   */
+  async callTool(name: string, args: Record<string, unknown>): Promise<MCPToolResult> {
+    const response = await this.sendRequest('tools/call', {
+      name,
+      arguments: args,
+    });
+
+    if (response.error) {
+      throw new Error(response.error.message);
+    }
+
+    return response.result as MCPToolResult;
+  }
+
+  /**
    * Stops MCP server
    */
   async stop(): Promise<void> {

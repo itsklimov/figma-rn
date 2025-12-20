@@ -15,7 +15,8 @@ import { detectVariantsAndStates, type VariantDetection } from './variant-state-
 import { extractAnimationHints, generateReanimatedCode, generateGestureHandlerCode, type AnimationHint } from './animation-extractor.js';
 import { inferDataModels, generateTypeDefinitions, generateReactQueryHooks, type DataModel } from './data-model-generator.js';
 import { generateReactNativeComponent } from './code-generator-v2.js';
-import { loadProjectConfig } from './config-loader.js';
+import { loadProjectConfig, loadFolderConfig, mergeConfigs } from './config-loader.js';
+import { detectComponentGroups, type ComponentGroupDetection } from './interactive-group-detector.js';
 import type { ProjectConfig } from './config-schema.js';
 
 /**
@@ -337,6 +338,8 @@ export interface DetectionResults {
   animations: AnimationHint | null;
   /** Data models */
   dataModels: DataModel[];
+  /** Interactive component groups (ratings, tabs, etc.) */
+  componentGroups: ComponentGroupDetection[];
 }
 
 /**
@@ -390,6 +393,10 @@ export interface HierarchyNode {
   characters?: string;
   /** Child nodes */
   children?: HierarchyNode[];
+  /** Has more children (truncated at maxDepth) */
+  hasMoreChildren?: boolean;
+  /** Child count (when truncated) */
+  childCount?: number;
 }
 
 /**
@@ -418,8 +425,8 @@ export interface OneShotResult {
   hierarchy?: HierarchyNode;
   /** Extracted interactions */
   interactions?: ExtractedInteraction[];
-  /** Extracted scrolls */
-  scrolls?: ScrollInfo[];
+  /** Detected component groups (ratings, tabs, etc.) */
+  componentGroups?: ComponentGroupDetection[];
 }
 
 /**
@@ -471,7 +478,7 @@ function extractImageNodes(node: any, config?: ProjectConfig): ExtractedImage[] 
   const seenComponentIds = new Set<string>();
 
   // Icon pattern: Icon*, ic/*, ic, *_icon, *-icon, star*, chevron*, arrow*
-  const iconPattern = /^Icon|^ic[\/\-_]|^ic$|[_\-]icon|star|chevron|arrow/i;
+  const iconPattern = /^Icon|^ic[/_-]|^ic$|[_-]icon|star|chevron|arrow/i;
 
   // Image pattern: photo*, img*, image*, *_image
   const imagePattern = /^photo|^img$|^image|_image$/i;
@@ -622,7 +629,17 @@ function countNodes(node: any): { total: number; instances: number } {
 /**
  * Extracts full hierarchy from Figma tree with positioning
  */
-function extractHierarchy(node: any, parentBounds?: { x: number; y: number }): HierarchyNode {
+function extractHierarchy(
+  node: any,
+  parentBounds?: { x: number; y: number },
+  currentDepth: number = 0,
+  maxDepth: number = 5
+): HierarchyNode | null {
+  // Skip system components entirely
+  if (!node || isSystemComponent(node.name)) {
+    return null;
+  }
+
   const hierarchyNode: HierarchyNode = {
     id: node.id,
     name: node.name || '',
@@ -667,10 +684,23 @@ function extractHierarchy(node: any, parentBounds?: { x: number; y: number }): H
 
   // Recursively process children with current bounds as parent
   if (node.children && Array.isArray(node.children) && node.children.length > 0) {
-    const currentBounds = node.absoluteBoundingBox;
-    hierarchyNode.children = node.children.map((child: any) =>
-      extractHierarchy(child, currentBounds ? { x: currentBounds.x, y: currentBounds.y } : undefined)
-    );
+    if (currentDepth < maxDepth) {
+      const currentBounds = node.absoluteBoundingBox;
+      hierarchyNode.children = node.children
+        .map((child: any) =>
+          extractHierarchy(
+            child,
+            currentBounds ? { x: currentBounds.x, y: currentBounds.y } : undefined,
+            currentDepth + 1,
+            maxDepth
+          )
+        )
+        .filter((child): child is HierarchyNode => child !== null); // Filter out nulls (system components)
+    } else {
+      // At max depth, indicate there are more children but don't include them
+      hierarchyNode.hasMoreChildren = true;
+      hierarchyNode.childCount = node.children.length;
+    }
   }
 
   return hierarchyNode;
@@ -723,43 +753,6 @@ function extractInteractions(node: any): ExtractedInteraction[] {
   return interactions;
 }
 
-/**
- * Scroll information
- */
-export interface ScrollInfo {
-  /** Node ID */
-  nodeId: string;
-  /** Node name */
-  nodeName: string;
-  /** Scroll direction */
-  direction: 'HORIZONTAL' | 'VERTICAL' | 'BOTH';
-}
-
-/**
- * Extracts scrollBehavior for ScrollView detection
- */
-function extractScrollInfo(node: any): ScrollInfo[] {
-  const scrolls: ScrollInfo[] = [];
-
-  function traverse(n: any) {
-    if (n.scrollBehavior === 'SCROLLS' || n.overflowDirection) {
-      const direction = n.overflowDirection === 'HORIZONTAL' ? 'HORIZONTAL'
-        : n.overflowDirection === 'VERTICAL' ? 'VERTICAL'
-        : 'BOTH';
-      scrolls.push({
-        nodeId: n.id,
-        nodeName: n.name || '',
-        direction,
-      });
-    }
-    if (n.children) {
-      n.children.forEach(traverse);
-    }
-  }
-
-  traverse(node);
-  return scrolls;
-}
 
 /**
  * Downloads images directly to local assets folder
@@ -973,6 +966,7 @@ function calculateOverallConfidence(detections: DetectionResults): number {
   }
 
   if (confidences.length === 0) {
+    return 0.5; // Default confidence
   }
 
   // Return maximum confidence
@@ -1008,6 +1002,7 @@ export async function generateCompleteScreen(
   // 1. Parse Figma URL
   const parsedUrl = parseFigmaUrl(figmaUrl);
   if (!parsedUrl) {
+    throw new Error(`Invalid Figma URL: ${figmaUrl}`);
   }
 
   const { fileKey, nodeId } = parsedUrl;
@@ -1031,14 +1026,24 @@ export async function generateCompleteScreen(
       }
     }
   } catch (error) {
+    console.warn(`Failed to fetch Figma styles: ${error instanceof Error ? error.message : String(error)}`);
   }
 
   // 3. Load project config (if not provided)
-  const projectConfig = config || await loadProjectConfig() || undefined;
+  let projectConfig = config || await loadProjectConfig() || undefined;
+
+  // 3.1. Load and merge folder-specific config (if outputFolder exists)
+  if (outputFolder && projectConfig) {
+    const folderConfig = await loadFolderConfig(outputFolder);
+    if (folderConfig) {
+      projectConfig = mergeConfigs(projectConfig, folderConfig);
+      console.error(`[DEBUG] Merged folder config from ${outputFolder}`);
+    }
+  }
 
 
-  // 4. Run ALL detectors in PARALLEL + image extraction
-  const [listDetection, formDetection, sheetDetection, variantsDetection, animationHints, dataModels, extractedImages] = await Promise.all([
+  // 4. Run ALL detectors in PARALLEL + image extraction + interactions
+  const [listDetection, formDetection, sheetDetection, variantsDetection, animationHints, dataModels, extractedImages, interactions] = await Promise.all([
     // List pattern detection
     Promise.resolve(detectListPattern(node)),
 
@@ -1059,7 +1064,13 @@ export async function generateCompleteScreen(
 
     // Image extraction
     Promise.resolve(extractImageNodes(node, projectConfig)),
+
+    // Interaction extraction (needed for component group detection)
+    Promise.resolve(extractInteractions(node)),
   ]);
+
+  // 4.1. Detect component groups from interactions
+  const componentGroups = detectComponentGroups(node, interactions);
 
 
   // 4.1. Download images
@@ -1083,6 +1094,7 @@ export async function generateCompleteScreen(
     variants: variantsDetection.isComponentSet || variantsDetection.variants.length > 0 ? variantsDetection : null,
     animations: animationHints,
     dataModels,
+    componentGroups,
   };
 
   // 6. Determine screen type
@@ -1102,7 +1114,7 @@ export async function generateCompleteScreen(
   });
 
   let mainComponentCode: string;
-  mainComponentCode = await generateReactNativeComponent(node, screenName, projectConfig, imageMap, { styleMap });
+  mainComponentCode = await generateReactNativeComponent(node, screenName, projectConfig, imageMap, { styleMap, componentGroups });
 
   files.push({
     path: `src/screens/${screenName}.tsx`,
@@ -1233,16 +1245,10 @@ export async function generateCompleteScreen(
   // 11. Count nodes
   const nodeCounts = countNodes(node);
 
-  // 12. Extract full hierarchy
-  const hierarchy = extractHierarchy(node);
+  // 12. Extract full hierarchy (limited to 5 levels deep)
+  const hierarchy = extractHierarchy(node) || undefined;
 
-  // 13. Extract interactions
-  const interactions = extractInteractions(node);
-
-  // 14. Extract scrolls
-  const scrolls = extractScrollInfo(node);
-
-  // 15. Return complete result
+  // 13. Return complete result
   return {
     screenName,
     nodeId, // Canonical ID from Figma API
@@ -1256,7 +1262,7 @@ export async function generateCompleteScreen(
     instanceCount: nodeCounts.instances,
     hierarchy,
     interactions: interactions.length > 0 ? interactions : undefined,
-    scrolls: scrolls.length > 0 ? scrolls : undefined,
+    componentGroups: componentGroups.length > 0 ? componentGroups : undefined,
   };
 }
 

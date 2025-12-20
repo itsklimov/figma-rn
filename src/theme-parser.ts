@@ -1,6 +1,6 @@
 import { Project, SourceFile, SyntaxKind, Node, ObjectLiteralExpression, PropertyAssignment } from 'ts-morph';
 import { existsSync } from 'fs';
-import { resolve, join } from 'path';
+import { resolve, join, basename } from 'path';
 
 /**
  * Color token from theme
@@ -52,8 +52,8 @@ export interface SpacingInfo {
 export interface ThemeTokens {
   colors: Map<string, ColorToken>;
   fonts: Map<string, FontToken>;
-  typography?: Map<string, TypographyStyleToken>;  // Complete typography styles
-  spacing?: SpacingInfo;
+  typography?: Map<string, TypographyStyleToken>;
+  spacing?: Map<string, number>;
   radii?: Map<string, number>;
   shadows?: Map<string, any>;
 }
@@ -68,11 +68,22 @@ export interface ThemeTokens {
  */
 export async function parseThemeFile(
   filePath: string,
-  basePath: string = 'theme'
+  basePath?: string
 ): Promise<ThemeTokens> {
   try {
     // Resolve absolute file path
     const absolutePath = resolve(filePath);
+    const fileName = basename(filePath).toLowerCase();
+
+    // If base path not provided, try to infer from filename
+    if (!basePath) {
+      if (fileName.includes('color') || fileName.includes('palette')) basePath = 'colors';
+      else if (fileName.includes('typogra') || fileName.includes('font')) basePath = 'typography';
+      else if (fileName.includes('spacing')) basePath = 'spacing';
+      else if (fileName.includes('radius') || fileName.includes('radii')) basePath = 'radii';
+      else if (fileName.includes('shadow') || fileName.includes('elevation')) basePath = 'shadows';
+      else basePath = 'theme';
+    }
 
     // Check file existence
     if (!existsSync(absolutePath)) {
@@ -89,17 +100,48 @@ export async function parseThemeFile(
 
     const sourceFile = project.addSourceFileAtPath(absolutePath);
 
-    // Find theme node
-    const themeNode = findThemeNode(sourceFile);
+    // Find theme nodes
+    const themeNodes = findThemeNodes(sourceFile);
 
-    if (!themeNode) {
-      throw new Error(`Could not find theme object in file: ${filePath}`);
+    if (themeNodes.length === 0) {
+      console.error(`   ❌ No theme objects found in ${filePath}`);
+      throw new Error(`Could not find theme objects in file: ${filePath}`);
     }
 
-    // Extract tokens recursively
-    const tokens = extractTokensRecursive(themeNode, basePath);
+    const allTokens: ThemeTokens = { 
+      colors: new Map(), 
+      fonts: new Map(), 
+      typography: new Map(), 
+      radii: new Map(), 
+      shadows: new Map(), 
+      spacing: new Map() 
+    };
 
-    return tokens;
+    for (const node of themeNodes) {
+      // If node is a function, we resolve it to its return object literal
+      const targetNode = resolveValueNode(node);
+      if (!Node.isObjectLiteralExpression(targetNode)) continue;
+
+      // Determine the starting path for tokens
+      const nodeName = getObjectLiteralName(targetNode as any) || (node as any).getName?.();
+      let effectivePath = basePath || 'theme';
+      if (nodeName && nodeName !== basePath && nodeName !== 'default' && !['theme', 'tokens', 'designTokens'].includes(nodeName)) {
+        effectivePath = basePath ? `${basePath}.${nodeName}` : nodeName;
+      }
+
+      // Extract tokens recursively
+      const tokens = extractTokensRecursive(targetNode, effectivePath);
+      
+      // Merge results
+      for (const [k, v] of tokens.colors) allTokens.colors.set(k, v);
+      for (const [k, v] of tokens.fonts) allTokens.fonts.set(k, v);
+      for (const [k, v] of tokens.typography) allTokens.typography.set(k, v);
+      for (const [k, v] of tokens.spacing) allTokens.spacing.set(k, v);
+      for (const [k, v] of tokens.radii) allTokens.radii.set(k, v);
+      for (const [k, v] of tokens.shadows) allTokens.shadows.set(k, v);
+    }
+
+    return allTokens;
   } catch (error) {
     console.error(`Error parsing theme file ${filePath}:`, error);
     throw error;
@@ -107,82 +149,178 @@ export async function parseThemeFile(
 }
 
 /**
- * Finds theme object node in the file
- * Finds theme object node in the file
- *
- * Search strategies:
- * 1. Default export
- * 2. Named export 'theme', 'colors', 'palette'
- * 3. Variable declaration with theme-like name
+ * Finds all relevant theme nodes in the file
  */
-function findThemeNode(sourceFile: SourceFile): ObjectLiteralExpression | null {
-  // Strategy 1: Find default export
+function findThemeNodes(sourceFile: SourceFile): Node[] {
+  const nodes: Node[] = [];
+  const themeNames = ['theme', 'colors', 'palette', 'tokens', 'designTokens', 'typography', 'spacing', 'radii', 'shadows', 'clientPalette', 'masterPalette', 'clientThemeInstance'];
+
+  // 1. Default export
   const defaultExport = sourceFile.getDefaultExportSymbol();
   if (defaultExport) {
     const declarations = defaultExport.getDeclarations();
-    for (const decl of declarations) {
-      const objLiteral = findObjectLiteralInNode(decl);
-      if (objLiteral) return objLiteral;
-    }
+    nodes.push(...declarations);
   }
 
-  // Strategy 2: Find named exports with known names
-  const themeNames = ['theme', 'colors', 'palette', 'tokens', 'designTokens', 'typography'];
+  // 2. Named exports
   for (const name of themeNames) {
     const exportedDecl = sourceFile.getExportedDeclarations().get(name);
-    if (exportedDecl && exportedDecl.length > 0) {
-      const objLiteral = findObjectLiteralInNode(exportedDecl[0]);
-      if (objLiteral) return objLiteral;
-    }
+    if (exportedDecl) nodes.push(...exportedDecl);
   }
 
-  // Strategy 3: Find variables with matching names
+  // 3. Variables with matching names
   const variableStatements = sourceFile.getVariableStatements();
   for (const varStatement of variableStatements) {
     const declarations = varStatement.getDeclarations();
     for (const decl of declarations) {
       const name = decl.getName().toLowerCase();
-      if (themeNames.some(themeName => name.includes(themeName))) {
-        const objLiteral = findObjectLiteralInNode(decl);
-        if (objLiteral) return objLiteral;
+      if (themeNames.some(themeName => name.toLowerCase().includes(themeName.toLowerCase()))) {
+        nodes.push(decl);
       }
     }
   }
 
-  // Strategy 4: If nothing found, take the first large object
-  const allObjectLiterals = sourceFile.getDescendantsOfKind(SyntaxKind.ObjectLiteralExpression);
-  if (allObjectLiterals.length > 0) {
-    // Sort by size (number of properties) and take the largest
-    const sorted = allObjectLiterals.sort((a, b) =>
-      b.getProperties().length - a.getProperties().length
-    );
-    return sorted[0];
+  // 4. Large object literals (fallback)
+  if (nodes.length === 0) {
+    const allObjectLiterals = sourceFile.getDescendantsOfKind(SyntaxKind.ObjectLiteralExpression);
+    if (allObjectLiterals.length > 0) {
+      const sorted = allObjectLiterals.sort((a, b) =>
+        b.getProperties().length - a.getProperties().length
+      );
+      nodes.push(sorted[0]);
+    }
+  }
+
+  // Filter to unique nodes and map to object literals or functions returning objects
+  const finalNodes: Node[] = [];
+  const seen = new Set<Node>();
+
+  for (const node of nodes) {
+    const resolved = resolveNodeToTarget(node);
+    if (resolved && !seen.has(resolved)) {
+      finalNodes.push(resolved);
+      seen.add(resolved);
+    }
+  }
+
+  return finalNodes;
+}
+
+/**
+ * Resolves a node to either an ObjectLiteralExpression or a Function that returns one
+ */
+function resolveNodeToTarget(node: Node): Node | null {
+  // Check literal
+  if (Node.isObjectLiteralExpression(node)) return node;
+  
+  // Check variable declaration
+  if (Node.isVariableDeclaration(node)) {
+    const init = node.getInitializer();
+    if (init) {
+      // Unwrap AsExpression or Parentheses
+      let target = init;
+      while (Node.isAsExpression(target) || Node.isParenthesizedExpression(target)) {
+        target = target.getExpression();
+      }
+
+      if (Node.isObjectLiteralExpression(target)) return target;
+      if (Node.isArrowFunction(target) || Node.isFunctionExpression(target)) return target;
+      
+      // Follow reference
+      if (Node.isIdentifier(target)) {
+        const refs = target.getDefinitions();
+        for (const ref of refs) {
+          const decl = ref.getDeclarationNode();
+          if (decl && decl !== node) return resolveNodeToTarget(decl);
+        }
+      }
+    }
+  }
+  
+  // Check property assignment
+  if (Node.isPropertyAssignment(node)) {
+    const init = node.getInitializer();
+    if (init) return resolveNodeToTarget(init);
   }
 
   return null;
 }
 
 /**
- * Finds ObjectLiteralExpression in node or its descendants
- * Finds ObjectLiteralExpression in node or its descendants
+ * Resolves a node to its actual value node by following identifiers/variable references.
+ * Limited to the same file for performance and simplicity.
  */
-function findObjectLiteralInNode(node: Node): ObjectLiteralExpression | null {
-  // Check the node itself
-  if (Node.isObjectLiteralExpression(node)) {
-    return node;
+function resolveValueNode(node: Node): Node {
+  // 0. Unwrap AsExpression or Parentheses
+  if (Node.isAsExpression(node) || Node.isParenthesizedExpression(node)) {
+    return resolveValueNode(node.getExpression());
   }
 
-  // Check initializer (for variables)
-  if (Node.isVariableDeclaration(node)) {
-    const initializer = node.getInitializer();
-    if (initializer && Node.isObjectLiteralExpression(initializer)) {
-      return initializer;
+  // 1. Resolve Identifiers
+  if (Node.isIdentifier(node)) {
+    const definitions = node.getDefinitions();
+    for (const def of definitions) {
+      const decl = def.getDeclarationNode();
+      if (decl && Node.isVariableDeclaration(decl)) {
+        const init = decl.getInitializer();
+        // Prevent infinite recursion for circular refs
+        if (init && init !== node) return resolveValueNode(init);
+      }
     }
   }
 
-  // Search in descendants
-  const objLiteral = node.getFirstDescendantByKind(SyntaxKind.ObjectLiteralExpression);
-  return objLiteral || null;
+  // 2. Resolve Property Access (base.purple10)
+  if (Node.isPropertyAccessExpression(node)) {
+    const expression = node.getExpression();
+    const name = node.getName();
+    const baseObj = resolveValueNode(expression);
+    
+    if (Node.isObjectLiteralExpression(baseObj)) {
+      const prop = baseObj.getProperty(name);
+      if (prop && (Node.isPropertyAssignment(prop) || Node.isShorthandPropertyAssignment(prop))) {
+        const init = Node.isPropertyAssignment(prop) ? prop.getInitializer() : prop.getNameNode();
+        if (init) return resolveValueNode(init);
+      }
+    }
+  }
+
+  // 3. Resolve Arrow Functions results (if no params)
+  if (Node.isArrowFunction(node) || Node.isFunctionExpression(node)) {
+    const body = node.getBody();
+    if (Node.isParenthesizedExpression(body)) {
+      return resolveValueNode(body.getExpression());
+    }
+    if (Node.isObjectLiteralExpression(body)) {
+      return body;
+    }
+  }
+
+  return node;
+}
+
+/**
+ * Finds the name of an ObjectLiteralExpression (from its variable declaration or property assignment)
+ */
+function getObjectLiteralName(node: ObjectLiteralExpression): string | null {
+  let current: Node = node;
+  let parent = current.getParent();
+  
+  // Unwrap AsExpression or Parentheses
+  while (parent && (Node.isAsExpression(parent) || Node.isParenthesizedExpression(parent))) {
+    current = parent;
+    parent = current.getParent();
+  }
+
+  if (parent && (Node.isVariableDeclaration(parent) || Node.isPropertyAssignment(parent))) {
+    return parent.getName();
+  }
+
+  // Check if it's a default export: export default { ... }
+  if (parent && Node.isExportAssignment(parent)) {
+    return 'default';
+  }
+
+  return null;
 }
 
 /**
@@ -197,86 +335,101 @@ function findObjectLiteralInNode(node: Node): ObjectLiteralExpression | null {
 function extractTokensRecursive(
   node: ObjectLiteralExpression,
   currentPath: string,
-  tokens: ThemeTokens = { colors: new Map(), fonts: new Map(), typography: new Map(), radii: new Map(), shadows: new Map() }
+  tokens: ThemeTokens = { colors: new Map(), fonts: new Map(), typography: new Map(), radii: new Map(), shadows: new Map(), spacing: new Map() }
 ): ThemeTokens {
   const properties = node.getProperties();
 
   for (const prop of properties) {
     if (!Node.isPropertyAssignment(prop)) continue;
 
-    const propName = prop.getName();
-    const propPath = `${currentPath}.${propName}`;
+    const rawPropName = prop.getName();
+    // Strip quotes if present (prop.getName() returns 'key' for quoted keys)
+    const propName = rawPropName.replace(/^['"]|['"]$/g, '');
+    // Use bracket notation for keys that aren't valid JS identifiers (e.g., '2xl', '3d')
+    const isValidIdentifier = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(propName);
+    const propPath = isValidIdentifier 
+      ? `${currentPath}.${propName}` 
+      : `${currentPath}['${propName}']`;
     const initializer = prop.getInitializer();
-
     if (!initializer) continue;
 
-    // If nested object - check if it's a typography style or regular object
-    if (Node.isObjectLiteralExpression(initializer)) {
+    // RESOLVE VALUE
+    const resolvedValueNode = resolveValueNode(initializer);
+    const valueText = resolvedValueNode.getText().replace(/['"]/g, '');
+
+    const isInsideSpacing = isSpacingValue(currentPath) || isSpacingValue(propName);
+    const isInsideRadii = isRadiiValue(currentPath) || isRadiiValue(propName);
+    const isInsideShadows = isShadowValue(currentPath) || isShadowValue(propName);
+    
+    // Semantic colors detection: if property is 'text', 'background', 'border' or contains 'color'
+    const isSemanticColor = ['text', 'background', 'border', 'accent', 'secondary', 'primary'].includes(propName.toLowerCase()) || propName.toLowerCase().includes('color');
+
+    // 1. Handle Object Literals
+    if (Node.isObjectLiteralExpression(resolvedValueNode)) {
       // Check if this is a typography style (contains fontSize)
-      const typoStyle = extractTypographyStyle(initializer, propPath);
+      const typoStyle = extractTypographyStyle(resolvedValueNode, propPath);
       if (typoStyle) {
         if (!tokens.typography) tokens.typography = new Map();
         tokens.typography.set(propPath, typoStyle);
-      } else {
-        // Otherwise recurse
-        extractTokensRecursive(initializer, propPath, tokens);
+        continue;
       }
+
+      // Check for shadow objects
+      if (isInsideShadows) {
+        const shadowObj = extractShadowObject(resolvedValueNode);
+        if (shadowObj) {
+          if (!tokens.shadows) tokens.shadows = new Map();
+          tokens.shadows.set(propPath, shadowObj);
+          continue;
+        }
+      }
+
+      // Otherwise recurse
+      extractTokensRecursive(resolvedValueNode, propPath, tokens);
       continue;
     }
 
-    // Get text value
-    const valueText = initializer.getText().replace(/['"]/g, '');
+    // 2. Handle Call Expressions (Shadows/Scaling)
+    if (Node.isCallExpression(resolvedValueNode)) {
+      if (isInsideShadows) {
+        const shadowObj = extractShadowFromCall(resolvedValueNode);
+        if (shadowObj) {
+          if (!tokens.shadows) tokens.shadows = new Map();
+          tokens.shadows.set(propPath, shadowObj);
+          continue;
+        }
+      }
+    }
 
-    // Check for color (hex, rgb, rgba)
-    if (isColorValue(valueText)) {
+    // 3. Handle Colors
+    if (isColorValue(valueText) || (isSemanticColor && isColorValue(valueText))) {
       const colorToken: ColorToken = {
         value: normalizeColorValue(valueText),
         path: propPath,
         name: propName,
       };
-      // Use normalized value as key
       tokens.colors.set(colorToken.value, colorToken);
+      continue;
     }
 
-    // Check for font
+    // 4. Handle Numeric Tokens (Spacing, Radii)
+    const numValue = extractNumberFromValue(valueText);
+    if (numValue !== null) {
+      if (isInsideSpacing) {
+        if (!tokens.spacing) tokens.spacing = new Map();
+        tokens.spacing.set(propPath, numValue);
+      } else if (isInsideRadii) {
+        if (!tokens.radii) tokens.radii = new Map();
+        tokens.radii.set(propPath, numValue);
+      }
+      continue;
+    }
+
+    // 5. Check for font
     const fontToken = extractFontToken(propName, valueText, propPath);
     if (fontToken) {
       const key = `${fontToken.family}-${fontToken.weight || 400}`;
       tokens.fonts.set(key, fontToken);
-    }
-
-    // Check for spacing values
-    if (isSpacingValue(propName)) {
-      if (!tokens.spacing) {
-        tokens.spacing = { values: [] };
-      }
-      const numValue = parseFloat(valueText);
-      if (!isNaN(numValue) && tokens.spacing.values) {
-        tokens.spacing.values.push(numValue);
-      }
-    }
-
-    // Check for radii values - check both property name and path
-    if (isRadiiValue(propName) || isRadiiValue(currentPath)) {
-      // Extract number from valueText (could be "12", "scale(12)", etc.)
-      const numValue = extractNumberFromValue(valueText);
-      if (numValue !== null) {
-        if (!tokens.radii) {
-          tokens.radii = new Map();
-        }
-        tokens.radii.set(propPath, numValue);
-      }
-    }
-
-    // Check for shadow objects
-    if (Node.isObjectLiteralExpression(initializer) && isShadowValue(propName)) {
-      const shadowObj = extractShadowObject(initializer);
-      if (shadowObj) {
-        if (!tokens.shadows) {
-          tokens.shadows = new Map();
-        }
-        tokens.shadows.set(propPath, shadowObj);
-      }
     }
   }
 
@@ -288,8 +441,8 @@ function extractTokensRecursive(
  * Checks if value is a color
  */
 function isColorValue(value: string): boolean {
-  // Hex color
-  if (/^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$/.test(value)) return true;
+  // Hex color (support 3, 6, or 8 digits)
+  if (/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/.test(value)) return true;
 
   // RGB/RGBA
   if (/^rgba?\(/.test(value)) return true;
@@ -301,18 +454,16 @@ function isColorValue(value: string): boolean {
 }
 
 /**
- * Normalizes color to hex format
- * Normalizes color to hex format
+ * Normalizes color to uppercase 6-digit hex format if possible
  */
 function normalizeColorValue(value: string): string {
-  // If already hex - return as is (in uppercase)
   if (value.startsWith('#')) {
-    return value.toUpperCase();
+    let hex = value.replace('#', '').toUpperCase();
+    if (hex.length === 3) {
+      hex = hex.split('').map(c => c + c).join('');
+    }
+    return `#${hex}`;
   }
-
-  // For rgb/rgba/hsl/hsla can return as is
-  // or convert to hex (requires additional library)
-  // For now just return as is
   return value;
 }
 
@@ -353,7 +504,7 @@ function extractFontToken(
   if (nameLower === 'font' && typeof value === 'string') {
     // Simple heuristic for parsing font shorthand
     const parts = value.split(' ');
-    let family = parts[parts.length - 1];
+    const family = parts[parts.length - 1];
     let weight: number | undefined;
 
     for (const part of parts) {
@@ -378,7 +529,7 @@ function extractFontToken(
 
 /**
  * Extracts typography style from object (if contains fontSize)
- * Extracts typography style from object (if contains fontSize)
+ * Handles nested fontFamily structures: { regular, bold }
  */
 function extractTypographyStyle(
   node: ObjectLiteralExpression,
@@ -391,36 +542,86 @@ function extractTypographyStyle(
   let fontWeight: number = 400;
   let fontFamily: string | undefined;
   let letterSpacing: number | undefined;
+  // Track nested font family variants
+  let fontFamilyRegular: string | undefined;
+  let fontFamilyBold: string | undefined;
 
   for (const prop of properties) {
     if (!Node.isPropertyAssignment(prop)) continue;
 
-    const propName = prop.getName().toLowerCase();
+    // Strip quotes and lowercase for comparison (handles "fontSize" vs fontSize)
+    const rawPropName = prop.getName();
+    const propName = rawPropName.replace(/^['"]|['"]$/g, '').toLowerCase();
     const initializer = prop.getInitializer();
     if (!initializer) continue;
 
-    const valueText = initializer.getText().replace(/['"]/g, '');
-    const numValue = extractNumberFromValue(valueText);
-
     if (propName === 'fontsize' || propName === 'size') {
-      fontSize = numValue;
+      const valueText = initializer.getText().replace(/['"]/g, '');
+      fontSize = extractNumberFromValue(valueText);
     } else if (propName === 'lineheight' || propName === 'lineheightpx') {
-      lineHeight = numValue ?? undefined;
+      const valueText = initializer.getText().replace(/['"]/g, '');
+      lineHeight = extractNumberFromValue(valueText) ?? undefined;
     } else if (propName === 'fontweight' || propName === 'weight') {
-      fontWeight = numValue ?? 400;
+      const valueText = initializer.getText().replace(/['"]/g, '');
+      fontWeight = extractNumberFromValue(valueText) ?? 400;
     } else if (propName === 'fontfamily' || propName === 'family') {
-      // Extract weight from family name
-      fontFamily = valueText;
-      const nameLower = valueText.toLowerCase();
-      if (nameLower.includes('bold')) {
-        fontWeight = 700;
-      } else if (nameLower.includes('semibold') || nameLower.includes('semi-bold')) {
-        fontWeight = 590;
-      } else if (nameLower.includes('medium')) {
-        fontWeight = 500;
+      // Check if it's a nested object with variants
+      if (Node.isObjectLiteralExpression(initializer)) {
+        // Handle: fontFamily: { regular: "...", bold: "..." }
+        for (const variantProp of initializer.getProperties()) {
+          if (!Node.isPropertyAssignment(variantProp)) continue;
+          // Strip quotes from variant names too
+          const variantName = variantProp.getName().replace(/^['"]|['"]$/g, '').toLowerCase();
+          const variantInit = variantProp.getInitializer();
+          if (variantInit) {
+            const variantValue = variantInit.getText().replace(/['"]/g, '');
+            if (variantName === 'regular') {
+              fontFamilyRegular = variantValue;
+            } else if (variantName === 'bold' || variantName === 'semibold') {
+              fontFamilyBold = variantValue;
+            }
+          }
+        }
+        // Use regular as default fontFamily
+        fontFamily = fontFamilyRegular || fontFamilyBold;
+      } else {
+        // Flat string: fontFamily: "SFProText-Regular"
+        const valueText = initializer.getText().replace(/['"]/g, '');
+        fontFamily = valueText;
+        // Extract weight from family name
+        const nameLower = valueText.toLowerCase();
+        if (nameLower.includes('bold')) {
+          fontWeight = 700;
+        } else if (nameLower.includes('semibold') || nameLower.includes('semi-bold')) {
+          fontWeight = 600;
+        } else if (nameLower.includes('medium')) {
+          fontWeight = 500;
+        } else if (nameLower.includes('regular')) {
+          fontWeight = 400;
+        } else if (nameLower.includes('light')) {
+          fontWeight = 300;
+        } else if (nameLower.includes('thin')) {
+          fontWeight = 100;
+        }
       }
     } else if (propName === 'letterspacing') {
-      letterSpacing = numValue ?? undefined;
+      // Check if it's a nested object with variants
+      if (Node.isObjectLiteralExpression(initializer)) {
+        // Handle: letterSpacing: { regular: -0.41, bold: -0.41 }
+        for (const variantProp of initializer.getProperties()) {
+          if (!Node.isPropertyAssignment(variantProp)) continue;
+          const variantName = variantProp.getName().toLowerCase();
+          if (variantName === 'regular') {
+            const variantInit = variantProp.getInitializer();
+            if (variantInit) {
+              letterSpacing = extractNumberFromValue(variantInit.getText()) ?? undefined;
+            }
+          }
+        }
+      } else {
+        const valueText = initializer.getText().replace(/['"]/g, '');
+        letterSpacing = extractNumberFromValue(valueText) ?? undefined;
+      }
     }
   }
 
@@ -430,28 +631,33 @@ function extractTypographyStyle(
       path,
       fontSize,
       lineHeight,
-      fontWeight,
+      fontWeight: fontWeight === 590 ? 600 : fontWeight, // Normalize Apple's 590 to standard 600
       fontFamily,
       letterSpacing,
-    };
+      // Store variant info for matcher to use
+      ...(fontFamilyRegular && { fontFamilyRegular }),
+      ...(fontFamilyBold && { fontFamilyBold }),
+    } as TypographyStyleToken;
   }
 
   return null;
 }
 
 /**
- * Extracts number from value (could be "12", "scale(12)", "moderateScale(12)", etc.)
- * Extracts number from value (could be "12", "scale(12)", "moderateScale(12)", etc.)
+ * Extracts number from value (could be "12", "12px", "scale(12)", "moderateScale(12)", etc.)
  */
 function extractNumberFromValue(valueText: string): number | null {
+  // Remove 'px' suffix if present
+  const cleanValue = valueText.replace(/px$/, '').trim();
+
   // Direct number
-  const directNum = parseFloat(valueText);
-  if (!isNaN(directNum)) {
+  const directNum = parseFloat(cleanValue);
+  if (!isNaN(directNum) && isFinite(directNum)) {
     return directNum;
   }
 
-  // Function with numeric argument: scale(12), moderateScale(16), RFValue(20)
-  const funcMatch = valueText.match(/\w+\s*\(\s*(\d+(?:\.\d+)?)\s*(?:,|\))/);
+  // Function with numeric argument: scale(12), moderateScale(16), RFValue(20), size(24)
+  const funcMatch = cleanValue.match(/\w+\s*\(\s*(-?\d+(?:\.\d+)?)\s*(?:,|\))/);
   if (funcMatch) {
     return parseFloat(funcMatch[1]);
   }
@@ -563,6 +769,32 @@ function extractShadowObject(node: ObjectLiteralExpression): any {
   // Check if we got at least basic shadow properties
   if (shadowObj.offset || shadowObj.opacity !== undefined || shadowObj.radius !== undefined) {
     return shadowObj;
+  }
+
+  return null;
+}
+
+/**
+ * Extracts shadow object from CallExpression (e.g., createShadow(y, opacity, blur, elevation))
+ */
+function extractShadowFromCall(node: any): any {
+  const args = node.getArguments();
+  const funcName = node.getExpression().getText().toLowerCase();
+
+  // Handle Marafet's createShadow(offsetY, opacity, radius, elevation)
+  if (funcName.includes('shadow') && args.length >= 3) {
+    const offsetY = extractNumberFromValue(args[0].getText());
+    const opacity = extractNumberFromValue(args[1].getText());
+    const radius = extractNumberFromValue(args[2].getText());
+
+    if (offsetY !== null || opacity !== null || radius !== null) {
+      return {
+        offset: { width: 0, height: offsetY ?? 0 },
+        opacity: opacity ?? 1,
+        radius: radius ?? 0,
+        color: '#000000', // Default for createShadow in Marafet
+      };
+    }
   }
 
   return null;

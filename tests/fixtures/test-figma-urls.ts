@@ -6,8 +6,8 @@
  */
 
 // Base URL for test file
-export const TEST_FILE_KEY = 'yfQEfmNzTQnQxTIBWG4SxO';
-export const TEST_FILE_NAME = 'MARAFET--Copy-';
+export const TEST_FILE_KEY = 'UP4RaLYLk41imjPis2j6an';
+export const TEST_FILE_NAME = 'MARAFET-dev';
 export const BASE_URL = `https://www.figma.com/design/${TEST_FILE_KEY}/${TEST_FILE_NAME}`;
 
 /**
@@ -19,11 +19,10 @@ export function createFigmaUrl(nodeId: string): string {
 
 /**
  * Test URLs for different element types
- * Need to update node-id after exploring Figma file
  */
 export const TEST_URLS = {
-  // Main test screen (from user)
-  mainScreen: createFigmaUrl('4212-63544'),
+  // Main test screen
+  mainScreen: createFigmaUrl('2532-25721'),
 
   // Alternative nodes for testing different patterns
   // TODO: Add after exploring Figma file structure

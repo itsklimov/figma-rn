@@ -104,6 +104,49 @@ Generate auth flow:
 - ForgotPasswordScreen from https://www.figma.com/design/ABC?node-id=1-3
 ```
 
+### `get_screen` — Complete Pipeline (Production-Ready)
+
+Generate production-ready React Native code using the clean architecture pipeline. This tool implements the full end-to-end workflow including asset download, screenshot capture, and file writing.
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `figmaUrl` | Yes | Figma URL with `node-id` parameter |
+| `componentName` | No | Component name (defaults to Figma node name) |
+| `themeFilePath` | No | Path to project theme file for token matching |
+| `outputDir` | No | Output directory (defaults to "components") |
+| `projectRoot` | No | Project root directory (defaults to cwd) |
+| `writeFiles` | No | Whether to write files to disk (default: true) |
+| `category` | No | Category (screens/modals/sheets/components/icons, default: "screens") |
+
+**Features**:
+- Automatic list detection → `FlatList` generation with type-safe `renderItem`
+- Component extraction for repeated patterns
+- Accessibility props: `accessibilityRole`, `accessibilityLabel`, `hitSlop` for small icons
+- Token extraction and mapping to project theme
+- Asset download with deduplication (images and icons to `./assets/`)
+- Screenshot capture for visual validation
+- Multi-file output: Main component + extracted components + tokens + assets + screenshot
+- Smart name resolution (prevents filename conflicts, enables updates)
+- Complete file writing to `.figma/{category}/{name}/` structure
+
+**Example**:
+```
+Generate HomeScreen from https://www.figma.com/design/ABC?node-id=123-456
+with theme from src/theme/index.ts
+```
+
+**Output**:
+```
+.figma/screens/HomeScreen/
+├── index.tsx           # Main component
+├── ProductCard.tsx     # Extracted component
+├── screenshot.png      # Visual reference
+├── meta.json           # Metadata
+└── assets/
+    ├── logo.png
+    └── icon-search.svg
+```
+
 ## Automatic UI Pattern Detection
 
 The MCP server automatically detects UI patterns and generates appropriate React Native code:

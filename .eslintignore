@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.figma/
+debug/
+sessions/
+scripts/
+tests/
+*.config.js
+*.config.ts

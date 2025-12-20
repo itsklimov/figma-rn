@@ -16,12 +16,16 @@ import { ProjectConfig } from './config-schema.js';
 import { loadProjectConfig } from './config-loader.js';
 import { generateSmartStyleName } from './smart-namer.js';
 import { normalizeStyleName } from './style-normalizer.js';
+import { type ComponentGroupDetection, isGroupParent, isGroupChild } from './interactive-group-detector.js';
+import { generateComponentGroupJSX } from './component-group-generators.js';
 
 /**
  * Generator options
  */
 export interface GeneratorOptions {
   styleMap?: Map<string, string>;
+  /** Detected component groups for smart generation */
+  componentGroups?: ComponentGroupDetection[];
 }
 
 /**
@@ -69,11 +73,15 @@ export async function generateReactNativeComponent(
     const typographyMappings = await autoGenerateTypographyMappings(figmaTypography, typographyPath);
 
     if (!config.mappings) config.mappings = {};
-    config.mappings.colors = colorMappings;
-    config.mappings.spacing = spacingMappings;
-    config.mappings.radii = radiiMappings;
-    config.mappings.shadows = shadowMappings;
-    config.mappings.typography = typographyMappings;
+    // Merge: existing (user-provided) mappings take priority over auto-generated.
+    // Spread order: auto-generated first, then user config overwrites.
+    // This allows users to override specific mappings in .figmarc.json while
+    // still getting auto-generated mappings for values they haven't specified.
+    config.mappings.colors = { ...colorMappings, ...(config.mappings.colors || {}) };
+    config.mappings.spacing = { ...spacingMappings, ...(config.mappings.spacing || {}) };
+    config.mappings.radii = { ...radiiMappings, ...(config.mappings.radii || {}) };
+    config.mappings.shadows = { ...shadowMappings, ...(config.mappings.shadows || {}) };
+    config.mappings.typography = { ...typographyMappings, ...(config.mappings.typography || {}) };
 
     // DON'T save mappings to file - use in memory only
     // await updateConfigMappings({ colors: colorMappings }); // REMOVED
@@ -99,13 +107,13 @@ export async function generateReactNativeComponent(
   );
 
   // Add imports
-  addImports(sourceFile, metadata);
+  addImports(sourceFile, metadata, options?.componentGroups);
 
   // Generate component
-  generateComponent(sourceFile, metadata, componentName, imageMap, options?.styleMap);
+  generateComponent(sourceFile, metadata, componentName, imageMap, options?.styleMap, options?.componentGroups);
 
   // Generate createStyles
-  generateCreateStyles(sourceFile, metadata, config);
+  generateCreateStyles(sourceFile, metadata, config, options);
 
   // Get generated code
   let code = sourceFile.getFullText();
@@ -442,27 +450,11 @@ function shouldSkipNode(nodeName: string): boolean {
   return shouldSkip;
 }
 
-/**
- * Checks if StatusBar exists in component tree
- */
-function hasStatusBar(node: any): boolean {
-  if (!node) return false;
-
-  if (node.name && node.name.toLowerCase().includes('statusbar')) {
-    return true;
-  }
-
-  if (node.children && Array.isArray(node.children)) {
-    return node.children.some((child: any) => hasStatusBar(child));
-  }
-
-  return false;
-}
 
 /**
  * Adds necessary imports
  */
-function addImports(sourceFile: SourceFile, metadata: any): void {
+function addImports(sourceFile: SourceFile, metadata: any, componentGroups?: ComponentGroupDetection[]): void {
   // React
   sourceFile.addImportDeclaration({
     moduleSpecifier: 'react',
@@ -470,12 +462,7 @@ function addImports(sourceFile: SourceFile, metadata: any): void {
   });
 
   // Collect necessary RN components
-  const rnComponents = collectRNComponents(metadata);
-
-  // Add StatusBar if detected in design
-  if (hasStatusBar(metadata)) {
-    rnComponents.add('StatusBar');
-  }
+  const rnComponents = collectRNComponents(metadata, componentGroups);
 
   // React Native components
   sourceFile.addImportDeclaration({
@@ -513,8 +500,13 @@ function addImports(sourceFile: SourceFile, metadata: any): void {
 /**
  * Collects all necessary RN components from metadata
  */
-function collectRNComponents(node: any): Set<string> {
+function collectRNComponents(node: any, componentGroups?: ComponentGroupDetection[]): Set<string> {
   const components = new Set<string>();
+
+  // Add TouchableOpacity if component groups are present
+  if (componentGroups && componentGroups.length > 0) {
+    components.add('TouchableOpacity');
+  }
 
   const traverse = (n: any) => {
     // Skip system components
@@ -548,6 +540,69 @@ function hasGradientFills(node: any): boolean {
 }
 
 /**
+ * Generates props interface properties for component groups
+ */
+function generateComponentGroupProps(groups: ComponentGroupDetection[]): Array<{name: string, type: string, hasQuestionToken: boolean}> {
+  const props: Array<{name: string, type: string, hasQuestionToken: boolean}> = [];
+
+  for (const group of groups) {
+    switch (group.pattern) {
+      case 'rating':
+        props.push({ name: 'rating', type: 'number', hasQuestionToken: true });
+        props.push({ name: 'onRatingChange', type: '(value: number) => void', hasQuestionToken: true });
+        break;
+      case 'tabs':
+        props.push({ name: 'activeTab', type: 'number', hasQuestionToken: true });
+        props.push({ name: 'onTabChange', type: '(index: number) => void', hasQuestionToken: true });
+        break;
+      case 'segmented-control':
+        props.push({ name: 'selectedSegment', type: 'number', hasQuestionToken: true });
+        props.push({ name: 'onSegmentChange', type: '(index: number) => void', hasQuestionToken: true });
+        break;
+      case 'stepper':
+        props.push({ name: 'stepperValue', type: 'number', hasQuestionToken: true });
+        props.push({ name: 'onIncrement', type: '() => void', hasQuestionToken: true });
+        props.push({ name: 'onDecrement', type: '() => void', hasQuestionToken: true });
+        break;
+      case 'pagination':
+        props.push({ name: 'currentPage', type: 'number', hasQuestionToken: true });
+        props.push({ name: 'onPageChange', type: '(index: number) => void', hasQuestionToken: true });
+        break;
+    }
+  }
+  return props;
+}
+
+/**
+ * Generates props destructure statement with default values
+ */
+function generatePropsDestructure(groups: ComponentGroupDetection[]): string {
+  const vars: string[] = [];
+
+  for (const group of groups) {
+    switch (group.pattern) {
+      case 'rating':
+        vars.push('rating = 0', 'onRatingChange');
+        break;
+      case 'tabs':
+        vars.push('activeTab = 0', 'onTabChange');
+        break;
+      case 'segmented-control':
+        vars.push('selectedSegment = 0', 'onSegmentChange');
+        break;
+      case 'stepper':
+        vars.push('stepperValue = 0', 'onIncrement', 'onDecrement');
+        break;
+      case 'pagination':
+        vars.push('currentPage = 0', 'onPageChange');
+        break;
+    }
+  }
+
+  return `const { ${vars.join(', ')} } = props;`;
+}
+
+/**
  * Generates functional component
  */
 function generateComponent(
@@ -555,15 +610,35 @@ function generateComponent(
   metadata: any,
   componentName: string,
   imageMap?: Map<string, string>,
-  styleMap?: Map<string, string>
+  styleMap?: Map<string, string>,
+  componentGroups?: ComponentGroupDetection[]
 ): void {
-  const includeStatusBar = hasStatusBar(metadata);
+  // If component groups exist, generate props interface
+  if (componentGroups && componentGroups.length > 0) {
+    const propsInterface = generateComponentGroupProps(componentGroups);
+    sourceFile.addInterface({
+      name: `${componentName}Props`,
+      isExported: true,
+      properties: propsInterface
+    });
+  }
 
   sourceFile.addFunction({
     name: componentName,
     isExported: true,
     returnType: 'JSX.Element',
+    parameters: componentGroups?.length ? [{
+      name: 'props',
+      type: `${componentName}Props`
+    }] : [],
     statements: (writer) => {
+      // Destructure props for each pattern
+      if (componentGroups?.length) {
+        const destructure = generatePropsDestructure(componentGroups);
+        writer.writeLine(destructure);
+        writer.blankLine();
+      }
+
       writer.writeLine('const {styles, theme} = useTheme(createStyles);');
       writer.blankLine();
       writer.write('return (');
@@ -571,14 +646,8 @@ function generateComponent(
       writer.write('  <>');
       writer.newLine();
 
-      // Add StatusBar if detected in design
-      if (includeStatusBar) {
-        writer.write('    <StatusBar barStyle="dark-content" />');
-        writer.newLine();
-      }
-
       // Generate JSX
-      const jsx = generateJSXRecursive(metadata, 2, undefined, imageMap, styleMap);
+      const jsx = generateJSXRecursive(metadata, 2, undefined, imageMap, styleMap, componentGroups);
       writer.write(jsx);
 
       writer.newLine();
@@ -640,11 +709,34 @@ function generateJSXRecursive(
   depth: number,
   parentNode?: any,
   imageMap?: Map<string, string>,
-  styleMap?: Map<string, string>
+  styleMap?: Map<string, string>,
+  componentGroups?: ComponentGroupDetection[]
 ): string {
   // Skip system components
   if (shouldSkipNode(node.name)) {
     return '';
+  }
+
+  // Check if this node is a child of a component group (skip - handled by parent)
+  if (componentGroups && isGroupChild(node.id, componentGroups)) {
+    return '';
+  }
+
+  // Check if this node is a component group parent
+  const groupParent = componentGroups ? isGroupParent(node.id, componentGroups) : null;
+  if (groupParent) {
+    const styleName = normalizeStyleName(generateSmartStyleName(
+      node.name || 'group',
+      'View',
+      { parentName: parentNode?.name }
+    ));
+
+    return generateComponentGroupJSX({
+      group: groupParent,
+      node,
+      depth,
+      styleName,
+    });
   }
 
   const indent = '  '.repeat(depth);
@@ -716,7 +808,7 @@ function generateJSXRecursive(
 
       // Filter children and remove empty strings
       const childrenJSX = node.children
-        .map((child: any) => generateJSXRecursive(child, depth + 1, node, imageMap, styleMap))
+        .map((child: any) => generateJSXRecursive(child, depth + 1, node, imageMap, styleMap, componentGroups))
         .filter((childJSX: string) => childJSX.trim() !== '');
 
       if (childrenJSX.length > 0) {
@@ -777,7 +869,7 @@ function generateJSXRecursive(
 
       // Filter children and remove empty strings
       const childrenJSX = node.children
-        .map((child: any) => generateJSXRecursive(child, depth + 1, node, imageMap, styleMap))
+        .map((child: any) => generateJSXRecursive(child, depth + 1, node, imageMap, styleMap, componentGroups))
         .filter((childJSX: string) => childJSX.trim() !== '');
 
       if (childrenJSX.length > 0) {
@@ -798,10 +890,10 @@ function generateJSXRecursive(
 /**
  * Generates createStyles function
  */
-function generateCreateStyles(sourceFile: SourceFile, metadata: any, config: ProjectConfig): void {
+function generateCreateStyles(sourceFile: SourceFile, metadata: any, config: ProjectConfig, options?: GeneratorOptions): void {
   // Collect all styles
   const stylesMap = new Map<string, any>();
-  collectStyles(metadata, stylesMap, config);
+  collectStyles(metadata, stylesMap, config, undefined, options?.componentGroups);
 
   sourceFile.addVariableStatement({
     declarationKind: VariableDeclarationKind.Const,
@@ -875,12 +967,202 @@ function generateCreateStyles(sourceFile: SourceFile, metadata: any, config: Pro
 }
 
 /**
+ * Generates component group-specific styles
+ */
+function generateComponentGroupStyles(
+  stylesMap: Map<string, any>,
+  containerStyleName: string,
+  group: ComponentGroupDetection,
+  node: any,
+  config: ProjectConfig
+): void {
+  const scaleFunc = config.codeStyle.scaleFunction;
+
+  // Helper to apply scale function
+  const applyScale = (value: number): string | number => {
+    return scaleFunc ? `${scaleFunc}(${value})` : value;
+  };
+
+  // Helper to find node by ID in tree
+  const findNode = (root: any, targetId: string): any | null => {
+    if (!root) return null;
+    if (root.id === targetId) return root;
+    if (root.children) {
+      for (const child of root.children) {
+        const found = findNode(child, targetId);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  // Get first child node using actual nodeId from group
+  const firstChildId = group.childNodeIds[0];
+  const firstChild = firstChildId ? findNode(node, firstChildId) : node.children?.[0];
+
+  // Extract actual styles from the child node
+  const childStyle = firstChild ? generateStyleObject(firstChild, config) : {};
+
+  // Get actual dimensions
+  const itemWidth = firstChild?.absoluteBoundingBox?.width || firstChild?.width || 56;
+  const itemHeight = firstChild?.absoluteBoundingBox?.height || firstChild?.height || 54;
+
+  switch (group.pattern) {
+    case 'rating': {
+      // Star touchable area - use actual child dimensions
+      stylesMap.set(`${containerStyleName}Star`, {
+        width: applyScale(itemWidth),
+        height: applyScale(itemHeight),
+        justifyContent: 'center',
+        alignItems: 'center',
+      });
+      // Star icon - extract actual fill color from child
+      const starIconStyle: Record<string, any> = {
+        width: applyScale(itemWidth - 4),
+        height: applyScale(itemHeight - 4),
+      };
+      // Use actual styles from the Figma node
+      if (childStyle.backgroundColor) {
+        starIconStyle.backgroundColor = childStyle.backgroundColor;
+      }
+      if (childStyle.borderRadius) {
+        starIconStyle.borderRadius = childStyle.borderRadius;
+      }
+      if (childStyle.borderWidth) {
+        starIconStyle.borderWidth = childStyle.borderWidth;
+      }
+      if (childStyle.borderColor) {
+        starIconStyle.borderColor = childStyle.borderColor;
+      }
+      stylesMap.set(`${containerStyleName}StarIcon`, starIconStyle);
+      // Active state - use same base but with opacity change for visual feedback
+      const starActiveStyle: Record<string, any> = {
+        opacity: 1,
+      };
+      if (childStyle.backgroundColor) {
+        starActiveStyle.backgroundColor = childStyle.backgroundColor;
+      }
+      stylesMap.set(`${containerStyleName}StarIconActive`, starActiveStyle);
+      break;
+    }
+
+    case 'tabs': {
+      // Tab item - extract actual styles
+      const tabStyle: Record<string, any> = {
+        paddingHorizontal: childStyle.paddingLeft || childStyle.paddingRight || applyScale(16),
+        paddingVertical: childStyle.paddingTop || childStyle.paddingBottom || applyScale(8),
+      };
+      if (childStyle.backgroundColor) {
+        tabStyle.backgroundColor = childStyle.backgroundColor;
+      }
+      stylesMap.set(`${containerStyleName}Tab`, tabStyle);
+      stylesMap.set(`${containerStyleName}TabActive`, {
+        borderBottomWidth: applyScale(2),
+        borderBottomColor: childStyle.borderColor || childStyle.backgroundColor,
+      });
+      // Tab text - look for text child
+      const textChild = firstChild?.children?.find((c: any) => c.type === 'TEXT');
+      const textStyle = textChild ? generateStyleObject(textChild, config) : {};
+      stylesMap.set(`${containerStyleName}TabText`, {
+        fontSize: textStyle.fontSize || applyScale(14),
+        color: textStyle.color,
+        fontWeight: textStyle.fontWeight,
+      });
+      stylesMap.set(`${containerStyleName}TabTextActive`, {
+        fontWeight: '600',
+      });
+      break;
+    }
+
+    case 'segmented-control':
+      stylesMap.set(`${containerStyleName}Segment`, {
+        flex: 1,
+        paddingVertical: childStyle.paddingTop || applyScale(8),
+        alignItems: 'center',
+        backgroundColor: childStyle.backgroundColor,
+        borderRadius: childStyle.borderRadius,
+      });
+      stylesMap.set(`${containerStyleName}SegmentSelected`, {
+        opacity: 0.8,
+      });
+      stylesMap.set(`${containerStyleName}SegmentText`, {
+        fontSize: applyScale(14),
+      });
+      break;
+
+    case 'stepper':
+      stylesMap.set(`${containerStyleName}Button`, {
+        width: childStyle.width || applyScale(40),
+        height: childStyle.height || applyScale(40),
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: childStyle.backgroundColor,
+        borderRadius: childStyle.borderRadius || applyScale(8),
+      });
+      stylesMap.set(`${containerStyleName}ButtonText`, {
+        fontSize: applyScale(20),
+        fontWeight: '600',
+      });
+      stylesMap.set(`${containerStyleName}Value`, {
+        fontSize: applyScale(16),
+        minWidth: applyScale(40),
+        textAlign: 'center',
+      });
+      break;
+
+    case 'pagination':
+      stylesMap.set(`${containerStyleName}Dot`, {
+        width: childStyle.width || applyScale(8),
+        height: childStyle.height || applyScale(8),
+        borderRadius: childStyle.borderRadius || applyScale(4),
+        backgroundColor: childStyle.backgroundColor,
+      });
+      stylesMap.set(`${containerStyleName}DotActive`, {
+        opacity: 1
+      });
+      break;
+  }
+}
+
+/**
  * Collects all styles from metadata tree
  */
-function collectStyles(node: any, stylesMap: Map<string, any>, config: ProjectConfig, parentNode?: any): void {
+function collectStyles(
+  node: any,
+  stylesMap: Map<string, any>,
+  config: ProjectConfig,
+  parentNode?: any,
+  componentGroups?: ComponentGroupDetection[]
+): void {
   // Skip system components
   if (shouldSkipNode(node.name)) {
     return;
+  }
+
+  // Check if this node is a child of a component group (skip - handled by parent)
+  if (componentGroups && isGroupChild(node.id, componentGroups)) {
+    return;
+  }
+
+  // Check if this is a component group parent
+  const groupParent = componentGroups ? isGroupParent(node.id, componentGroups) : null;
+  if (groupParent) {
+    // Generate container style
+    const containerStyleName = normalizeStyleName(generateSmartStyleName(
+      node.name || 'group',
+      'View',
+      { parentName: parentNode?.name }
+    ));
+
+    const containerStyle = generateStyleObject(node, config);
+    if (Object.keys(containerStyle).length > 0) {
+      stylesMap.set(containerStyleName, containerStyle);
+    }
+
+    // Generate pattern-specific item styles
+    generateComponentGroupStyles(stylesMap, containerStyleName, groupParent, node, config);
+
+    return; // Don't traverse children - handled as group
   }
 
   // Generate style name and normalize it (transliteration + camelCase)
@@ -900,7 +1182,7 @@ function collectStyles(node: any, stylesMap: Map<string, any>, config: ProjectCo
   }
 
   if (node.children && Array.isArray(node.children)) {
-    node.children.forEach((child: any) => collectStyles(child, stylesMap, config, node));
+    node.children.forEach((child: any) => collectStyles(child, stylesMap, config, node, componentGroups));
   }
 }
 
@@ -1041,16 +1323,19 @@ function generateStyleObject(node: any, config: ProjectConfig): Record<string, a
   }
 
   // Border (strokes)
+  // Only add border if stroke has visible color
   if (node.strokes && Array.isArray(node.strokes) && node.strokes.length > 0) {
     const stroke = node.strokes[0];
     if (stroke.type === 'SOLID' && stroke.color && stroke.visible !== false) {
       const { r, g, b } = stroke.color;
       const opacity = stroke.opacity ?? stroke.color.a ?? 1;
       styles.borderColor = `rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, ${opacity})`;
+
+      // Only add borderWidth if we have a visible borderColor
+      if (node.strokeWeight !== undefined && node.strokeWeight > 0) {
+        styles.borderWidth = applyScale(node.strokeWeight);
+      }
     }
-  }
-  if (node.strokeWeight !== undefined && node.strokeWeight > 0) {
-    styles.borderWidth = applyScale(node.strokeWeight);
   }
 
   // Shadows (effects)
@@ -1214,29 +1499,4 @@ function mapToRNComponent(node: any): string {
     default:
       return 'View';
   }
-}
-
-/**
- * Converts string to camelCase
- * If result starts with a digit, adds underscore prefix
- *
- * NOTE: This function is kept as a fallback and is used internally by smart-namer.ts
- */
-function toCamelCase(str: string): string {
-  let result = str
-    .replace(/[^a-zA-Z0-9]+(.)/g, (_, chr) => chr.toUpperCase())
-    .replace(/^[A-Z]/, (chr) => chr.toLowerCase())
-    .replace(/[^a-zA-Z0-9]/g, '');
-
-  // If starts with digit, add underscore prefix
-  if (/^\d/.test(result)) {
-    result = '_' + result;
-  }
-
-  // If empty string, return fallback
-  if (!result) {
-    result = 'element';
-  }
-
-  return result;
 }

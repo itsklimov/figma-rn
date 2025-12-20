@@ -136,6 +136,7 @@ export async function generateBatch(
       const node = response.nodes[nodeId]?.document;
 
       if (!node) {
+        throw new Error(`Node ${nodeId} not found in file ${fileKey}`);
       }
 
       // Extract colors from node
@@ -435,6 +436,7 @@ function parseFigmaUrl(figmaUrl: string): { fileKey: string; nodeId: string } {
 
   const nodeMatch = figmaUrl.match(/node-id=([^&]+)/);
   if (!nodeMatch) {
+    throw new Error(`Invalid Node ID in Figma URL: ${figmaUrl}`);
   }
   const nodeId = nodeMatch[1].replace(/-/g, ':');
 
