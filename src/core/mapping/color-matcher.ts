@@ -7,20 +7,42 @@
 type Lab = [number, number, number];
 
 /**
- * Convert hex color to RGB (0-255)
- * Accepts #RRGGBB or RRGGBB format. Alpha channel (#RRGGBBAA) is ignored.
+ * Convert hex or rgba color to RGB (0-255)
  */
-function hexToRgb(hex: string): [number, number, number] {
-  const h = hex.replace('#', '');
-  if (h.length < 6 || !/^[0-9A-Fa-f]+$/.test(h)) {
-    throw new Error(`Invalid hex color: ${hex}`);
+function toRgb(color: string): [number, number, number] {
+  // Handle Hex
+  if (color.startsWith('#') || /^[0-9A-Fa-f]{3,8}$/.test(color)) {
+    let h = color.startsWith('#') ? color.replace('#', '') : color;
+    
+    // Skip if it is a shorthand hex like #ABC
+    if (h.length === 3) {
+      h = h.split('').map(c => c + c).join('');
+    }
+
+    // Support 3, 6, 8 (with alpha) but only use first 6 for RGB
+    if (h.length === 8) h = h.slice(0, 6);
+
+    if (h.length !== 6) {
+      throw new Error(`Invalid hex color: ${color}`);
+    }
+    return [
+      parseInt(h.slice(0, 2), 16),
+      parseInt(h.slice(2, 4), 16),
+      parseInt(h.slice(4, 6), 16),
+    ];
   }
-  // Only use first 6 characters (ignore alpha if present)
-  return [
-    parseInt(h.slice(0, 2), 16),
-    parseInt(h.slice(2, 4), 16),
-    parseInt(h.slice(4, 6), 16),
-  ];
+
+  // Handle RGBA/RGB
+  const match = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+  if (match) {
+    return [
+      parseInt(match[1], 10),
+      parseInt(match[2], 10),
+      parseInt(match[3], 10),
+    ];
+  }
+
+  throw new Error(`Unsupported color format: ${color}`);
 }
 
 /**
@@ -60,14 +82,19 @@ function xyzToLab(x: number, y: number, z: number): Lab {
 }
 
 /**
- * Convert hex color to LAB color space
+ * Convert hex/rgba color to LAB color space
  */
-export function hexToLab(hex: string): Lab {
-  const [r, g, b] = hexToRgb(hex);
+export function colorToLab(color: string): Lab {
+  const [r, g, b] = toRgb(color);
   const [lr, lg, lb] = [srgbToLinear(r), srgbToLinear(g), srgbToLinear(b)];
   const [x, y, z] = linearRgbToXyz(lr, lg, lb);
   return xyzToLab(x, y, z);
 }
+
+/**
+ * Legacy alias for colorToLab
+ */
+export const hexToLab = colorToLab;
 
 /**
  * Calculate Delta-E (CIE76) between two LAB colors
@@ -91,22 +118,54 @@ export function findClosestColor(
   themeColors: Map<string, string>,
   threshold: number = 5
 ): string | null {
-  const targetLab = hexToLab(hex);
+  // Use colorToLab which parses Hex/RGB/RGBA
+  let targetLab: Lab;
+  try {
+    targetLab = colorToLab(hex);
+  } catch {
+    return null; // Invalid target color
+  }
+
+  // Normalize target hex for comparison
+  let normHex: string;
+  try {
+    const [r, g, b] = toRgb(hex);
+    const toHex = (n: number) => n.toString(16).padStart(2, '0').toUpperCase();
+    normHex = `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+  } catch {
+    return null; // Invalid target color
+  }
+
   let bestMatch: string | null = null;
   let bestDistance = Infinity;
 
   for (const [themeHex, themePath] of themeColors) {
-    // Exact match - return immediately
-    if (themeHex.toUpperCase() === hex.toUpperCase()) {
+    // Normalize theme hex for comparison
+    let normThemeHex: string;
+    try {
+      const [tr, tg, tb] = toRgb(themeHex);
+      const toHex = (n: number) => n.toString(16).padStart(2, '0').toUpperCase();
+      normThemeHex = `#${toHex(tr)}${toHex(tg)}${toHex(tb)}`;
+    } catch {
+      continue;
+    }
+
+    // Exact match after normalization
+    if (normThemeHex === normHex) {
       return themePath;
     }
 
-    const themeLab = hexToLab(themeHex);
-    const distance = labDistance(targetLab, themeLab);
+    try {
+      const themeLab = xyzToLab(...linearRgbToXyz(...toRgb(themeHex).map(srgbToLinear) as [number, number, number]));
+      const distance = labDistance(targetLab, themeLab);
 
-    if (distance < bestDistance && distance <= threshold) {
-      bestDistance = distance;
-      bestMatch = themePath;
+      if (distance < bestDistance && distance <= threshold) {
+        bestDistance = distance;
+        bestMatch = themePath;
+      }
+    } catch {
+      // Ignore invalid theme colors
+      continue;
     }
   }
 
