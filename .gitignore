@@ -43,6 +43,12 @@ coverage/
 # Figma MCP generated files
 .figma/
 
+# Debug and Sessions
+debug/
+sessions/
+debug-figma-data.ts
+
+
 # Local development (private, never committed)
 .local/
 *.private.*
