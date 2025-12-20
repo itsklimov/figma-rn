@@ -12,21 +12,35 @@
  * toValidIdentifier('') // => 'element'
  */
 export function toValidIdentifier(name: string): string {
-  // Remove invalid characters but preserve case
-  let result = name.replace(/[^a-zA-Z0-9_]/g, '');
+  // Split into words, handling spaces AND camelCase transitions
+  // e.g. "productCard" -> "product Card" -> ["product", "Card"]
+  // e.g. "Product Card" -> "Product Card" -> ["Product", "Card"]
+  const words = name
+    .replace(/([a-z])([A-Z])/g, '$1 $2') // Split camelCase
+    .replace(/[^a-zA-Z0-9]/g, ' ')       // Replace special chars with space
+    .split(/\s+/)
+    .filter(w => w.length > 0);
+
+  if (words.length === 0) {
+    return 'element';
+  }
+
+  const camelCase = words
+    .map((word, index) => {
+      // First word lowercase, others title case
+      if (index === 0) {
+        return word.toLowerCase();
+      }
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
+    .join('');
 
   // If starts with digit, add prefix
-  if (/^\d/.test(result)) {
-    result = 'style' + result;
+  if (/^\d/.test(camelCase)) {
+    return 'style' + camelCase;
   }
 
-  // If empty, use fallback
-  if (!result) {
-    result = 'element';
-  }
-
-  // Ensure first char is lowercase (camelCase convention)
-  return result.charAt(0).toLowerCase() + result.slice(1);
+  return camelCase;
 }
 
 /**
@@ -78,7 +92,12 @@ export function sanitizeComponentName(figmaName: string): string {
   const cleaned = figmaName
     .replace(/[^\w\s-]/g, '')
     .trim();
-  const words = cleaned.split(/[\s\-_]+/);
+  
+  // Split by spaces, hyphens, underscores OR camelCase transitions
+  const words = cleaned
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .split(/[\s\-_]+/);
+    
   const pascalCase = words
     .map(word => {
       if (!word) return '';
@@ -89,4 +108,43 @@ export function sanitizeComponentName(figmaName: string): string {
     return 'Component' + pascalCase;
   }
   return pascalCase || 'Component';
+}
+
+/**
+ * Valid PascalCase converter (alias for component names)
+ */
+export const toPascalCase = sanitizeComponentName;
+
+/**
+ * Format number as strict integer
+ * Used for macroscopic layout properties (width, height, gap, fontSize)
+ */
+export function formatInteger(value: number): string {
+  return String(Math.round(value));
+}
+
+/**
+ * Format number with smart rounding
+ * - Removes noise (e.g. 30.00001 -> 30)
+ * - Preserves precision for small values (e.g. 0.5)
+ * - Limits decimals for irregular values (e.g. 37.406 -> 37.41)
+ * Used for microscopic details (borders, shadows, radii)
+ */
+export function formatSmart(value: number): string {
+  // If extremely close to integer, snap to it
+  if (Math.abs(value - Math.round(value)) < 0.01) {
+    return String(Math.round(value));
+  }
+  
+  // If small (likely deliberate fractional), keep up to 2 decimals
+  // Or if it's a deliberate non-integer value
+  return parseFloat(value.toFixed(2)).toString();
+}
+
+/**
+ * Format number as float with precision
+ * Used for naturally fractional properties (opacity)
+ */
+export function formatFloat(value: number, precision: number = 2): string {
+  return parseFloat(value.toFixed(precision)).toString();
 }

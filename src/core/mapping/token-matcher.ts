@@ -52,6 +52,95 @@ function matchValue(
 }
 
 /**
+ * Match a spacing value to project spacing with "closest neighbor" logic
+ * - Exact match first
+ * - Then find closest value within tolerance (±2px or 20%)
+ * - This allows mapping values like 18 to 16, or 22 to 24
+ */
+function matchSpacing(
+  value: number,
+  projectSpacing: Map<string | number, string> | undefined
+): string {
+  if (!projectSpacing || projectSpacing.size === 0) {
+    return String(value);
+  }
+
+  // Try exact match first
+  const exactMatch = projectSpacing.get(value);
+  if (exactMatch) {
+    return exactMatch;
+  }
+
+  // Fuzzy match: find closest value within tolerance
+  let closestPath: string | null = null;
+  let closestDiff = Infinity;
+  const tolerance = Math.max(2, value * 0.2); // ±2px or 20%, whichever is larger
+
+  for (const [spacingValue, path] of projectSpacing) {
+    const numValue = typeof spacingValue === 'number' ? spacingValue : parseFloat(String(spacingValue));
+    if (isNaN(numValue)) continue;
+
+    const diff = Math.abs(numValue - value);
+    if (diff <= tolerance && diff < closestDiff) {
+      closestDiff = diff;
+      closestPath = path;
+    }
+  }
+
+  return closestPath || String(value);
+}
+
+/**
+ * Match a radius value to project radii with tolerance-based fuzzy matching
+ * - Exact match first
+ * - Then find closest value within tolerance (±2px or 15%)
+ * - Values >= 30 are matched to 'full' token if available (for circular elements)
+ *   Note: lowered from 50 to 30 as many mobile buttons use 30+ for pills
+ */
+function matchRadii(
+  value: number,
+  projectRadii: Map<string | number, string> | undefined
+): string {
+  if (!projectRadii || projectRadii.size === 0) {
+    return String(value);
+  }
+
+  // Try exact match first
+  const exactMatch = projectRadii.get(value);
+  if (exactMatch) {
+    return exactMatch;
+  }
+
+  // For large values (>= 30), try to find a "full" or "round" token
+  if (value >= 30) {
+    for (const [radiiValue, path] of projectRadii) {
+      const numValue = typeof radiiValue === 'number' ? radiiValue : parseFloat(String(radiiValue));
+      if (numValue >= 30 || path.toLowerCase().includes('full') || path.toLowerCase().includes('round')) {
+        return path;
+      }
+    }
+  }
+
+  // Fuzzy match: find closest value within tolerance
+  let closestPath: string | null = null;
+  let closestDiff = Infinity;
+  const tolerance = Math.max(2, value * 0.15); // ±2px or 15%, whichever is larger
+
+  for (const [radiiValue, path] of projectRadii) {
+    const numValue = typeof radiiValue === 'number' ? radiiValue : parseFloat(String(radiiValue));
+    if (isNaN(numValue)) continue;
+
+    const diff = Math.abs(numValue - value);
+    if (diff <= tolerance && diff < closestDiff) {
+      closestDiff = diff;
+      closestPath = path;
+    }
+  }
+
+  return closestPath || String(value);
+}
+
+/**
  * Match Figma colors to project colors
  * Uses exact match first, then Delta-E fuzzy matching
  */
@@ -78,10 +167,13 @@ function matchColors(
     }
   }
 
-  for (const [key, hex] of Object.entries(figmaColors)) {
+  for (const [id, hex] of Object.entries(figmaColors)) {
     // Use findClosestColor for fuzzy matching
     const match = findClosestColor(hex, hexToPath, threshold);
-    mappings[key] = match || hex;
+    const value = match || hex;
+    // Support both ID key (for tests) and Hex key (for generator)
+    mappings[id] = value;
+    mappings[hex] = value;
   }
 
   return mappings;
@@ -105,33 +197,73 @@ export function matchTokens(
   // Match colors with fuzzy matching
   mappings.colors = matchColors(extracted.colors, project.colors, colorThreshold);
 
-  // Match spacing (exact match only)
+  // Match spacing with fuzzy matching (closest neighbor)
   mappings.spacing = {};
-  for (const [key, value] of Object.entries(extracted.spacing)) {
-    mappings.spacing[key] = matchValue(value, project.spacing);
+  for (const [id, value] of Object.entries(extracted.spacing)) {
+    const matched = matchSpacing(value as number, project.spacing);
+    // Support both ID key (for tests) and Value key (for generator)
+    mappings.spacing[id] = matched;
+    mappings.spacing[value] = matched;
   }
 
-  // Match radii (exact match only)
+  // Match radii with fuzzy matching (tolerance-based)
   mappings.radii = {};
-  for (const [key, value] of Object.entries(extracted.radii)) {
-    mappings.radii[key] = matchValue(value, project.radii);
+  for (const [id, value] of Object.entries(extracted.radii)) {
+    const matched = matchRadii(value, project.radii);
+    // Support both ID key (for tests) and Value key (for generator)
+    mappings.radii[id] = matched;
+    mappings.radii[value] = matched;
   }
 
-  // Match typography (exact match only, by stringified key)
+  // Match typography (by serialized key comparison)
   mappings.typography = {};
-  for (const [key, value] of Object.entries(extracted.typography)) {
-    // Typography matching would need fontSize/fontWeight comparison
-    // For now, keep as-is (generation layer handles this)
-    mappings.typography[key] = key;
+  if (extracted.typography) {
+    for (const [_, value] of Object.entries(extracted.typography)) {
+      // 1. Normalize Figma values
+      // Normalize non-standard font weights (590→600, 510→500, etc.) to nearest 100
+      const rawWeight = value.fontWeight || 400;
+      const figmaWeight = Math.round(rawWeight / 100) * 100;
+      const figmaSize = value.fontSize || 0;
+      const figmaLH = Math.round(value.lineHeight || 0);
+      const figmaTypoKey = `${value.fontFamily || ''}-${figmaSize}-${figmaWeight}-${figmaLH}`;
+      
+      // 2. Try exact match
+      let match = project.typography?.get(figmaTypoKey);
+      
+      // 3. Fallback: Fuzzy match (Size + Weight bucket + LH tolerance)
+      if (!match && project.typography) {
+        const weightBucket = Math.floor(figmaWeight / 100) * 100;
+        
+        for (const [pKey, pPath] of project.typography.entries()) {
+          const [pFamily, pSize, pWeight, pLH] = String(pKey).split('-');
+          const pSizeNum = parseInt(pSize);
+          const pWeightNum = parseInt(pWeight);
+          const pLHNum = parseInt(pLH);
+          const pWeightBucket = Math.floor(pWeightNum / 100) * 100;
+          
+          const sizeMatch = Math.abs(pSizeNum - figmaSize) <= 1; // +/- 1px tolerance for size
+          const weightMatch = pWeightBucket === weightBucket;
+          const lhMatch = Math.abs(pLHNum - figmaLH) <= 2; // +/- 2px tolerance for line-height
+          
+          if (sizeMatch && weightMatch && lhMatch) {
+            match = pPath;
+            break;
+          }
+        }
+      }
+
+      // Key by the content hash/string, not the ID
+      mappings.typography[figmaTypoKey] = match || figmaTypoKey;
+    }
   }
 
   // Match shadows (exact match only, by deterministic key)
   mappings.shadows = {};
-  for (const [key, value] of Object.entries(extracted.shadows)) {
+  for (const [_, value] of Object.entries(extracted.shadows)) {
     // Use same deterministic key format as theme-extractor
     const shadowKey = `${value.offsetX ?? 0},${value.offsetY ?? 0},${value.blur ?? 0},${value.spread ?? 0}`;
     const match = project.shadows?.get(shadowKey);
-    mappings.shadows[key] = match || key;
+    mappings.shadows[shadowKey] = match || shadowKey;
   }
 
   return mappings;
