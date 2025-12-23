@@ -49,13 +49,11 @@ export function toValidIdentifier(name: string): string {
  */
 export function escapeJSXText(text: string): string {
   return text
-    .replace(/\\/g, '\\\\')
-    .replace(/"/g, '\\"')
-    .replace(/\n/g, '\\n')
     .replace(/\{/g, '&#123;')
     .replace(/\}/g, '&#125;')
     .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+    .replace(/>/g, '&gt;')
+    .replace(/\n/g, '{"\\n"}');
 }
 
 /**
@@ -147,4 +145,14 @@ export function formatSmart(value: number): string {
  */
 export function formatFloat(value: number, precision: number = 2): string {
   return parseFloat(value.toFixed(precision)).toString();
+}
+
+/**
+ * Format a percentage value (0-100 scale) as a percentage string
+ * Rounds to 2 decimal places, removes trailing zeros
+ * Used for SCALE constraints in constraint-mapper
+ */
+export function formatPercent(value: number): string {
+  const rounded = parseFloat(value.toFixed(2));
+  return `${rounded}%`;
 }

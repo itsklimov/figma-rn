@@ -82,7 +82,7 @@ async function main() {
 
   const figmaNode = transformNode(doc);
   const screenIR = transformToScreenIR(figmaNode);
-  const detectionResult = runDetectors(screenIR.root);
+  const detectionResult = runDetectors(screenIR.root, screenIR.stylesBundle);
   
   // Match tokens
   const tokenMappings = matchTokens(screenIR.stylesBundle.tokens, projectTokens);

@@ -17,6 +17,7 @@ import type {
   Effect,
   CornerRadius,
   TypographyInfo,
+  ButtonIR,
 } from './types.js';
 import { normalizeTree } from './normalize/index.js';
 import { addLayoutInfo } from './layout/index.js';
@@ -96,17 +97,87 @@ function buildVisualPropsMap(node: LayoutNode): Map<string, NodeVisualProps> {
 
 /**
  * Collect all styles from an IR tree using the visual props map
+ * Implements content-aware deduplication and collision handling
  */
 function collectStyles(
   node: IRNode,
   propsMap: Map<string, NodeVisualProps>
 ): Record<string, ReturnType<typeof extractStyleFromProps>> {
   const styles: Record<string, ReturnType<typeof extractStyleFromProps>> = {};
+  
+  // Track hashes of styles to deduplicate identical content
+  // Hash -> styleRef
+  const hashToRef = new Map<string, string>();
+  
+  // Helper to generate a stable hash for a style object
+  function getStyleHash(style: any): string {
+    // Sort keys to ensure deterministic hash for same properties
+    const sortedProps = Object.keys(style).sort().reduce((acc: any, key) => {
+      acc[key] = style[key];
+      return acc;
+    }, {});
+    return JSON.stringify(sortedProps);
+  }
+
+  function registerStyle(n: { styleRef: string }, props: NodeVisualProps): void {
+    const style = extractStyleFromProps(n.styleRef, props);
+    const hash = getStyleHash(style);
+
+    // 1. Check if we already have this exact style content under ANY name
+    const existingRef = hashToRef.get(hash);
+    if (existingRef) {
+      // Reuse existing style name
+      n.styleRef = existingRef;
+      return;
+    }
+
+    // 2. Check if the preferred name is already taken by DIFFERENT content
+    let finalRef = n.styleRef;
+    let counter = 1;
+    
+    while (styles[finalRef]) {
+      const existingStyle = styles[finalRef];
+      if (getStyleHash(existingStyle) === hash) {
+        // Same content already registered under this name
+        n.styleRef = finalRef;
+        hashToRef.set(hash, finalRef);
+        return;
+      }
+      // Name collision with different content!
+      finalRef = `${n.styleRef}_${counter++}`;
+    }
+
+    // 3. Register new style
+    n.styleRef = finalRef;
+    styles[finalRef] = extractStyleFromProps(finalRef, props); // Re-extract with final name for ID consistency
+    hashToRef.set(hash, finalRef);
+  }
 
   function walk(n: IRNode): void {
     const props = propsMap.get(n.id);
     if (props) {
-      styles[n.styleRef] = extractStyleFromProps(n.styleRef, props);
+      registerStyle(n, props);
+    }
+
+    if (n.semanticType === 'Button') {
+      const btn = n as ButtonIR;
+      if (btn.textId && btn.textStyleRef) {
+        const textProps = propsMap.get(btn.textId);
+        if (textProps) {
+          // Wrap in object compatible with registerStyle interface
+          const pseudoNode = { styleRef: btn.textStyleRef };
+          registerStyle(pseudoNode, textProps);
+          btn.textStyleRef = pseudoNode.styleRef;
+        }
+      }
+      if (btn.iconId && btn.iconStyleRef) {
+        const iconProps = propsMap.get(btn.iconId);
+        if (iconProps) {
+          const pseudoNode = { styleRef: btn.iconStyleRef };
+          registerStyle(pseudoNode, iconProps);
+          btn.iconStyleRef = pseudoNode.styleRef;
+        }
+      }
     }
 
     if ('children' in n && n.children) {

@@ -20,9 +20,8 @@
  * └── icons/                # Standalone icons (SVG files)
  */
 
-import { mkdir, writeFile, readFile, access, appendFile, rm } from 'fs/promises';
-import { existsSync } from 'fs';
-import { join, dirname, basename } from 'path';
+import { mkdir, writeFile, readFile, appendFile, rm } from 'fs/promises';
+import { join, dirname } from 'path';
 // existsSync removed - now using glob for recursive search
 import { glob } from 'glob';
 import { ElementType } from './element-analyzer.js';
@@ -208,6 +207,7 @@ export interface FigmaConfig {
   // Utility functions
   utils: {
     scale?: string;       // Path to scale/responsive function
+    scaleFunctionName?: string; // Name of the scaling function (e.g., 'scale')
   };
   
   // Components directory
@@ -789,6 +789,7 @@ async function generateFigmaConfig(projectRoot: string): Promise<FigmaConfig> {
   let framework: FigmaConfig['framework'] = 'react-native';
   let stylePattern: FigmaConfig['stylePattern'] = 'StyleSheet';
   let importPrefix = '@app';
+  let scaleFunctionName: string | undefined;
   let componentsDir: string | undefined;
 
   // ============================================================================
@@ -897,8 +898,37 @@ async function generateFigmaConfig(projectRoot: string): Promise<FigmaConfig> {
     });
     
     if (matches.length > 0 && !utils.scale) {
-      utils.scale = matches[0];
-      console.error(`   🛠️ Found scale util: ${utils.scale}`);
+      const match = matches[0];
+      utils.scale = match;
+      
+      // Try to detect function name from filename first
+      const nameMatch = match.match(/\/([^./]+)\.(ts|js)$/);
+      if (nameMatch) {
+        const fileName = nameMatch[1];
+        if (['scale', 'moderateScale', 'RFValue', 'verticalScale'].includes(fileName)) {
+          scaleFunctionName = fileName;
+        }
+      }
+      
+      // Fallback: If filename isn't the function, read file content
+      if (!scaleFunctionName) {
+        try {
+          const content = await readFile(join(projectRoot, match), 'utf-8');
+          const exportMatches = content.match(/export (?:const|function) (\w+)/g);
+          if (exportMatches) {
+            const names = exportMatches.map(m => m.split(' ')[2]);
+            scaleFunctionName = names.find(n => ['scale', 'moderateScale', 'RFValue', 'verticalScale'].includes(n)) || names[0];
+          }
+        } catch (e) {
+          // Ignore
+        }
+      }
+      
+      // Final fallback
+      if (!scaleFunctionName) scaleFunctionName = 'scale';
+      
+      utils.scaleFunctionName = scaleFunctionName;
+      console.error(`   🛠️ Found scale util: ${utils.scale} (function: ${scaleFunctionName})`);
       break;
     }
   }
@@ -1170,10 +1200,7 @@ export async function registerGeneration(
 
   // Screenshot already saved directly to local folder
   let hasScreenshot = false;
-  let screenshotPath: string | undefined;
   if (options.screenshotPath) {
-    // Path already points to local folder
-    screenshotPath = options.screenshotPath;
     hasScreenshot = true;
   }
 
