@@ -201,7 +201,6 @@ export function isComponent(node: LayoutNode): boolean {
  */
 export function classifyNode(node: LayoutNode): SemanticType {
   // Order matters - check more specific types first
-
   // Component (First priority if explicitly an instance)
   if (isComponent(node)) {
     return 'Component';
@@ -442,14 +441,22 @@ export function toIRNode(node: LayoutNode): IRNode {
         size: Math.max(node.boundingBox.width, node.boundingBox.height),
       } as IconIR;
 
-    case 'Button':
+    case 'Button': {
+      const textChild = node.children.find(child => child.type === 'TEXT' && child.text);
+      const iconChild = node.children.find(child => isIcon(child));
+      
       return {
         ...baseProps,
         semanticType: 'Button',
         label: extractButtonLabel(node),
         iconRef: extractButtonIcon(node),
+        textStyleRef: textChild ? generateStyleRef(textChild) : undefined,
+        iconStyleRef: iconChild ? generateStyleRef(iconChild) : undefined,
+        textId: textChild?.id,
+        iconId: iconChild?.id,
         variant: inferButtonVariant(node),
       } as ButtonIR;
+    }
 
     case 'Card':
       return {

@@ -19,6 +19,10 @@ export interface ImportConfig {
   stylePattern: 'useTheme' | 'StyleSheet';
   /** Has project theme tokens */
   hasProjectTheme: boolean;
+  /** Scaling function name */
+  scaleFunction?: string;
+  /** Scaling function path */
+  scaleFunctionPath?: string;
 }
 
 /**
@@ -86,6 +90,14 @@ function generateThemeImport(config: ImportConfig): string | null {
     imports.push(`import { theme } from '${config.themeImportPath}';`);
   } else {
     imports.push(`import { theme } from '${config.importPrefix}/styles';`);
+  }
+
+  // 3. Scaling function import
+  if (config.scaleFunction && config.scaleFunctionPath) {
+    const cleanPath = config.scaleFunctionPath
+      .replace(/^(src|app)\//, '')
+      .replace(/\.(ts|tsx|js|jsx)$/, '');
+    imports.push(`import { ${config.scaleFunction} } from '${config.importPrefix}/${cleanPath}';`);
   }
   
   return imports.join('\n');

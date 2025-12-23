@@ -15,12 +15,25 @@ import type {
 } from '../types.js';
 
 /**
- * Convert a Color to hex string
+ * Resolve effective color by combining base color with fill opacity
  */
-function colorToHex(color: { hex: string }): string {
-  return color.hex;
+function resolveEffectiveColor(color: { hex: string; rgba: { r: number; g: number; b: number; a: number } }, opacity: number): string {
+  const finalAlpha = color.rgba.a * opacity;
+  if (finalAlpha >= 0.995) {
+    // Return standard 6-digit hex (normalized)
+    const r = color.rgba.r.toString(16).padStart(2, '0');
+    const g = color.rgba.g.toString(16).padStart(2, '0');
+    const b = color.rgba.b.toString(16).padStart(2, '0');
+    return `#${r}${g}${b}`.toLowerCase();
+  } else {
+    // Return 8-digit hex for semi-transparent colors
+    const r = color.rgba.r.toString(16).padStart(2, '0');
+    const g = color.rgba.g.toString(16).padStart(2, '0');
+    const b = color.rgba.b.toString(16).padStart(2, '0');
+    const a = Math.round(finalAlpha * 255).toString(16).padStart(2, '0');
+    return `#${r}${g}${b}${a}`.toLowerCase();
+  }
 }
-
 
 /**
  * Extract background style from fills
@@ -39,21 +52,20 @@ export function fillsToBackground(
   }
 
   if (fill.type === 'solid') {
-    return { backgroundColor: colorToHex(fill.color) };
+    return { backgroundColor: resolveEffectiveColor(fill.color, fill.opacity) };
   }
 
   if (fill.type === 'gradient') {
     return {
       backgroundGradient: {
         type: fill.gradient.type,
-        colors: fill.gradient.stops.map(stop => colorToHex(stop.color)),
+        colors: fill.gradient.stops.map(stop => resolveEffectiveColor(stop.color, fill.opacity)),
         positions: fill.gradient.stops.map(stop => stop.position),
         angle: fill.gradient.angle,
       },
     };
   }
 
-  // Image fills are handled separately
   return {};
 }
 
@@ -69,7 +81,7 @@ export function strokesToBorder(
 
   const stroke = strokes[0];
   return {
-    borderColor: colorToHex(stroke.color),
+    borderColor: resolveEffectiveColor(stroke.color, stroke.opacity ?? 1),
     borderWidth: stroke.weight,
   };
 }
@@ -90,7 +102,7 @@ export function effectsToShadow(
   }
 
   return {
-    color: colorToHex(shadow.color),
+    color: resolveEffectiveColor(shadow.color, 1), // Effects already have color.rgba.a
     offsetX: shadow.offset.x,
     offsetY: shadow.offset.y,
     blur: shadow.radius,
@@ -132,7 +144,13 @@ export function typographyToStyle(
   if (fills) {
     const solidFill = fills.find(f => f.type === 'solid');
     if (solidFill && solidFill.type === 'solid') {
-      color = colorToHex(solidFill.color);
+      color = resolveEffectiveColor(solidFill.color, solidFill.opacity);
+    } else {
+      // Fallback to first stop of gradient if present
+      const gradientFill = fills.find(f => f.type === 'gradient');
+      if (gradientFill && gradientFill.type === 'gradient' && gradientFill.gradient.stops.length > 0) {
+        color = resolveEffectiveColor(gradientFill.gradient.stops[0].color, gradientFill.opacity);
+      }
     }
   }
 
@@ -202,15 +220,26 @@ export function extractStyleFromProps(
   if (typography) style.typography = typography;
 
   // Size
-  if (props.width !== undefined) style.width = props.width;
-  if (props.height !== undefined) style.height = props.height;
+  if (typeof props.width === 'number') style.width = Math.round(props.width);
+  else if (props.width !== undefined) style.width = props.width;
+
+  if (typeof props.height === 'number') style.height = Math.round(props.height);
+  else if (props.height !== undefined) style.height = props.height;
   
   // Positioning
   if (props.position) style.position = props.position;
-  if (props.left !== undefined) style.left = props.left;
-  if (props.right !== undefined) style.right = props.right;
-  if (props.top !== undefined) style.top = props.top;
-  if (props.bottom !== undefined) style.bottom = props.bottom;
+
+  if (typeof props.left === 'number') style.left = Math.round(props.left);
+  else if (props.left !== undefined) style.left = props.left;
+
+  if (typeof props.right === 'number') style.right = Math.round(props.right);
+  else if (props.right !== undefined) style.right = props.right;
+
+  if (typeof props.top === 'number') style.top = Math.round(props.top);
+  else if (props.top !== undefined) style.top = props.top;
+
+  if (typeof props.bottom === 'number') style.bottom = Math.round(props.bottom);
+  else if (props.bottom !== undefined) style.bottom = props.bottom;
 
   // Opacity
   if (props.opacity !== undefined && props.opacity !== 1) {

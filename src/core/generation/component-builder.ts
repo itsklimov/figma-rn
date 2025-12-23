@@ -13,6 +13,8 @@ import { generateFlatList, generateItemComponent } from './list-generator.js';
 import { generateTokensIfNeeded } from './tokens-generator.js';
 import { toValidIdentifier } from './utils.js';
 import { extractProps } from './prop-extractor.js';
+import { mergePropsVariations, extractVariableProps } from '../detection/repetition-detector.js';
+import { detectSemanticState } from '../detection/state-detector.js';
 
 /**
  * Result of component generation
@@ -50,12 +52,16 @@ export interface GenerationOptions {
   suppressTodos?: boolean;
   /** Responsive scaling function name (e.g., 'scale') */
   scaleFunction?: string;
+  /** Path to scaling function for import generation */
+  scaleFunctionPath?: string;
   /** Style pattern: useTheme or StyleSheet */
   stylePattern?: 'useTheme' | 'StyleSheet';
   /** Path to useTheme hook if discovered */
   useThemeHookPath?: string;
   /** Import prefix from tsconfig (e.g., '@app') */
   importPrefix?: string;
+  /** Semantic state information for state-based styling (internal use) */
+  semanticState?: import('../detection/state-detector.js').SemanticState;
 }
 
 /**
@@ -99,23 +105,7 @@ function toPascalCase(str: string): string {
 /**
  * Assemble complete TSX file from parts
  */
-function assembleComponent(
-  imports: string,
-  componentName: string,
-  jsx: string,
-  styles: string
-): string {
-  return `${imports}
 
-export function ${componentName}() {
-  return (
-${jsx}
-  );
-}
-
-${styles}
-`;
-}
 
 /**
  * Generate a complete React Native component from ScreenIR
@@ -150,7 +140,7 @@ export function generateComponent(
 ): GenerationResult {
   // 1. Resolve component name and root props
   const componentName = options?.componentName || toPascalCase(screen.name) || 'GeneratedComponent';
-  const { props: rootProps } = extractProps(screen.root);
+  const { props: rootProps } = extractProps(screen.root, screen.stylesBundle);
   const rootPropsList = Object.keys(rootProps);
   
   // Generate props interface for the main component
@@ -198,7 +188,7 @@ export function generateComponent(
   const repeaters = collectRepeaters(screen.root);
   const usedRepeaterNames = new Set<string>();
   for (const repeater of repeaters) {
-    const { dataConstant, itemComponent, typeDefinition, itemComponentName } = generateRepeaterParts(repeater, mappings, options, usedRepeaterNames);
+    const { dataConstant, itemComponent, typeDefinition, itemComponentName } = generateRepeaterParts(repeater, screen.stylesBundle, mappings, options, listExtras.generatedComponentNames);
     listExtras.data.push(dataConstant);
     listExtras.types.push(typeDefinition);
     listExtras.subComponents.push(itemComponent);
@@ -215,7 +205,7 @@ export function generateComponent(
     if (listExtras.generatedComponentNames.has(comp.componentName)) {
       continue;
     }
-    const code = generateSubComponent(comp, mappings, options);
+    const code = generateSubComponent(comp, screen.stylesBundle, mappings, options);
     if (code.includes('ImageSourcePropType')) {
       needsImageSourcePropType = true;
     }
@@ -229,6 +219,12 @@ export function generateComponent(
   const extraRNImports: string[] = [];
   if (listExtras.imports.has('FlatList')) extraRNImports.push('FlatList');
   if (needsImageSourcePropType) extraRNImports.push('ImageSourcePropType');
+  
+  // Check if any generated code uses Pressable (semantic state components)
+  const allSubComponentsCode = [...subComponentsCodeParts, ...listExtras.subComponents].join('\n');
+  if (allSubComponentsCode.includes('<Pressable')) {
+    extraRNImports.push('Pressable');
+  }
   
   // Check for SVG usage in paths
   if (options?.imagePathMap) {
@@ -247,6 +243,8 @@ export function generateComponent(
     themeImportPath: options.themeImportPath,
     stylePattern: options.stylePattern || 'StyleSheet',
     hasProjectTheme: options.hasProjectTheme ?? false,
+    scaleFunction: options.scaleFunction,
+    scaleFunctionPath: options.scaleFunctionPath,
   } : undefined;
 
   const imports = buildImports(screen.root, extraRNImports, screen.stylesBundle, importConfig);
@@ -254,11 +252,12 @@ export function generateComponent(
   // 4. Build JSX from IR tree (indented for return statement)
   const jsx = buildJSX(screen.root, 2, options?.imagePathMap, jsxOverrides, screen.stylesBundle, mappings);
 
-  // Fix #8: Extract used style names from JSX for tree-shaking
+  // Fix #8: Extract used style names from ALL generated JSX (main + sub-components) for tree-shaking
   const usedStyles = new Set<string>();
+  const allGeneratedJSX = [jsx, ...subComponentsCodeParts, ...listExtras.subComponents].join('\n');
   const styleRefPattern = /styles\.([a-zA-Z0-9_]+)/g;
   let styleMatch;
-  while ((styleMatch = styleRefPattern.exec(jsx)) !== null) {
+  while ((styleMatch = styleRefPattern.exec(allGeneratedJSX)) !== null) {
     usedStyles.add(styleMatch[1]);
   }
 
@@ -273,6 +272,43 @@ export function generateComponent(
       scaleFunction: options?.scaleFunction
     }
   );
+
+  // 6. Generate Selected variant styles for semantic state components
+  // Find all styles.XXXSelected references and generate the variant styles
+  let finalStylesCode = stylesCode;
+  const selectedStylePattern = /styles\.([a-zA-Z0-9_]+)Selected/g;
+  const selectedStyles = new Set<string>();
+  let selectedMatch;
+  while ((selectedMatch = selectedStylePattern.exec(allGeneratedJSX)) !== null) {
+    selectedStyles.add(selectedMatch[1]);
+  }
+  
+  if (selectedStyles.size > 0) {
+    // Generate Selected variant styles with the state-specific colors
+    // TODO: Get actual colors from stateStyles - for now use semantic defaults
+    const variantStylesCode: string[] = [];
+    
+    for (const baseStyle of selectedStyles) {
+      // Check if base style looks like a container or text
+      const isText = baseStyle.includes('text') || baseStyle.includes('Text');
+      
+      if (isText) {
+        // Text selected state typically has white color
+        variantStylesCode.push(`  ${baseStyle}Selected: {\n    color: '#ffffff',\n  },`);
+      } else {
+        // Container selected state typically has accent background
+        variantStylesCode.push(`  ${baseStyle}Selected: {\n    backgroundColor: theme.gradients?.primary?.from || '#7a54ff',\n  },`);
+      }
+    }
+    
+    // Insert variant styles before the closing });
+    if (variantStylesCode.length > 0) {
+      finalStylesCode = finalStylesCode.replace(
+        /\n\}\);$/,
+        '\n' + variantStylesCode.join('\n') + '\n});'
+      );
+    }
+  }
 
   // 6. Theme access is via useTheme() hook - no additional imports needed
   // Token paths are prefixed with 'theme.' (e.g., theme.spacing.md, theme.color.primary)
@@ -330,7 +366,7 @@ export function ${componentName}(${rootPropsDestructure}) {
 ${themeHook}${bodyContent}
 }
 
-${stylesCode}
+${finalStylesCode}
 `;
 
   // Clean up extra double newlines
@@ -400,6 +436,7 @@ function collectRepeaters(root: IRNode): RepeaterIR[] {
  */
 function generateRepeaterParts(
   repeater: RepeaterIR,
+  stylesBundle: StylesBundle,
   mappings: TokenMappings,
   options?: GenerationOptions,
   usedNames?: Set<string>
@@ -435,42 +472,92 @@ function generateRepeaterParts(
   }
   repeater.dataPropName = dataConstantName;
 
-  // 1. Identify dynamic fields by comparing children (simple version: extract all text/image as props)
+  // 1. Identify dynamic fields by comparing children
   const template = repeater.children[0];
-  const { props: templateProps } = extractProps(template);
+  const variations = mergePropsVariations(repeater.children, stylesBundle);
   
-  // 2. Build data array with normalized items (all props from template)
-  const dataItems = repeater.children.map(child => {
-    const { props: childProps } = extractProps(child);
-    const itemData: Record<string, string> = {};
+  // 2. Detect semantic state (e.g., 1-of-N = isSelected)
+  const stateResult = detectSemanticState(repeater.children, variations, stylesBundle);
+  
+  // 3. Build data array based on semantic state or raw variations
+  let dataItems: Record<string, any>[];
+  let semanticPropName: string | undefined;
+  let stateStyles: Record<string, any> | undefined;
+  
+  if (stateResult.hasSemanticState && stateResult.state) {
+    // Semantic state detected! Generate data with state flags, not style values
+    semanticPropName = stateResult.state.propName;
+    stateStyles = stateResult.state.stateStyles;
     
-    // Ensure every prop from template is present in the data item
-    for (const propName of Object.keys(templateProps)) {
-      itemData[propName] = childProps[propName]?.value || templateProps[propName]?.defaultValue || '';
-    }
-    return itemData;
-  });
+    dataItems = repeater.children.map((child, idx) => {
+      const rawValues = extractVariableProps(child, stylesBundle);
+      const itemData: Record<string, any> = {};
+      
+      // Add semantic state prop
+      itemData[semanticPropName!] = stateResult.state!.instanceStates.get(child.id) ?? false;
+      
+      // Only add non-style props (text content, etc.)
+      // Get text from child0_text
+      const textValue = rawValues['child0_text'] || rawValues['text'] || '';
+      if (textValue) {
+        itemData['text'] = textValue;
+      }
+      
+      return itemData;
+    });
+  } else {
+    // Fallback: use existing style-based variation extraction
+    const { props: templateProps } = extractProps(template, stylesBundle, variations);
+    
+    dataItems = repeater.children.map(child => {
+      const rawValues = extractVariableProps(child, stylesBundle);
+      const itemData: Record<string, string> = {};
+      
+      for (const propName of Object.keys(templateProps)) {
+        const propConfig = templateProps[propName];
+        
+        if (propConfig.type === 'style' && propConfig.property) {
+          if (rawValues[propConfig.property]) {
+            itemData[propName] = rawValues[propConfig.property];
+          } else {
+            const rawKey = propName.replace(/([A-Z])/g, '_$1').toLowerCase();
+            if (rawValues[rawKey]) {
+              itemData[propName] = rawValues[rawKey];
+            } else {
+              itemData[propName] = propConfig.defaultValue || '';
+            }
+          }
+        } else if (propConfig.type === 'string') {
+          const rawKey = propName.replace(/([A-Z])/g, '_$1').toLowerCase();
+          itemData[propName] = rawValues[rawKey] || rawValues[`child0_text`] || propConfig.defaultValue || '';
+        } else {
+          itemData[propName] = propConfig.defaultValue || '';
+        }
+      }
+      return itemData;
+    });
+  }
 
   const dataConstant = `const ${dataConstantName} = ${JSON.stringify(dataItems, null, 2)};`;
 
-  // 3. Generate Item Component
+  // 4. Generate Item Component with semantic state support
   const itemCompIR: ComponentIR = {
     ...template,
     semanticType: 'Component',
     componentName: repeater.itemComponentName,
-    props: templateProps,
+    props: stateResult.hasSemanticState ? {} : extractProps(template, stylesBundle, variations).props,
+    propsVariations: variations,
   } as any;
   
-  const itemComponent = generateSubComponent(itemCompIR, mappings, options);
+  // Pass semantic state info to sub-component generation
+  const itemComponent = generateSubComponent(
+    itemCompIR, 
+    stylesBundle, 
+    mappings, 
+    { ...options, semanticState: stateResult.hasSemanticState ? stateResult.state : undefined }
+  );
 
-  // 4. Type definition
-  const propLines = Object.entries(templateProps).map(([name, config]: [string, any]) => {
-     const type = config.type === 'image' ? 'ImageSourcePropType' : 'string';
-     return `  ${name}: ${type};`;
-  });
-  const typeDefinition = `interface ${repeater.itemComponentName}Props {\n${propLines.join('\n')}\n}`;
-
-  return { dataConstant, itemComponent, typeDefinition, itemComponentName: repeater.itemComponentName };
+  return { dataConstant, itemComponent, typeDefinition: '', itemComponentName: repeater.itemComponentName };
 }
 
 /**
@@ -478,6 +565,7 @@ function generateRepeaterParts(
  */
 function generateSubComponent(
   component: ComponentIR, 
+  stylesBundle?: StylesBundle,
   mappings?: TokenMappings,
   options?: GenerationOptions
 ): string {
@@ -513,18 +601,61 @@ function generateSubComponent(
 
   // Ensure component has props extracted from its own sub-tree
   // We use extractProps again here to populate component.props and set propName on children
-  const { props: extractedProps } = extractProps(implementationNode);
-  const componentWithProps = { ...component, props: extractedProps };
+  const variations = (component as any).propsVariations || 
+                    options?.detectionResult?.components.find(c => c.componentName === component.componentName)?.propsVariations;
+                    
+  const { props: extractedProps } = extractProps(implementationNode, stylesBundle, variations);
 
   // Generate props interface
   let propsInterface = '';
   let propsType = '';
   let propsDestructure = '';
   
+  // Check if we have semantic state (e.g., isSelected pattern)
+  const semanticState = options?.semanticState;
+  
+  if (semanticState && semanticState.propType === 'boolean') {
+    // Semantic state detected - generate isSelected-style interface
+    const propName = semanticState.propName; // e.g., "isSelected"
+    const interfaceName = `${component.componentName}Props`;
+    
+    const propLines = [
+      `  /** Text to display */\n  text: string;`,
+      `  /** Whether this item is in the ${semanticState.type} state */\n  ${propName}?: boolean;`,
+      `  /** Called when item is pressed */\n  onPress?: () => void;`,
+    ];
+    
+    propsInterface = `interface ${interfaceName} {\n${propLines.join('\n')}\n}\n\n`;
+    propsDestructure = `{ text, ${propName} = false, onPress }: ${interfaceName}`;
+    
+    // Generate JSX with conditional styling
+    const containerStyleRef = implementationNode.styleRef || 'container';
+    const textChild = 'children' in implementationNode ? 
+      (implementationNode as any).children.find((c: any) => c.semanticType === 'Text') : null;
+    const textStyleRef = textChild?.styleRef || 'text';
+    
+    // Use Pressable for interactive items
+    const jsx = `    <Pressable 
+      style={[styles.${containerStyleRef}, ${propName} && styles.${containerStyleRef}Selected]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ selected: ${propName} }}
+    >
+      <Text style={[styles.${textStyleRef}, ${propName} && styles.${textStyleRef}Selected]}>{text}</Text>
+    </Pressable>`;
+    
+    return `${propsInterface}function ${component.componentName}(${propsDestructure}) {
+  return (
+${jsx}
+  );
+}`;
+  }
+  
   if (Object.keys(extractedProps).length > 0) {
     const propLines = Object.entries(extractedProps).map(([name, config]: [string, any]) => {
-      const type = config.type === 'image' ? 'ImageSourcePropType' : 'string';
-      return `  /** Default: "${config.defaultValue}" */\n  ${name}: ${type};`;
+      const type = (config.type === 'image' || config.type === 'style') ? (config.type === 'image' ? 'ImageSourcePropType' : 'string') : 'string';
+      const typeDoc = config.type === 'style' ? `Visual property: ${config.property}` : `Default: "${config.defaultValue}"`;
+      return `  /** ${typeDoc} */\n  ${name}: ${type};`;
     });
     
     const interfaceName = `${component.componentName}Props`;
@@ -550,23 +681,10 @@ function generateSubComponent(
   }
 
   // We use indent 1 because it's inside a function
-  const jsx = buildJSX(implementationNode, 2, options?.imagePathMap, undefined, undefined, mappings);
+  const jsx = buildJSX(implementationNode, 2, options?.imagePathMap, undefined, stylesBundle, mappings);
   
-  // Generate function signature based on props
-  let funcSignature: string;
-  if (component.props && Object.keys(component.props).length > 0) {
-    // Destructure props with default values
-    const propsWithDefaults = Object.entries(component.props)
-      .map(([name, config]: [string, any]) => {
-        const defaultVal = config.defaultValue ? ` = "${config.defaultValue.replace(/"/g, '\\"')}"` : '';
-        return `${name}${defaultVal}`;
-      })
-      .join(', ');
-    funcSignature = `{ ${propsWithDefaults} }: ${propsType}`;
-  } else {
-    // No props - use empty signature
-    funcSignature = '';
-  }
+
+
 
   return `${propsInterface}function ${component.componentName}(${propsDestructure}) {
   return (
@@ -715,16 +833,22 @@ function generateExtractedComponent(
 ): string {
   const { componentName, propsVariations } = hint;
 
-  // Generate props interface
-  const propsEntries = Object.entries(propsVariations)
-    .map(([key]) => `  ${key}?: string;`)
-    .join('\n');
+  // Extract props with style awareness
+  const { props: extractedProps } = extractProps(templateNode, stylesBundle, propsVariations);
 
-  const propsInterface = propsEntries
-    ? `interface ${componentName}Props {\n${propsEntries}\n}\n\n`
+  // Generate props interface
+  const propLines = Object.entries(extractedProps).map(([name, config]: [string, any]) => {
+    const type = (config.type === 'image' || config.type === 'style') ? (config.type === 'image' ? 'ImageSourcePropType' : 'string') : 'string';
+    const typeDoc = config.type === 'style' ? `Visual property: ${config.property}` : `Default: "${config.defaultValue}"`;
+    return `  /** ${typeDoc} */\n  ${name}?: ${type};`;
+  });
+
+  const propsInterface = propLines.length > 0
+    ? `interface ${componentName}Props {\n${propLines.join('\n')}\n}\n\n`
     : '';
 
-  const propsParam = propsEntries ? `props: ${componentName}Props` : '';
+  const propsParam = propLines.length > 0 ? `props: ${componentName}Props` : '';
+  const propsDestructure = propLines.length > 0 ? `{ ${Object.keys(extractedProps).join(', ')} }: ${componentName}Props` : '';
 
   // Build imports from template node
   const imports = buildImports(templateNode);
@@ -737,7 +861,7 @@ function generateExtractedComponent(
 
   return `${imports}
 
-${propsInterface}export function ${componentName}(${propsParam}) {
+${propsInterface}export function ${componentName}(${propsDestructure || '{}'}) {
   return (
 ${jsx}
   );

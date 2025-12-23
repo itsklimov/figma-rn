@@ -201,6 +201,7 @@ export function transformStroke(raw: any): Stroke | null {
   return {
     color: transformColor(stroke.color),
     weight: raw.strokeWeight ?? 1,
+    opacity: stroke.opacity ?? 1,
     align: (raw.strokeAlign?.toLowerCase() as 'inside' | 'outside' | 'center') || 'inside',
   };
 }

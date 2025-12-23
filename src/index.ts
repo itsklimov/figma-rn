@@ -724,21 +724,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           componentName,
           themeFilePath,
           outputDir,
-          writeFiles,
           category
         } = args as {
           figmaUrl: string;
           componentName?: string;
           themeFilePath?: string;
           outputDir?: string;
-          writeFiles?: boolean;
           category?: string;
         };
 
         console.error(`\n🎯 [GET_SCREEN] Processing ${figmaUrl}...`);
 
         const result = await executeGetScreen(
-          { figmaUrl, componentName, themeFilePath, outputDir, writeFiles, category },
+          { figmaUrl, componentName, themeFilePath, outputDir, category },
           FIGMA_TOKEN
         );
 

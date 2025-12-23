@@ -116,7 +116,7 @@ export function labDistance(a: Lab, b: Lab): number {
 export function findClosestColor(
   hex: string,
   themeColors: Map<string, string>,
-  threshold: number = 5
+  threshold: number = 8
 ): string | null {
   // Use colorToLab which parses Hex/RGB/RGBA
   let targetLab: Lab;

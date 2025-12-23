@@ -195,6 +195,8 @@ export interface Stroke {
   color: Color;
   /** Stroke width */
   weight: number;
+  /** Stroke opacity */
+  opacity?: number;
   /** Stroke alignment relative to edge */
   align: 'inside' | 'outside' | 'center';
   /** Stroke cap style */
@@ -232,7 +234,7 @@ export interface VariableAlias {
  * Bound variables (Design Tokens)
  */
 export interface BoundVariables {
-  [key: string]: VariableAlias | VariableAlias[];
+  [key: string]: VariableAlias | VariableAlias[] | { [subkey: string]: VariableAlias };
 }
 
 /**

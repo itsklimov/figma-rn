@@ -13,13 +13,15 @@ import { transformToScreenIR } from '../../core/pipeline.js';
 import { runDetectors } from '../../core/detection/index.js';
 import { matchTokens, createEmptyMappings, type TokenMappings } from '../../core/mapping/token-matcher.js';
 import { extractProjectTokens } from '../../core/mapping/theme-extractor.js';
-import { generateComponent, generateComponentMultiFile, type MultiFileResult } from '../../core/generation/index.js';
+import { 
+  generateComponent, 
+  type MultiFileResult 
+} from '../../core/generation/index.js';
 import type { ScreenIR } from '../../core/types.js';
 import { downloadAssets } from '../asset-downloader.js';
 import { resolveComponentName } from '../name-resolver.js';
 import { writeGeneratedFiles, type WriteResult } from '../file-writer.js';
 import {
-  loadManifest,
   getOrCreateManifest,
   loadAllProjectTokens,
   refreshFigmaConfig,
@@ -97,10 +99,6 @@ Returns:
         type: 'string',
         description: 'Output directory for generated files (default: "components")',
       },
-      writeFiles: {
-        type: 'boolean',
-        description: 'Whether to write files to disk (default: true)',
-      },
       category: {
         type: 'string',
         description: 'Category for the component (screens, modals, sheets, components, icons) (default: "screens")',
@@ -127,7 +125,6 @@ export interface GetScreenArgs {
   componentName?: string;
   themeFilePath?: string;
   outputDir?: string;
-  writeFiles?: boolean;
   category?: string;
   suppressTodos?: boolean;
   scaleFunction?: string;
@@ -341,7 +338,8 @@ export async function executeGetScreen(
       themeImportPath,
       assetsPrefix,
       suppressTodos: args.suppressTodos,
-      scaleFunction: args.scaleFunction || config.utils?.scale,
+      scaleFunction: args.scaleFunction || config.utils?.scaleFunctionName,
+      scaleFunctionPath: config.utils?.scale,
       // New: Pass config for import generation
       stylePattern: config.stylePattern,
       useThemeHookPath: config.hooks?.useTheme,
@@ -358,25 +356,23 @@ export async function executeGetScreen(
       unmappedTokens: generationResult.unmappedTokens,
     };
 
-    // 13. Write files if enabled (default: true)
+    // 13. Write files
     let writeResult: WriteResult | undefined;
-    if (args.writeFiles !== false) {
-      try {
-        writeResult = await writeGeneratedFiles({
-          projectRoot,
-          figmaUrl,
-          category,
-          componentName: resolved.name,
-          multiFileResult,
-          assets: assetResult.assets,
-          screenshot: screenshotBuffer,
-          figmaName: screenIR.name,
-          previousName: resolved.previousName,
-        });
-      } catch (error) {
-        console.error('Failed to write files:', error);
-        // Continue without writing files
-      }
+    try {
+      writeResult = await writeGeneratedFiles({
+        projectRoot,
+        figmaUrl,
+        category,
+        componentName: resolved.name,
+        multiFileResult,
+        assets: assetResult.assets,
+        screenshot: screenshotBuffer,
+        figmaName: screenIR.name,
+        previousName: resolved.previousName,
+      });
+    } catch (error) {
+      console.error('Failed to write files:', error);
+      // Continue without writing files
     }
 
     // 14. Prepare response

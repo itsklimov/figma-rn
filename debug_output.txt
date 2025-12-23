@@ -1,0 +1,58 @@
+🚀 Mode: BASELINE
+🔗 URL: https://www.figma.com/design/urlmcU7w44JTXsaN7K5lHZ/MARAFET-dev?node-id=3593-85722&m=dev
+🔄 Refreshing config from: /Users/its/Documents/Dev/code/marafet/marafet-frontend
+🔄 Re-evaluating project configuration...
+🔍 Scanning project for theme files...
+   📦 Found 3 token file(s):
+      - src/styles/tokens.ts
+      - src/styles/index.ts
+      - src/styles/theme.ts
+   🪝 Found useTheme hook: src/contexts/ThemeContext.tsx
+   🛠️ Found scale util: src/utils/responsive.ts (function: scale)
+   📍 Import prefix: @app
+✅ Configuration refreshed
+🎨 Loading project tokens...
+📦 Loading tokens from 3 file(s)...
+Debug: Loaded 29 colors
+Debug: Sample colors: [
+  [ '#7A54FF', 'theme.gradients.primary.from' ],
+  [ '#AB5CE9', 'theme.accent.accent60' ],
+  [ 'rgba(255, 124, 140, 0.2)', 'theme.overlayColors.errorLight' ],
+  [ 'rgba(24, 179, 138, 0.2)', 'theme.overlayColors.successLight' ],
+  [ '#FCFAFE', 'theme.accent.accent10' ]
+]
+📦 Processing: Ad Services (3593:85722)
+Debug: Mapped colors: [
+  [ 'color_0', "theme.overlay.appBlack['40']" ],
+  [ '#17171a66', "theme.overlay.appBlack['40']" ],
+  [ 'color_1', "theme.overlay.white['5']" ],
+  [ '#ffffff', "theme.overlay.white['5']" ],
+  [ 'color_2', '#7f7f7f66' ]
+]
+Debug: Project Spacing tokens: 12
+Debug: Extracted Spacing: [
+  [ 'spacing_0', 5 ],
+  [ 'spacing_1', 14 ],
+  [ 'spacing_2', 21 ],
+  [ 'spacing_3', 22 ],
+  [ 'spacing_4', 25 ],
+  [ 'spacing_5', 36 ],
+  [ 'spacing_6', 37 ],
+  [ 'spacing_7', 41 ],
+  [ 'spacing_8', 43 ],
+  [ 'spacing_9', 44 ]
+]
+Debug: Spacing mappings: [
+  [ '0', 'theme.spacing.none' ],
+  [ '2', "theme.spacing['2xs']" ],
+  [ '4', 'theme.spacing.xs' ],
+  [ '5', 'theme.spacing.xs' ],
+  [ '8', 'theme.spacing.sm' ],
+  [ '12', 'theme.spacing.md' ],
+  [ '14', 'theme.spacing.md' ],
+  [ '16', 'theme.spacing.lg' ],
+  [ '20', 'theme.spacing.xl' ],
+  [ '21', 'theme.spacing.xl' ]
+]
+
+✅ Baseline saved to: /Users/its/Documents/Dev/code/MCPs/dev/figma-rn/.figma/regression/baselines/baseline_3593-85722.tsx
