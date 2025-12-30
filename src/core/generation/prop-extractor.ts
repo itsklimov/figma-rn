@@ -167,7 +167,7 @@ export function extractProps(
     }
 
     // 4. Recurse into children
-    if ('children' in node) {
+    if ('children' in node && node.children) {
       node.children.forEach((child, idx) => {
         traverse(child, depth + 1, path.concat(`child${idx}`));
       });
