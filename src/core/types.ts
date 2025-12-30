@@ -172,6 +172,8 @@ export interface TextIR extends IRNodeBase {
 export interface ImageIR extends IRNodeBase {
   semanticType: 'Image';
   imageRef?: string;
+  children?: IRNode[]; // Optional - for images with overlays (text, gradient, badges)
+  layout?: LayoutMeta; // Optional - for arranging children
 }
 
 /**
@@ -186,6 +188,8 @@ export interface ButtonIR extends IRNodeBase {
   textId?: string;
   iconId?: string;
   variant: 'primary' | 'secondary' | 'outline' | 'ghost';
+  children?: IRNode[]; // Optional - for complex buttons with custom internal structure
+  layout?: LayoutMeta; // Optional - for arranging children
 }
 
 /**
@@ -204,6 +208,8 @@ export interface IconIR extends IRNodeBase {
   semanticType: 'Icon';
   iconRef: string;
   size: number;
+  children?: IRNode[]; // Optional - for composite icons (icon + badge)
+  layout?: LayoutMeta; // Optional - for arranging children
 }
 
 /**

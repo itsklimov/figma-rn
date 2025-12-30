@@ -340,17 +340,18 @@ function buildStyleProps(
  * Now context-aware and uses styleRef as key
  */
 function collectLayouts(
-  node: IRNode, 
-  map: Map<string, LayoutWithContext>, 
+  node: IRNode,
+  map: Map<string, LayoutWithContext>,
   parentType?: 'row' | 'column' | 'stack' | 'absolute'
 ): void {
-  if (node.semanticType === 'Container' || node.semanticType === 'Card' || node.semanticType === 'Component') {
+  // Check at runtime for nodes with layout and children (now includes Button/Icon/Image)
+  if ('layout' in node && node.layout && 'children' in node && node.children) {
     // Store layout with parent context
     map.set(node.styleRef, {
       ...node.layout,
       parentType
     });
-    
+
     // Recurse with OUR type as parent
     for (const child of node.children) {
       collectLayouts(child, map, node.layout.type);

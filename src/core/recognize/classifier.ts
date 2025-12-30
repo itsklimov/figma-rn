@@ -129,8 +129,8 @@ export function isButton(node: LayoutNode): boolean {
     return false;
   }
 
-  // Must have a background (fill)
-  const hasBackground = node.fills && node.fills.length > 0 && node.fills.some(f => f.type === 'solid');
+  // Must have a background (solid or gradient fill)
+  const hasBackground = node.fills && node.fills.length > 0 && node.fills.some(f => f.type === 'solid' || f.type === 'gradient');
   if (!hasBackground) {
     return false;
   }
@@ -426,25 +426,41 @@ export function toIRNode(node: LayoutNode): IRNode {
 
     case 'Image': {
       const imageRef = node.fills?.find(f => f.type === 'image');
+      const children = node.children && node.children.length > 0
+        ? processChildrenWithRepeaters(node.children)
+        : undefined;
+
       return {
         ...baseProps,
         semanticType: 'Image',
         imageRef: imageRef?.type === 'image' ? imageRef.imageRef : undefined,
+        children,
+        layout: node.layout,
       } as ImageIR;
     }
 
-    case 'Icon':
+    case 'Icon': {
+      const children = node.children && node.children.length > 0
+        ? processChildrenWithRepeaters(node.children)
+        : undefined;
+
       return {
         ...baseProps,
         semanticType: 'Icon',
         iconRef: styleRef,
         size: Math.max(node.boundingBox.width, node.boundingBox.height),
+        children,
+        layout: node.layout,
       } as IconIR;
+    }
 
     case 'Button': {
       const textChild = node.children.find(child => child.type === 'TEXT' && child.text);
       const iconChild = node.children.find(child => isIcon(child));
-      
+      const children = node.children && node.children.length > 0
+        ? processChildrenWithRepeaters(node.children)
+        : undefined;
+
       return {
         ...baseProps,
         semanticType: 'Button',
@@ -455,6 +471,8 @@ export function toIRNode(node: LayoutNode): IRNode {
         textId: textChild?.id,
         iconId: iconChild?.id,
         variant: inferButtonVariant(node),
+        children,
+        layout: node.layout,
       } as ButtonIR;
     }
 

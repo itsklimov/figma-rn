@@ -397,8 +397,8 @@ function collectComponents(root: IRNode): ComponentIR[] {
       // The children effectively belong to the Component definition.
       // So we MUST walk inside the component to find *other* components it relies on.
     }
-    
-    if ('children' in node) {
+
+    if ('children' in node && node.children) {
       for (const child of node.children) {
         walk(child);
       }
@@ -419,8 +419,8 @@ function collectRepeaters(root: IRNode): RepeaterIR[] {
     if (node.semanticType === 'Repeater') {
       repeaters.push(node as RepeaterIR);
     }
-    
-    if ('children' in node) {
+
+    if ('children' in node && node.children) {
       for (const child of node.children) {
         walk(child);
       }
@@ -704,7 +704,7 @@ function findNodeById(node: any, id: string, visited: Set<string> = new Set()): 
   if (visited.has(node.id)) return null;
   visited.add(node.id);
 
-  if ('children' in node) {
+  if ('children' in node && node.children) {
     for (const child of node.children) {
       const found = findNodeById(child, id, visited);
       if (found) return found;

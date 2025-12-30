@@ -63,7 +63,7 @@ function hasGradients(node: IRNode, stylesBundle?: StylesBundle): boolean {
     if (style?.backgroundGradient) return true;
   }
 
-  if ('children' in node) {
+  if ('children' in node && node.children) {
     return node.children.some(child => hasGradients(child, stylesBundle));
   }
   return false;
