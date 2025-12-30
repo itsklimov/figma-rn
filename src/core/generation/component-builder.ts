@@ -346,13 +346,54 @@ export function generateComponent(
   const additionalData = listExtras.data.join('\n\n');
   const renderItems = listExtras.renderItems.map(fn => fn.replace(/^ {2}/, '')).join('\n\n');
 
-  const bodyContent = `  return (\n${jsx}\n  );`;
-  const themeHook = jsx.includes('theme.') && options?.hasProjectTheme 
-    ? '  const { theme } = useTheme();\n\n' 
+  // Determine if we need SafeAreaView wrapper
+  const needsSafeArea = screen.hasSafeAreaLayout === true;
+
+  // Build body content with optional SafeAreaView wrapper
+  let bodyContent: string;
+  if (needsSafeArea) {
+    // Wrap content with SafeAreaView for proper safe area handling
+    // Determine which edges to protect based on insets
+    const edges: string[] = [];
+    if (screen.safeAreaInsets?.top && screen.safeAreaInsets.top > 0) edges.push("'top'");
+    if (screen.safeAreaInsets?.bottom && screen.safeAreaInsets.bottom > 0) edges.push("'bottom'");
+    if (screen.safeAreaInsets?.left && screen.safeAreaInsets.left > 0) edges.push("'left'");
+    if (screen.safeAreaInsets?.right && screen.safeAreaInsets.right > 0) edges.push("'right'");
+
+    const edgesAttr = edges.length > 0 ? ` edges={[${edges.join(', ')}]}` : '';
+    bodyContent = `  return (
+    <SafeAreaView style={styles.safeArea}${edgesAttr}>
+${jsx}
+    </SafeAreaView>
+  );`;
+  } else {
+    bodyContent = `  return (\n${jsx}\n  );`;
+  }
+
+  const themeHook = jsx.includes('theme.') && options?.hasProjectTheme
+    ? '  const { theme } = useTheme();\n\n'
     : '';
 
-  let code = `${finalImports}
+  // Add SafeAreaView import if needed
+  let safeAreaImport = '';
+  if (needsSafeArea) {
+    safeAreaImport = "import { SafeAreaView } from 'react-native-safe-area-context';\n";
+  }
 
+  // Add safeArea style if SafeAreaView is used
+  if (needsSafeArea) {
+    // Insert safeArea style at the beginning of the styles
+    finalStylesCode = finalStylesCode.replace(
+      /const styles = StyleSheet\.create\(\{/,
+      `const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+  },`
+    );
+  }
+
+  let code = `${finalImports}
+${safeAreaImport}
 ${rootPropsInterface}
 ${additionalTypes}
 
@@ -630,8 +671,7 @@ function generateSubComponent(
     
     // Generate JSX with conditional styling
     const containerStyleRef = implementationNode.styleRef || 'container';
-    const textChild = 'children' in implementationNode ? 
-      (implementationNode as any).children.find((c: any) => c.semanticType === 'Text') : null;
+    const textChild = (implementationNode as any).children?.find((c: any) => c.semanticType === 'Text') ?? null;
     const textStyleRef = textChild?.styleRef || 'text';
     
     // Use Pressable for interactive items

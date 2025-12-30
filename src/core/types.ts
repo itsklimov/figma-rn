@@ -29,6 +29,7 @@ export type FilterReason =
   | 'measurement'
   | 'status-bar'
   | 'home-indicator'
+  | 'os-component'
   | 'pattern-match';
 
 /**
@@ -365,6 +366,17 @@ export interface PipelineOptions {
 }
 
 /**
+ * Safe area insets detected from Figma design
+ * Used to properly wrap content with SafeAreaView
+ */
+export interface SafeAreaInsets {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+}
+
+/**
  * Final output of the transformation pipeline
  */
 export interface ScreenIR {
@@ -372,4 +384,8 @@ export interface ScreenIR {
   name: string;
   root: IRNode;
   stylesBundle: StylesBundle;
+  /** Safe area insets detected from OS chrome elements */
+  safeAreaInsets?: SafeAreaInsets;
+  /** Whether the design uses safe area layout (has status bar, home indicator, etc.) */
+  hasSafeAreaLayout?: boolean;
 }
