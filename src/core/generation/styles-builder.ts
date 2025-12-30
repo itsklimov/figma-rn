@@ -243,10 +243,26 @@ function buildStyleProps(
     } else {
       // Individual corners
       const { topLeft, topRight, bottomRight, bottomLeft } = style.borderRadius;
-      if (topLeft > 0) lines.push(`    borderTopLeftRadius: ${sc(formatSmart(topLeft))},`);
-      if (topRight > 0) lines.push(`    borderTopRightRadius: ${sc(formatSmart(topRight))},`);
-      if (bottomRight > 0) lines.push(`    borderBottomRightRadius: ${sc(formatSmart(bottomRight))},`);
-      if (bottomLeft > 0) lines.push(`    borderBottomLeftRadius: ${sc(formatSmart(bottomLeft))},`);
+      if (topLeft > 0) {
+        const { value, mapped } = mapNumber(topLeft, 'radii', mappings);
+        lines.push(`    borderTopLeftRadius: ${mapped ? value : sc(value)},`);
+        if (!mapped) unmapped.radii.add(topLeft);
+      }
+      if (topRight > 0) {
+        const { value, mapped } = mapNumber(topRight, 'radii', mappings);
+        lines.push(`    borderTopRightRadius: ${mapped ? value : sc(value)},`);
+        if (!mapped) unmapped.radii.add(topRight);
+      }
+      if (bottomRight > 0) {
+        const { value, mapped } = mapNumber(bottomRight, 'radii', mappings);
+        lines.push(`    borderBottomRightRadius: ${mapped ? value : sc(value)},`);
+        if (!mapped) unmapped.radii.add(bottomRight);
+      }
+      if (bottomLeft > 0) {
+        const { value, mapped } = mapNumber(bottomLeft, 'radii', mappings);
+        lines.push(`    borderBottomLeftRadius: ${mapped ? value : sc(value)},`);
+        if (!mapped) unmapped.radii.add(bottomLeft);
+      }
     }
   }
 
@@ -368,7 +384,8 @@ export function buildStyles(
   const styleEntries: string[] = [];
 
   for (const [styleRef, extractedStyle] of Object.entries(stylesBundle.styles)) {
-    const styleName = toValidIdentifier(extractedStyle.id);
+    // Use styleRef directly since JSX generation uses it as-is
+    const styleName = styleRef;
     
     // Fix 8: Skip styles that aren't referenced in JSX (if usedStyles provided)
     if (options?.usedStyles && options.usedStyles.size > 0 && !options.usedStyles.has(styleName)) {

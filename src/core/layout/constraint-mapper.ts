@@ -5,6 +5,7 @@
  */
 
 import { FigmaNode, BoundingBox } from '../../api/types.js';
+import { formatPercent } from '../generation/utils.js';
 
 type ConstraintStyle = {
   position: 'absolute';
@@ -69,8 +70,8 @@ function getHorizontalStyles(
 
     case 'SCALE':
       return {
-        left: `${(relativeX / parentWidth) * 100}%`,
-        width: `${(width / parentWidth) * 100}%`,
+        left: formatPercent((relativeX / parentWidth) * 100),
+        width: formatPercent((width / parentWidth) * 100),
       };
 
     default:
@@ -123,8 +124,8 @@ function getVerticalStyles(
 
     case 'SCALE':
       return {
-        top: `${(relativeY / parentHeight) * 100}%`,
-        height: `${(height / parentHeight) * 100}%`,
+        top: formatPercent((relativeY / parentHeight) * 100),
+        height: formatPercent((height / parentHeight) * 100),
       };
 
     default:

@@ -28,7 +28,6 @@ describe('get_screen tool debug', () => {
         figmaUrl: TEST_URLS.mainScreen,
         componentName: 'DebugScreen',
         projectRoot: workspace.root,
-        writeFiles: true
       });
 
       console.log('Result success:', !result.isError);

@@ -28,14 +28,14 @@ describe('buildStyles', () => {
       name: 'container',
       semanticType: 'Container',
       boundingBox: baseBoundingBox,
-      styleRef: 'style_1',
+      styleRef: 'container',
       layout: baseLayout,
       children: [],
     };
 
     const stylesBundle: StylesBundle = {
       styles: {
-        style_1: {
+        container: {
           id: 'container',
           backgroundColor: '#FFFFFF',
         },
@@ -62,7 +62,7 @@ describe('buildStyles', () => {
       name: 'row',
       semanticType: 'Container',
       boundingBox: baseBoundingBox,
-      styleRef: 'style_1',
+      styleRef: 'row',
       layout: {
         type: 'row',
         gap: 16,
@@ -76,7 +76,7 @@ describe('buildStyles', () => {
 
     const stylesBundle: StylesBundle = {
       styles: {
-        style_1: { id: 'row' },
+        row: { id: 'row' },
       },
       tokens: {
         colors: {},
@@ -104,14 +104,14 @@ describe('buildStyles', () => {
       name: 'card',
       semanticType: 'Container',
       boundingBox: baseBoundingBox,
-      styleRef: 'style_1',
+      styleRef: 'card',
       layout: baseLayout,
       children: [],
     };
 
     const stylesBundle: StylesBundle = {
       styles: {
-        style_1: {
+        card: {
           id: 'card',
           backgroundColor: '#3B82F6',
         },
@@ -144,14 +144,14 @@ describe('buildStyles', () => {
       name: 'box',
       semanticType: 'Container',
       boundingBox: baseBoundingBox,
-      styleRef: 'style_1',
+      styleRef: 'box',
       layout: baseLayout,
       children: [],
     };
 
     const stylesBundle: StylesBundle = {
       styles: {
-        style_1: {
+        box: {
           id: 'box',
           backgroundColor: '#FF5733',
         },
@@ -177,14 +177,14 @@ describe('buildStyles', () => {
       name: 'rounded',
       semanticType: 'Container',
       boundingBox: baseBoundingBox,
-      styleRef: 'style_1',
+      styleRef: 'rounded',
       layout: baseLayout,
       children: [],
     };
 
     const stylesBundle: StylesBundle = {
       styles: {
-        style_1: {
+        rounded: {
           id: 'rounded',
           borderRadius: 8,
         },
@@ -208,14 +208,14 @@ describe('buildStyles', () => {
       name: 'asymmetric',
       semanticType: 'Container',
       boundingBox: baseBoundingBox,
-      styleRef: 'style_1',
+      styleRef: 'asymmetric',
       layout: baseLayout,
       children: [],
     };
 
     const stylesBundle: StylesBundle = {
       styles: {
-        style_1: {
+        asymmetric: {
           id: 'asymmetric',
           borderRadius: {
             topLeft: 8,
@@ -247,14 +247,14 @@ describe('buildStyles', () => {
       name: 'elevated',
       semanticType: 'Container',
       boundingBox: baseBoundingBox,
-      styleRef: 'style_1',
+      styleRef: 'elevated',
       layout: baseLayout,
       children: [],
     };
 
     const stylesBundle: StylesBundle = {
       styles: {
-        style_1: {
+        elevated: {
           id: 'elevated',
           shadow: {
             color: '#000000',
@@ -288,14 +288,14 @@ describe('buildStyles', () => {
       name: 'title',
       semanticType: 'Container',
       boundingBox: baseBoundingBox,
-      styleRef: 'style_1',
+      styleRef: 'title',
       layout: baseLayout,
       children: [],
     };
 
     const stylesBundle: StylesBundle = {
       styles: {
-        style_1: {
+        title: {
           id: 'title',
           typography: {
             fontFamily: 'Inter',
@@ -333,14 +333,14 @@ describe('buildStyles', () => {
       name: 'translucent',
       semanticType: 'Container',
       boundingBox: baseBoundingBox,
-      styleRef: 'style_1',
+      styleRef: 'translucent',
       layout: baseLayout,
       children: [],
     };
 
     const stylesBundle: StylesBundle = {
       styles: {
-        style_1: {
+        translucent: {
           id: 'translucent',
           opacity: 0.5,
         },
@@ -364,14 +364,14 @@ describe('buildStyles', () => {
       name: 'opaque',
       semanticType: 'Container',
       boundingBox: baseBoundingBox,
-      styleRef: 'style_1',
+      styleRef: 'opaque',
       layout: baseLayout,
       children: [],
     };
 
     const stylesBundle: StylesBundle = {
       styles: {
-        style_1: {
+        opaque: {
           id: 'opaque',
           opacity: 1,
         },
