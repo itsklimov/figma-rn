@@ -125,7 +125,7 @@ function walkObject(
  * Simplify token path by normalizing prefixes
  * - "tokens.color.primary" → "theme.color.primary" (normalize to theme.)
  * - "theme.spacing.md" → "theme.spacing.md" (keep as-is)
- * 
+ *
  * All paths should start with "theme." for unified access via useTheme hook
  */
 function simplifyPath(path: string): string {

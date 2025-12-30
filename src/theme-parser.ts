@@ -153,7 +153,8 @@ export async function parseThemeFile(
  */
 function findThemeNodes(sourceFile: SourceFile): Node[] {
   const nodes: Node[] = [];
-  const themeNames = ['theme', 'colors', 'palette', 'tokens', 'designTokens', 'typography', 'spacing', 'radii', 'shadows', 'clientPalette', 'masterPalette', 'clientThemeInstance'];
+  // Include color scale names (gray, accent, etc.) to extract their values directly
+  const themeNames = ['theme', 'colors', 'palette', 'tokens', 'designTokens', 'typography', 'spacing', 'radii', 'shadows', 'clientPalette', 'masterPalette', 'clientThemeInstance', 'gray', 'accent', 'black', 'white', 'success', 'error', 'gradient', 'opacityPresets'];
 
   // 1. Default export
   const defaultExport = sourceFile.getDefaultExportSymbol();
@@ -345,10 +346,23 @@ function extractTokensRecursive(
     const rawPropName = prop.getName();
     // Strip quotes if present (prop.getName() returns 'key' for quoted keys)
     const propName = rawPropName.replace(/^['"]|['"]$/g, '');
-    // Use bracket notation for keys that aren't valid JS identifiers (e.g., '2xl', '3d')
-    const isValidIdentifier = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(propName);
-    const propPath = isValidIdentifier 
-      ? `${currentPath}.${propName}` 
+
+    // Generate semantic property name for numeric keys in color/scale objects
+    // e.g., gray[10] → gray.gray10, accent[60] → accent.accent60
+    let semanticPropName = propName;
+    if (/^\d+$/.test(propName)) {
+      // Numeric key - extract parent name for semantic naming
+      const pathParts = currentPath.split('.');
+      const parentName = pathParts[pathParts.length - 1]?.replace(/[\[\]']/g, '');
+      if (parentName && ['gray', 'accent', 'spacing', 'radii'].includes(parentName.toLowerCase())) {
+        semanticPropName = `${parentName}${propName}`; // gray10, accent60
+      }
+    }
+
+    // Use bracket notation only for keys that can't be identifiers (after semantic naming attempt)
+    const isValidIdentifier = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(semanticPropName);
+    const propPath = isValidIdentifier
+      ? `${currentPath}.${semanticPropName}`
       : `${currentPath}['${propName}']`;
     const initializer = prop.getInitializer();
     if (!initializer) continue;

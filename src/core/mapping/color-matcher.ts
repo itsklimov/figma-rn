@@ -1,10 +1,39 @@
 /**
  * Inline Delta-E color matching - no external dependencies
  *
- * Supports 6-digit hex colors (#RRGGBB). Alpha channel is ignored if present.
+ * Supports hex colors (#RRGGBB, #RRGGBBAA) and rgba().
+ * Alpha channel is now considered for matching solid vs transparent colors.
  */
 
 type Lab = [number, number, number];
+
+/**
+ * Extract alpha value from a color string
+ * Returns 1 for solid colors, 0-1 for transparent
+ */
+export function getAlpha(color: string): number {
+  // Handle rgba(r, g, b, a)
+  const rgbaMatch = color.match(/rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*([\d.]+)\s*\)/i);
+  if (rgbaMatch) {
+    return parseFloat(rgbaMatch[1]);
+  }
+
+  // Handle 8-digit hex (#RRGGBBAA)
+  if (color.startsWith('#') && color.length === 9) {
+    const alpha = parseInt(color.slice(7, 9), 16) / 255;
+    return alpha;
+  }
+
+  // Solid color (hex without alpha, rgb())
+  return 1;
+}
+
+/**
+ * Check if a color is solid (alpha = 1)
+ */
+export function isSolidColor(color: string): boolean {
+  return getAlpha(color) >= 0.99; // Allow small floating point tolerance
+}
 
 /**
  * Convert hex or rgba color to RGB (0-255)
@@ -107,17 +136,37 @@ export function labDistance(a: Lab, b: Lab): number {
 }
 
 /**
+ * Calculate path complexity (simpler paths are preferred)
+ * Lower score = simpler path
+ */
+function pathComplexity(path: string): number {
+  let score = 0;
+  score += (path.match(/\./g) || []).length * 1;      // Each dot adds 1
+  score += (path.match(/\[/g) || []).length * 2;      // Each bracket adds 2
+  score += path.includes('overlay') ? 10 : 0;          // Overlay paths are deprioritized
+  score += path.includes('opacity') ? 10 : 0;          // Opacity paths are deprioritized
+  score += path.includes('Preset') ? 5 : 0;            // Preset paths are deprioritized
+  return score;
+}
+
+/**
  * Find closest color from theme colors
  * @param hex - Hex color to match (e.g., "#3B82F6")
  * @param themeColors - Map of hex → theme path (e.g., Map<"#3B82F6", "theme.colors.primary">)
  * @param threshold - Max Delta-E distance for a match (default: 5)
  * @returns Theme path if match found, null otherwise
+ *
+ * IMPORTANT: When matching solid colors (alpha=1), transparent theme tokens are skipped.
+ * This prevents matching #F7F7F7 to rgba(247,247,247,0).
  */
 export function findClosestColor(
   hex: string,
   themeColors: Map<string, string>,
   threshold: number = 8
 ): string | null {
+  // Check if source color is solid
+  const sourceIsSolid = isSolidColor(hex);
+
   // Use colorToLab which parses Hex/RGB/RGBA
   let targetLab: Lab;
   try {
@@ -138,8 +187,17 @@ export function findClosestColor(
 
   let bestMatch: string | null = null;
   let bestDistance = Infinity;
+  let bestComplexity = Infinity;
+
+  // First pass: collect all exact RGB matches
+  const exactMatches: Array<{ path: string; themeHex: string }> = [];
 
   for (const [themeHex, themePath] of themeColors) {
+    // CRITICAL: Skip transparent tokens when matching solid colors
+    if (sourceIsSolid && !isSolidColor(themeHex)) {
+      continue;
+    }
+
     // Normalize theme hex for comparison
     let normThemeHex: string;
     try {
@@ -150,23 +208,34 @@ export function findClosestColor(
       continue;
     }
 
-    // Exact match after normalization
+    // Collect exact matches (same RGB)
     if (normThemeHex === normHex) {
-      return themePath;
+      exactMatches.push({ path: themePath, themeHex });
     }
 
     try {
       const themeLab = xyzToLab(...linearRgbToXyz(...toRgb(themeHex).map(srgbToLinear) as [number, number, number]));
       const distance = labDistance(targetLab, themeLab);
+      const complexity = pathComplexity(themePath);
 
-      if (distance < bestDistance && distance <= threshold) {
-        bestDistance = distance;
-        bestMatch = themePath;
+      // Prefer lower distance, then lower complexity
+      if (distance <= threshold) {
+        if (distance < bestDistance || (distance === bestDistance && complexity < bestComplexity)) {
+          bestDistance = distance;
+          bestComplexity = complexity;
+          bestMatch = themePath;
+        }
       }
     } catch {
       // Ignore invalid theme colors
       continue;
     }
+  }
+
+  // If we have exact matches, pick the one with simplest path
+  if (exactMatches.length > 0) {
+    exactMatches.sort((a, b) => pathComplexity(a.path) - pathComplexity(b.path));
+    return exactMatches[0].path;
   }
 
   return bestMatch;
