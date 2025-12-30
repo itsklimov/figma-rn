@@ -5,27 +5,27 @@
 
 import type { FigmaNode } from '../../api/types.js';
 import type { NormalizedNode } from '../types.js';
-import { filterTree } from './filter.js';
+import { filterTree, type FilterOptions } from './filter.js';
 import { unwrapUselessGroups } from './unwrap.js';
 
-export { filterTree, filterNode, shouldFilter } from './filter.js';
+export { filterTree, filterNode, shouldFilter, type FilterOptions } from './filter.js';
 export { unwrapUselessGroups, isUselessGroup, isWrapperGroup, flattenWrapperGroups } from './unwrap.js';
 
 /**
  * Normalize a Figma node tree by:
- * 1. Filtering out hidden and irrelevant nodes
+ * 1. Filtering out hidden and irrelevant nodes (including OS chrome via excludeIds)
  * 2. Unwrapping useless wrapper groups
  *
  * @param root - The root FigmaNode to normalize
- * @param ignorePatterns - Optional patterns to filter out (e.g., '*annotation*')
+ * @param optionsOrPatterns - Either FilterOptions object or legacy string[] of patterns
  * @returns NormalizedNode tree, or null if root is filtered
  */
 export function normalizeTree(
   root: FigmaNode,
-  ignorePatterns?: string[]
+  optionsOrPatterns?: FilterOptions | string[]
 ): NormalizedNode | null {
-  // Step 1: Filter out hidden and irrelevant nodes
-  const filtered = filterTree(root, ignorePatterns);
+  // Step 1: Filter out hidden, irrelevant, and OS chrome nodes
+  const filtered = filterTree(root, optionsOrPatterns);
 
   if (filtered === null) {
     return null;

@@ -5,6 +5,7 @@
  * - Lists: Repeating items that should become FlatList
  * - Components: Repeated blocks that should be extracted
  * - Semantic States: Visual variations that represent UI states
+ * - Safe Areas: OS chrome elements for proper layout
  */
 
 import type { IRNode, StylesBundle } from '../types.js';
@@ -18,6 +19,15 @@ export type { ListHint, ComponentHint, DetectionResult } from './types.js';
 export type { SemanticState, StateDetectionResult } from './state-detector.js';
 export { createEmptyDetectionResult } from './types.js';
 export { detectSemanticState } from './state-detector.js';
+
+// Safe area detection
+export {
+  detectSafeArea,
+  shouldExcludeFromRender,
+  type SafeAreaInsets,
+  type SafeAreaDetectionResult,
+  type OSChromeElement,
+} from './safe-area-detector.js';
 
 /**
  * Run all detectors on an IR tree
