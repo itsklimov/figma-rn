@@ -273,8 +273,46 @@ ${spaces}</TouchableOpacity>`;
     case 'Icon': {
       const iconNode = node as IconIR;
 
-      // NEW: If icon has custom children, render them
-      if (iconNode.children && iconNode.children.length > 0) {
+      // Check if this is a "vector group" - container with only vector/image children
+      // These should be rendered as a single SVG, not individual elements
+      const isVectorGroup = iconNode.children && iconNode.children.length > 0 &&
+        iconNode.children.every(child =>
+          child.semanticType === 'Icon' ||
+          child.semanticType === 'Image' ||
+          (child as any).type === 'VECTOR' ||
+          (child as any).type === 'ELLIPSE' ||
+          (child as any).type === 'BOOLEAN_OPERATION'
+        );
+
+      // For vector groups: render as single SVG using parent's iconRef
+      // This prevents absolute positioning of individual vector paths
+      if (isVectorGroup && iconNode.iconRef) {
+        let iconSource: string;
+        let isSvg = false;
+        if (imagePathMap?.has(iconNode.iconRef)) {
+          const path = imagePathMap.get(iconNode.iconRef)!;
+          iconSource = `require('${path}')`;
+          isSvg = path.toLowerCase().endsWith('.svg');
+        } else {
+          iconSource = `{ uri: '' } /* TODO: Export as single SVG: ${iconNode.iconRef} */`;
+        }
+        const component = isSvg ? 'SvgIcon' : 'Image';
+        const a11yLabel = deriveA11yLabel(node.name);
+        const a11yProp = a11yLabel ? `\n${spaces}  accessibilityLabel="${a11yLabel}"` : '';
+        const hitSlop = calculateHitSlop(iconNode.size);
+        const hitSlopProp = hitSlop > 0
+          ? `\n${spaces}  hitSlop={{ top: ${hitSlop}, bottom: ${hitSlop}, left: ${hitSlop}, right: ${hitSlop} }}`
+          : '';
+
+        return `${spaces}<TouchableOpacity
+${spaces}  accessibilityRole="button"${a11yProp}${hitSlopProp}
+${spaces}>
+${spaces}  <${component} source={${iconSource}} style={styles.${styleName}} />
+${spaces}</TouchableOpacity>`;
+      }
+
+      // For icons with mixed children (not pure vector group): render children
+      if (iconNode.children && iconNode.children.length > 0 && !isVectorGroup) {
         const childrenJSX = iconNode.children
           .map((child) => buildJSX(child, indent + 1, imagePathMap, jsxOverrides, stylesBundle, mappings))
           .join('\n');

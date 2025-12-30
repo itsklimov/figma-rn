@@ -150,6 +150,67 @@ function pathComplexity(path: string): number {
 }
 
 /**
+ * Semantic color patterns for fallback matching
+ * When a color doesn't match any theme color within threshold,
+ * we try to match it to semantic color tokens based on luminance
+ */
+const SEMANTIC_FALLBACKS = {
+  // Very dark colors (luminance < 0.1) → text.primary or gray90+
+  dark: ['text.primary', 'text', 'gray.gray90', 'gray90', 'black'],
+  // Very light colors (luminance > 0.9) → background or gray10
+  light: ['background', 'gray.gray10', 'gray10', 'white'],
+  // Secondary text colors (medium-dark, luminance 0.2-0.4)
+  secondary: ['text.secondary', 'gray.gray70', 'gray70', 'gray.gray60', 'gray60'],
+};
+
+/**
+ * Get relative luminance of a color (0-1 scale)
+ */
+function getLuminance(hex: string): number {
+  try {
+    const [r, g, b] = toRgb(hex);
+    // Relative luminance formula (ITU-R BT.709)
+    return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  } catch {
+    return 0.5; // Default to middle
+  }
+}
+
+/**
+ * Try to find a semantic color token as fallback
+ */
+function findSemanticFallback(
+  hex: string,
+  themeColors: Map<string, string>
+): string | null {
+  const luminance = getLuminance(hex);
+
+  // Determine which semantic patterns to try
+  let patterns: string[];
+  if (luminance < 0.15) {
+    patterns = SEMANTIC_FALLBACKS.dark;
+  } else if (luminance > 0.85) {
+    patterns = SEMANTIC_FALLBACKS.light;
+  } else if (luminance < 0.45) {
+    patterns = SEMANTIC_FALLBACKS.secondary;
+  } else {
+    return null; // Mid-range colors don't get semantic fallback
+  }
+
+  // Search for theme paths containing these patterns
+  for (const pattern of patterns) {
+    for (const [_, themePath] of themeColors) {
+      const pathLower = themePath.toLowerCase();
+      if (pathLower.includes(pattern.toLowerCase())) {
+        return themePath;
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
  * Find closest color from theme colors
  * @param hex - Hex color to match (e.g., "#3B82F6")
  * @param themeColors - Map of hex → theme path (e.g., Map<"#3B82F6", "theme.colors.primary">)
@@ -158,6 +219,8 @@ function pathComplexity(path: string): number {
  *
  * IMPORTANT: When matching solid colors (alpha=1), transparent theme tokens are skipped.
  * This prevents matching #F7F7F7 to rgba(247,247,247,0).
+ *
+ * If no match found within threshold, tries semantic fallback matching based on luminance.
  */
 export function findClosestColor(
   hex: string,
@@ -238,5 +301,12 @@ export function findClosestColor(
     return exactMatches[0].path;
   }
 
-  return bestMatch;
+  // If Delta-E matching found something, use it
+  if (bestMatch) {
+    return bestMatch;
+  }
+
+  // Fallback: try semantic color matching based on luminance
+  // This helps match dark text colors to theme.text.primary, etc.
+  return findSemanticFallback(hex, themeColors);
 }
