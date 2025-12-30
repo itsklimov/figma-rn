@@ -24,9 +24,6 @@ import { mkdir, writeFile, readFile, appendFile, rm } from 'fs/promises';
 import { join, dirname } from 'path';
 // existsSync removed - now using glob for recursive search
 import { glob } from 'glob';
-import { ElementType } from './element-analyzer.js';
-import { DesignTokens, mergeDesignTokens } from './design-tokens.js';
-import { HierarchyNode } from './one-shot-generator.js';
 
 // ============================================================================
 // Types
@@ -100,8 +97,6 @@ export interface ElementMeta {
   };
   /** Asset list (legacy, for backwards compatibility) */
   assets: AssetInfo[];
-  /** Full node hierarchy - bulky, only included if requested */
-  hierarchy?: HierarchyNode;
   /** Hidden nodes in design */
   hiddenNodes?: string[];
   /** Total node count */
@@ -278,31 +273,6 @@ const CATEGORY_FOLDERS: Record<ManifestCategory, string> = {
 // ============================================================================
 // Utilities
 // ============================================================================
-
-/**
- * Get category from element type
- */
-export function getManifestCategory(elementType: ElementType): ManifestCategory {
-  switch (elementType) {
-    case 'screen':
-    case 'screen-fragment':
-      return 'screens';
-    case 'modal':
-    case 'dialog':
-    case 'toast':
-    case 'popover':
-      return 'modals';
-    case 'bottom-sheet':
-    case 'action-sheet':
-      return 'sheets';
-    case 'icon':
-    case 'logo':
-    case 'illustration':
-      return 'icons';
-    default:
-      return 'components';
-  }
-}
 
 /**
  * Normalize URL
@@ -1014,52 +984,6 @@ async function generateFigmaConfig(projectRoot: string): Promise<FigmaConfig> {
 }
 
 // ============================================================================
-// Design Tokens (theme.json)
-// ============================================================================
-
-/**
- * Load global tokens
- */
-export async function loadTheme(projectRoot: string): Promise<DesignTokens | null> {
-  const themePath = join(projectRoot, FIGMA_DIR, THEME_FILE);
-
-  try {
-    const content = await readFile(themePath, 'utf-8');
-    return JSON.parse(content) as DesignTokens;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Save global tokens
- */
-export async function saveTheme(projectRoot: string, tokens: DesignTokens): Promise<void> {
-  const themePath = join(projectRoot, FIGMA_DIR, THEME_FILE);
-  await mkdir(dirname(themePath), { recursive: true });
-  await writeFile(themePath, JSON.stringify(tokens, null, 2), 'utf-8');
-}
-
-/**
- * Update global tokens
- * Merges new tokens with existing ones
- */
-export async function updateTheme(
-  projectRoot: string,
-  newTokens: DesignTokens
-): Promise<DesignTokens> {
-  const existing = await loadTheme(projectRoot);
-
-  const merged = existing
-    ? mergeDesignTokens(existing, newTokens)
-    : newTokens;
-
-  await saveTheme(projectRoot, merged);
-
-  return merged;
-}
-
-// ============================================================================
 // Element Generation
 // ============================================================================
 
@@ -1153,15 +1077,12 @@ export async function registerGeneration(
     patterns?: ElementMeta['patterns'];
     assets?: AssetInfo[];
     screenshotPath?: string;
-    tokens?: DesignTokens;
     figmaName?: string;
-    hierarchy?: HierarchyNode;
     hiddenNodes?: string[];
     totalNodes?: number;
     instanceCount?: number;
     interactions?: ElementMeta['interactions'];
     componentGroups?: ElementMeta['componentGroups'];
-    includeHierarchy?: boolean;
     previousName?: string;
   } = {}
 ): Promise<GenerationResult> {
@@ -1215,29 +1136,16 @@ export async function registerGeneration(
     dependencies: options.dependencies || [],
     patterns: options.patterns || {},
     assets: options.assets || [],
-    hierarchy: options.hierarchy,
     hiddenNodes: options.hiddenNodes?.length ? options.hiddenNodes : undefined,
     totalNodes: options.totalNodes,
     instanceCount: options.instanceCount,
     hasScreenshot,
-    tokensExtracted: options.tokens
-      ? options.tokens.colors.length + options.tokens.typography.length + options.tokens.shadows.length
-      : 0,
+    tokensExtracted: 0,
     interactions: options.interactions,
     componentGroups: options.componentGroups,
   };
 
-  // Only include hierarchy if explicitly requested or if it's a small one
-  if (options.includeHierarchy || (options.hierarchy && options.totalNodes && options.totalNodes < 100)) {
-    meta.hierarchy = options.hierarchy;
-  }
-
   await saveElementMeta(elementFolder, meta);
-
-  // Update global tokens
-  if (options.tokens) {
-    await updateTheme(projectRoot, options.tokens);
-  }
 
   // Add to manifest
   const entry: ManifestEntry = {
@@ -1374,62 +1282,6 @@ export function formatResultForLLM(result: GenerationResult): string {
   response += `### To Use\n\n`;
   response += `\`\`\`bash\n${result.copyCommand}\n\`\`\`\n\n`;
   response += `**Suggested path**: \`${result.suggestedTarget}\`\n`;
-
-  return response;
-}
-
-/**
- * Format tokens for LLM
- */
-export function formatTokensForLLM(tokens: DesignTokens): string {
-  let response = `## 🎨 Design Tokens\n\n`;
-
-  // Colors
-  if (tokens.colors.length > 0) {
-    response += `### Colors (${tokens.colors.length})\n\n`;
-    response += `| Color | Type | Usage |\n`;
-    response += `|-------|------|-------|\n`;
-
-    const topColors = tokens.colors.slice(0, 10);
-    for (const color of topColors) {
-      if (color.type === 'solid') {
-        response += `| \`${color.hex}\` | solid | ${color.usageCount}x |\n`;
-      } else {
-        response += `| gradient-${color.gradientType} | ${color.gradientStops?.length} stops | ${color.usageCount}x |\n`;
-      }
-    }
-
-    if (tokens.colors.length > 10) {
-      response += `\n*... and ${tokens.colors.length - 10} more colors*\n`;
-    }
-    response += `\n`;
-  }
-
-  // Typography
-  if (tokens.typography.length > 0) {
-    response += `### Typography (${tokens.typography.length})\n\n`;
-    response += `| Font | Size | Weight | Usage |\n`;
-    response += `|------|------|--------|-------|\n`;
-
-    const topTypo = tokens.typography.slice(0, 8);
-    for (const typo of topTypo) {
-      response += `| ${typo.figma.fontFamily} | ${typo.figma.fontSize}px | ${typo.figma.fontWeight} | ${typo.usageCount}x |\n`;
-    }
-
-    if (tokens.typography.length > 8) {
-      response += `\n*... and ${tokens.typography.length - 8} more typography styles*\n`;
-    }
-    response += `\n`;
-  }
-
-  // Shadows
-  if (tokens.shadows.length > 0) {
-    response += `### Shadows (${tokens.shadows.length})\n\n`;
-    for (const shadow of tokens.shadows.slice(0, 3)) {
-      response += `- **${shadow.type}**: offset(${shadow.offset.x}, ${shadow.offset.y}), blur ${shadow.radius}, color ${shadow.color}\n`;
-    }
-    response += `\n`;
-  }
 
   return response;
 }
