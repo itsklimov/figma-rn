@@ -144,6 +144,7 @@ interface IRNodeBase {
   boundingBox: BoundingBox;
   styleRef: string; // Reference to style in StylesBundle
   propName?: string; // If set, this node's content is bound to a prop
+  styleProps?: Record<string, string>; // Mapping of style property -> prop name
 }
 
 /**
@@ -180,6 +181,10 @@ export interface ButtonIR extends IRNodeBase {
   semanticType: 'Button';
   label: string;
   iconRef?: string;
+  textStyleRef?: string;
+  iconStyleRef?: string;
+  textId?: string;
+  iconId?: string;
   variant: 'primary' | 'secondary' | 'outline' | 'ghost';
 }
 
@@ -222,6 +227,7 @@ export interface RepeaterIR extends IRNodeBase {
   dataPropName: string; // The name of the prop containing the array (e.g. 'masters')
   children: IRNode[]; // The original children (to extract data from)
   layout: LayoutMeta; // The layout of the items (row/col)
+  propsVariations?: Record<string, string[]>; // Variations detected across items
 }
 
 /**

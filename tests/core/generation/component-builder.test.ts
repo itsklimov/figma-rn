@@ -32,7 +32,7 @@ describe('generateComponent', () => {
         name: 'container',
         semanticType: 'Container',
         boundingBox: baseBoundingBox,
-        styleRef: 'style_1',
+        styleRef: 'container',
         layout: baseLayout,
         children: [
           {
@@ -40,15 +40,15 @@ describe('generateComponent', () => {
             name: 'title',
             semanticType: 'Text',
             boundingBox: baseBoundingBox,
-            styleRef: 'style_2',
+            styleRef: 'title',
             text: 'Product Name',
           } as TextIR,
         ],
       } as ContainerIR,
       stylesBundle: {
         styles: {
-          style_1: { id: 'container', backgroundColor: '#FFFFFF' },
-          style_2: {
+          container: { id: 'container', backgroundColor: '#ffffff' },
+          title: {
             id: 'title',
             typography: {
               fontFamily: 'Inter',
@@ -57,7 +57,7 @@ describe('generateComponent', () => {
               lineHeight: 24,
               letterSpacing: 0,
               textAlign: 'left',
-              color: '#1F2937',
+              color: '#1f2937',
             },
           },
         },
@@ -105,12 +105,12 @@ describe('generateComponent', () => {
         name: 'container',
         semanticType: 'Container',
         boundingBox: baseBoundingBox,
-        styleRef: 'style_1',
+        styleRef: 'container',
         layout: baseLayout,
         children: [],
       } as ContainerIR,
       stylesBundle: {
-        styles: { style_1: { id: 'container' } },
+        styles: { container: { id: 'container' } },
         tokens: {
           colors: {},
           spacing: {},
@@ -137,12 +137,12 @@ describe('generateComponent', () => {
         name: 'container',
         semanticType: 'Container',
         boundingBox: baseBoundingBox,
-        styleRef: 'style_1',
+        styleRef: 'container',
         layout: baseLayout,
         children: [],
       } as ContainerIR,
       stylesBundle: {
-        styles: { style_1: { id: 'container' } },
+        styles: { container: { id: 'container' } },
         tokens: {
           colors: {},
           spacing: {},
@@ -167,20 +167,20 @@ describe('generateComponent', () => {
         name: 'card',
         semanticType: 'Container',
         boundingBox: baseBoundingBox,
-        styleRef: 'style_1',
+        styleRef: 'card',
         layout: baseLayout,
         children: [],
       } as ContainerIR,
       stylesBundle: {
         styles: {
-          style_1: {
+          card: {
             id: 'card',
-            backgroundColor: '#FF5733',
+            backgroundColor: '#ff5733',
             borderRadius: 12,
           },
         },
         tokens: {
-          colors: { color_0: '#FF5733' },
+          colors: { color_0: '#ff5733' },
           spacing: {},
           radii: { radius_0: 12 },
           typography: {},
@@ -191,7 +191,7 @@ describe('generateComponent', () => {
 
     const result = generateComponent(screen, emptyMappings);
 
-    expect(result.unmappedTokens.colors).toContain('#FF5733');
+    expect(result.unmappedTokens.colors).toContain('#ff5733');
     expect(result.unmappedTokens.radii).toContain(12);
   });
 
@@ -204,15 +204,15 @@ describe('generateComponent', () => {
         name: 'submitBtn',
         semanticType: 'Button',
         boundingBox: baseBoundingBox,
-        styleRef: 'style_1',
+        styleRef: 'submitBtn',
         label: 'Submit',
         variant: 'primary',
       } as ButtonIR,
       stylesBundle: {
         styles: {
-          style_1: {
+          submitBtn: {
             id: 'submitBtn',
-            backgroundColor: '#3B82F6',
+            backgroundColor: '#3b82f6',
             borderRadius: 8,
           },
         },
@@ -243,19 +243,19 @@ describe('generateComponent', () => {
         name: 'card',
         semanticType: 'Container',
         boundingBox: baseBoundingBox,
-        styleRef: 'style_1',
+        styleRef: 'card',
         layout: baseLayout,
         children: [],
       } as ContainerIR,
       stylesBundle: {
         styles: {
-          style_1: {
+          card: {
             id: 'card',
-            backgroundColor: '#3B82F6',
+            backgroundColor: '#3b82f6',
           },
         },
         tokens: {
-          colors: { color_0: '#3B82F6' },
+          colors: { color_0: '#3b82f6' },
           spacing: {},
           radii: {},
           typography: {},
@@ -265,7 +265,7 @@ describe('generateComponent', () => {
     };
 
     const mappings: TokenMappings = {
-      colors: { '#3B82F6': 'theme.colors.primary' },
+      colors: { '#3b82f6': 'theme.colors.primary' },
       spacing: {},
       radii: {},
       typography: {},
@@ -275,7 +275,7 @@ describe('generateComponent', () => {
     const result = generateComponent(screen, mappings);
 
     expect(result.code).toContain('backgroundColor: theme.colors.primary');
-    expect(result.unmappedTokens.colors).not.toContain('#3B82F6');
+    expect(result.unmappedTokens.colors).not.toContain('#3b82f6');
   });
 });
 
@@ -307,12 +307,12 @@ describe('generateComponentMultiFile', () => {
         name: 'container',
         semanticType: 'Container',
         boundingBox: baseBoundingBox,
-        styleRef: 'style_1',
+        styleRef: 'container',
         layout: baseLayout,
         children: [],
       } as ContainerIR,
       stylesBundle: {
-        styles: { style_1: { id: 'container' } },
+        styles: { container: { id: 'container' } },
         tokens: {
           colors: {},
           spacing: {},
@@ -338,14 +338,14 @@ describe('generateComponentMultiFile', () => {
         name: 'container',
         semanticType: 'Container',
         boundingBox: baseBoundingBox,
-        styleRef: 'style_1',
+        styleRef: 'container',
         layout: baseLayout,
         children: [],
       } as ContainerIR,
       stylesBundle: {
-        styles: { style_1: { id: 'container', backgroundColor: '#3B82F6' } },
+        styles: { container: { id: 'container', backgroundColor: '#3b82f6' } },
         tokens: {
-          colors: { color_0: '#3B82F6' },
+          colors: { color_0: '#3b82f6' },
           spacing: { spacing_0: 16 },
           radii: {},
           typography: {},
@@ -372,14 +372,14 @@ describe('generateComponentMultiFile', () => {
         name: 'container',
         semanticType: 'Container',
         boundingBox: baseBoundingBox,
-        styleRef: 'style_1',
+        styleRef: 'container',
         layout: baseLayout,
         children: [],
       } as ContainerIR,
       stylesBundle: {
-        styles: { style_1: { id: 'container' } },
+        styles: { container: { id: 'container' } },
         tokens: {
-          colors: { color_0: '#3B82F6' },
+          colors: { color_0: '#3b82f6' },
           spacing: {},
           radii: {},
           typography: {},
@@ -404,7 +404,7 @@ describe('generateComponentMultiFile', () => {
         name: 'container',
         semanticType: 'Container',
         boundingBox: baseBoundingBox,
-        styleRef: 'style_1',
+        styleRef: 'container',
         layout: baseLayout,
         children: [
           {
@@ -429,7 +429,7 @@ describe('generateComponentMultiFile', () => {
       } as ContainerIR,
       stylesBundle: {
         styles: {
-          style_1: { id: 'container' },
+          container: { id: 'container' },
           style_card: { id: 'card' },
         },
         tokens: {
@@ -471,12 +471,12 @@ describe('generateComponentMultiFile', () => {
         name: 'container',
         semanticType: 'Container',
         boundingBox: baseBoundingBox,
-        styleRef: 'style_1',
+        styleRef: 'container',
         layout: baseLayout,
         children: [],
       } as ContainerIR,
       stylesBundle: {
-        styles: { style_1: { id: 'container' } },
+        styles: { container: { id: 'container' } },
         tokens: {
           colors: {},
           spacing: {},

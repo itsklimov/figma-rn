@@ -2,8 +2,9 @@
  * Repetition Detector - Identify repeated blocks for component extraction
  */
 
-import type { IRNode, ContainerIR, CardIR, TextIR, ButtonIR } from '../types.js';
+import type { IRNode, ContainerIR, CardIR, TextIR, ButtonIR, StylesBundle } from '../types.js';
 import type { ComponentHint } from './types.js';
+import { getStyleVariations } from '../utils/diffing.js';
 
 /** Minimum occurrences to extract a component */
 const MIN_OCCURRENCES = 2;
@@ -26,13 +27,30 @@ function getStructuralFingerprint(node: IRNode): string {
 /**
  * Extract variable props from a node (text content, labels, etc.)
  */
-function extractVariableProps(node: IRNode): Record<string, string> {
+export function extractVariableProps(node: IRNode, stylesBundle?: StylesBundle): Record<string, string> {
   const props: Record<string, string> = {};
+
+  // Extract visual style variations if stylesBundle is available
+  if (stylesBundle && node.styleRef) {
+    const style = stylesBundle.styles[node.styleRef];
+    if (style) {
+      if (style.backgroundColor) props['backgroundColor'] = style.backgroundColor;
+      if (style.typography?.color) props['color'] = style.typography.color;
+      if (style.borderColor) props['borderColor'] = style.borderColor;
+    }
+  }
 
   switch (node.semanticType) {
     case 'Text': {
       const textNode = node as TextIR;
       props['text'] = textNode.text;
+      // Also extract color from text node's style
+      if (stylesBundle && node.styleRef) {
+        const style = stylesBundle.styles[node.styleRef];
+        if (style?.typography?.color) {
+          props['color'] = style.typography.color;
+        }
+      }
       break;
     }
     case 'Button': {
@@ -41,15 +59,18 @@ function extractVariableProps(node: IRNode): Record<string, string> {
       break;
     }
     case 'Container':
-    case 'Card': {
+    case 'Card':
+    case 'Component': {
       // Collect props from children recursively
       const container = node as ContainerIR | CardIR;
-      container.children.forEach((child, index) => {
-        const childProps = extractVariableProps(child);
-        for (const [key, value] of Object.entries(childProps)) {
-          props[`child${index}_${key}`] = value;
-        }
-      });
+      if ('children' in node && (node as any).children) {
+        (node as any).children.forEach((child: IRNode, index: number) => {
+          const childProps = extractVariableProps(child, stylesBundle);
+          for (const [key, value] of Object.entries(childProps)) {
+            props[`child${index}_${key}`] = value;
+          }
+        });
+      }
       break;
     }
   }
@@ -127,11 +148,11 @@ function collectNodes(
 /**
  * Merge props variations from multiple instances
  */
-function mergePropsVariations(instances: IRNode[]): Record<string, string[]> {
+export function mergePropsVariations(instances: IRNode[], stylesBundle?: StylesBundle): Record<string, string[]> {
   const variations: Record<string, string[]> = {};
 
   for (const instance of instances) {
-    const props = extractVariableProps(instance);
+    const props = extractVariableProps(instance, stylesBundle);
     for (const [key, value] of Object.entries(props)) {
       if (!variations[key]) {
         variations[key] = [];
@@ -157,7 +178,7 @@ function mergePropsVariations(instances: IRNode[]): Record<string, string[]> {
  * // hints: [{ componentName: 'ProductCard', instanceIds: ['1:5', '1:10'], propsVariations: { text: ['Item 1', 'Item 2'] } }]
  * ```
  */
-export function detectRepetitions(root: IRNode): ComponentHint[] {
+export function detectRepetitions(root: IRNode, stylesBundle?: StylesBundle): ComponentHint[] {
   const nodesByFingerprint = new Map<string, IRNode[]>();
   collectNodes(root, nodesByFingerprint);
 
@@ -170,7 +191,7 @@ export function detectRepetitions(root: IRNode): ComponentHint[] {
     // Use the first instance to generate the component name
     const componentName = generateComponentName(nodes[0]);
     const instanceIds = nodes.map(n => n.id);
-    const propsVariations = mergePropsVariations(nodes);
+    const propsVariations = mergePropsVariations(nodes, stylesBundle);
 
     hints.push({
       componentName,

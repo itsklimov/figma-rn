@@ -3,7 +3,7 @@
  * Includes accessibility props for production-ready components
  */
 
-import type { IRNode, IconIR, StylesBundle, ExtractedStyle, RepeaterIR } from '../types.js';
+import type { IRNode, IconIR, StylesBundle, ExtractedStyle, RepeaterIR, ButtonIR } from '../types.js';
 import type { TokenMappings } from '../mapping/token-matcher.js';
 import { toValidIdentifier, escapeJSXText } from './utils.js';
 import { mapColor } from './styles-builder.js';
@@ -15,7 +15,20 @@ const MIN_TOUCH_TARGET = 44;
  * Derive a valid JS style name from node name
  */
 function deriveStyleName(node: IRNode): string {
-  return toValidIdentifier(node.name);
+  return toValidIdentifier(node.styleRef);
+}
+
+/**
+ * Generate the style attribute, merging static and dynamic styles if needed
+ */
+function getStyleAttribute(node: IRNode, styleName: string): string {
+  if (node.styleProps) {
+    const overrides = Object.entries(node.styleProps)
+      .map(([prop, name]) => `${prop}: ${name}`)
+      .join(', ');
+    return `style={[styles.${styleName}, { ${overrides} }]}`;
+  }
+  return `style={styles.${styleName}}`;
 }
 
 /**
@@ -118,10 +131,12 @@ export function buildJSX(
       if (hasGradient && style?.backgroundGradient) {
         const gradientProps = buildGradientProps(style.backgroundGradient, spaces, mappings);
         const children = node.children || [];
+        const styleAttr = getStyleAttribute(node, styleName);
+        
         if (children.length === 0) {
           return `${spaces}<LinearGradient
 ${gradientProps}
-${spaces}  style={styles.${styleName}}
+${spaces}  ${styleAttr}
 ${spaces}/>`;
         }
         const childrenJSX = children
@@ -129,7 +144,7 @@ ${spaces}/>`;
           .join('\n');
         return `${spaces}<LinearGradient
 ${gradientProps}
-${spaces}  style={styles.${styleName}}
+${spaces}  ${styleAttr}
 ${spaces}>
 ${childrenJSX}
 ${spaces}</LinearGradient>`;
@@ -137,28 +152,32 @@ ${spaces}</LinearGradient>`;
 
       // Regular View
       const children = node.children || [];
+      const styleAttr = getStyleAttribute(node, styleName);
+      
       if (children.length === 0) {
-        return `${spaces}<View style={styles.${styleName}} />`;
+        return `${spaces}<View ${styleAttr} />`;
       }
       const childrenJSX = children
         .map((child) => buildJSX(child, indent + 1, imagePathMap, jsxOverrides, stylesBundle, mappings))
         .join('\n');
-      return `${spaces}<View style={styles.${styleName}}>
+      return `${spaces}<View ${styleAttr}>
 ${childrenJSX}
 ${spaces}</View>`;
     }
 
     case 'Text': {
       const content = node.propName ? `{${node.propName}}` : escapeJSXText(node.text);
-      return `${spaces}<Text style={styles.${styleName}}>${content}</Text>`;
+      const styleAttr = getStyleAttribute(node, styleName);
+      return `${spaces}<Text ${styleAttr}>${content}</Text>`;
     }
 
     case 'Image': {
       // Use propName if available (parameterized image)
+      const styleAttr = getStyleAttribute(node, styleName);
       if (node.propName) {
         return `${spaces}<Image
 ${spaces}  source={${node.propName}}
-${spaces}  style={styles.${styleName}}
+${spaces}  ${styleAttr}
 ${spaces}  accessibilityRole="image"
 ${spaces}/>`;
       }
@@ -182,17 +201,17 @@ ${spaces}/>`;
       
       return `${spaces}<${component}
 ${spaces}  source={${source}}
-${spaces}  style={styles.${styleName}}
+${spaces}  ${styleAttr}
 ${spaces}  accessibilityRole="image"${a11yProp}
 ${spaces}/>`;
     }
 
     case 'Button': {
-      const escapedLabel = escapeJSXText(node.label);
-      const btn = node as any; // Cast to access iconRef for now
+      const btn = node as ButtonIR;
+      const escapedLabel = escapeJSXText(btn.label);
       
       let iconJSX = '';
-      if (btn.iconRef) {
+      if (btn.iconRef && btn.iconStyleRef) {
         let isSvg = false;
         let iconSource: string;
         if (imagePathMap?.has(btn.iconRef)) {
@@ -204,8 +223,11 @@ ${spaces}/>`;
         }
         
         const component = isSvg ? 'SvgIcon' : 'Image';
-        iconJSX = `\n${spaces}  <${component} source={${iconSource}} style={styles.${styleName}Icon} />`;
+        const iconStyleName = toValidIdentifier(btn.iconStyleRef);
+        iconJSX = `\n${spaces}  <${component} source={${iconSource}} style={styles.${iconStyleName}} />`;
       }
+
+      const textStyleName = btn.textStyleRef ? toValidIdentifier(btn.textStyleRef) : `${styleName}Text`;
 
       return `${spaces}<TouchableOpacity
 ${spaces}  style={styles.${styleName}}
@@ -213,7 +235,7 @@ ${spaces}  onPress={() => {}}
 ${spaces}  accessibilityRole="button"
 ${spaces}  accessibilityLabel="${escapedLabel}"
 ${spaces}>${iconJSX}
-${spaces}  <Text style={styles.${styleName}Text}>${escapedLabel}</Text>
+${spaces}  <Text style={styles.${textStyleName}}>${escapedLabel}</Text>
 ${spaces}</TouchableOpacity>`;
     }
 
@@ -286,10 +308,18 @@ export function collectStyleNames(node: IRNode): string[] {
     const styleName = deriveStyleName(n);
     names.push(styleName);
 
-    // Button generates additional text style
+    // Button generates additional text/icon styles
     if (n.semanticType === 'Button') {
-      names.push(`${styleName}Text`);
-      if ((n as any).iconRef) {
+      const btn = n as ButtonIR;
+      if (btn.textStyleRef) {
+        names.push(toValidIdentifier(btn.textStyleRef));
+      } else {
+        names.push(`${styleName}Text`);
+      }
+      
+      if (btn.iconStyleRef) {
+        names.push(toValidIdentifier(btn.iconStyleRef));
+      } else if ((btn as any).iconRef) {
         names.push(`${styleName}Icon`);
       }
     }
