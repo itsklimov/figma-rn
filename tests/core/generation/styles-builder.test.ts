@@ -388,4 +388,122 @@ describe('buildStyles', () => {
     const result = buildStyles(root, stylesBundle, emptyMappings);
     expect(result.code).not.toContain('opacity:');
   });
+
+  describe('Unistyles support', () => {
+    it('should wrap styles in theme callback for unistyles pattern', () => {
+      const root: ContainerIR = {
+        id: '1:1',
+        name: 'container',
+        semanticType: 'Container',
+        boundingBox: baseBoundingBox,
+        styleRef: 'container',
+        layout: baseLayout,
+        children: [],
+      };
+
+      const stylesBundle: StylesBundle = {
+        styles: {
+          container: {
+            id: 'container',
+            backgroundColor: '#FFFFFF',
+          },
+        },
+        tokens: {
+          colors: {},
+          spacing: {},
+          radii: {},
+          typography: {},
+          shadows: {},
+        },
+      };
+
+      const result = buildStyles(root, stylesBundle, emptyMappings, {
+        stylePattern: 'unistyles',
+      });
+
+      expect(result.code).toContain('const styles = StyleSheet.create(theme => ({');
+      expect(result.code).toContain('}));');
+      expect(result.code).toContain('container: {');
+    });
+
+    it('should use standard StyleSheet.create for non-unistyles patterns', () => {
+      const root: ContainerIR = {
+        id: '1:1',
+        name: 'container',
+        semanticType: 'Container',
+        boundingBox: baseBoundingBox,
+        styleRef: 'container',
+        layout: baseLayout,
+        children: [],
+      };
+
+      const stylesBundle: StylesBundle = {
+        styles: {
+          container: {
+            id: 'container',
+            backgroundColor: '#FFFFFF',
+          },
+        },
+        tokens: {
+          colors: {},
+          spacing: {},
+          radii: {},
+          typography: {},
+          shadows: {},
+        },
+      };
+
+      const result = buildStyles(root, stylesBundle, emptyMappings, {
+        stylePattern: 'StyleSheet',
+      });
+
+      expect(result.code).toContain('const styles = StyleSheet.create({');
+      expect(result.code).not.toContain('theme => ({');
+      expect(result.code).toMatch(/}\);$/);
+    });
+
+    it('should preserve theme token references in unistyles output', () => {
+      const root: ContainerIR = {
+        id: '1:1',
+        name: 'card',
+        semanticType: 'Container',
+        boundingBox: baseBoundingBox,
+        styleRef: 'card',
+        layout: baseLayout,
+        children: [],
+      };
+
+      const stylesBundle: StylesBundle = {
+        styles: {
+          card: {
+            id: 'card',
+            backgroundColor: '#3B82F6',
+          },
+        },
+        tokens: {
+          colors: { color_0: '#3B82F6' },
+          spacing: {},
+          radii: {},
+          typography: {},
+          shadows: {},
+        },
+      };
+
+      const mappings: TokenMappings = {
+        colors: { '#3B82F6': 'theme.colors.primary' },
+        spacing: {},
+        radii: {},
+        typography: {},
+        shadows: {},
+      };
+
+      const result = buildStyles(root, stylesBundle, mappings, {
+        stylePattern: 'unistyles',
+      });
+
+      // Theme tokens work in both patterns - theme is available via callback
+      expect(result.code).toContain('backgroundColor: theme.colors.primary');
+      expect(result.code).toContain('theme => ({');
+    });
+  });
 });

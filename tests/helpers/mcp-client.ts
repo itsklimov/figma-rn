@@ -60,6 +60,14 @@ export interface GenerateFlowParams {
   };
 }
 
+export interface GetScreenParams {
+  figmaUrl: string;
+  componentName?: string;
+  themeFilePath?: string;
+  outputDir?: string;
+  category?: string;
+}
+
 export class MCPClient {
   private process: ChildProcess | null = null;
   private requestId = 0;
@@ -236,11 +244,27 @@ export class MCPClient {
   }
 
   /**
-   * Calls generate_flow tool
+   * Calls generate_flow tool (deprecated - commented out in server)
    */
   async generateFlow(params: GenerateFlowParams): Promise<MCPToolResult> {
     const response = await this.sendRequest('tools/call', {
       name: 'generate_flow',
+      arguments: params,
+    });
+
+    if (response.error) {
+      throw new Error(response.error.message);
+    }
+
+    return response.result as MCPToolResult;
+  }
+
+  /**
+   * Calls get_screen tool (active tool for screen generation)
+   */
+  async getScreen(params: GetScreenParams): Promise<MCPToolResult> {
+    const response = await this.sendRequest('tools/call', {
+      name: 'get_screen',
       arguments: params,
     });
 

@@ -29,7 +29,7 @@ export const defaultConventions: FigmaConventions = {
     '*-guide',
     '*_guide',
   ],
-  annotationPatterns: ['*annotation*', '*measure*', '*spec*', '_*'],
+  annotationPatterns: ['*annotation*', '*measure*', '*spec*'],
 };
 
 /**

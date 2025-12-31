@@ -3,7 +3,7 @@
  * Includes accessibility props for production-ready components
  */
 
-import type { IRNode, IconIR, StylesBundle, ExtractedStyle, RepeaterIR, ButtonIR } from '../types.js';
+import type { IRNode, IconIR, ImageIR, StylesBundle, ExtractedStyle, RepeaterIR, ButtonIR } from '../types.js';
 import type { TokenMappings } from '../mapping/token-matcher.js';
 import { toValidIdentifier, escapeJSXText } from './utils.js';
 import { mapColor } from './styles-builder.js';
@@ -172,33 +172,47 @@ ${spaces}</View>`;
     }
 
     case 'Image': {
-      // Use propName if available (parameterized image)
+      const imgNode = node as ImageIR;
+
+      // NEW: If image has children (overlays), render as View container
+      if (imgNode.children && imgNode.children.length > 0) {
+        const childrenJSX = imgNode.children
+          .map((child) => buildJSX(child, indent + 1, imagePathMap, jsxOverrides, stylesBundle, mappings))
+          .join('\n');
+        const styleAttr = getStyleAttribute(node, styleName);
+
+        return `${spaces}<View ${styleAttr}>
+${childrenJSX}
+${spaces}</View>`;
+      }
+
+      // DEFAULT: Render as simple Image component
       const styleAttr = getStyleAttribute(node, styleName);
-      if (node.propName) {
+      if (imgNode.propName) {
         return `${spaces}<Image
-${spaces}  source={${node.propName}}
+${spaces}  source={${imgNode.propName}}
 ${spaces}  ${styleAttr}
 ${spaces}  accessibilityRole="image"
 ${spaces}/>`;
       }
-      
+
       // Use imageRef if available, with mapping to local path
       let source: string;
       let isSvg = false;
-      if (node.imageRef && imagePathMap?.has(node.imageRef)) {
-        const path = imagePathMap.get(node.imageRef)!;
+      if (imgNode.imageRef && imagePathMap?.has(imgNode.imageRef)) {
+        const path = imagePathMap.get(imgNode.imageRef)!;
         source = `require('${path}')`;
         isSvg = path.toLowerCase().endsWith('.svg');
-      } else if (node.imageRef) {
-        source = `{ uri: '' } /* TODO: Image ref: ${node.imageRef} */`;
+      } else if (imgNode.imageRef) {
+        source = `{ uri: '' } /* TODO: Image ref: ${imgNode.imageRef} */`;
       } else {
         source = `{ uri: '' } /* TODO: Add image source */`;
       }
-      
+
       const component = isSvg ? 'SvgIcon' : 'Image';
       const a11yLabel = deriveA11yLabel(node.name);
       const a11yProp = a11yLabel ? `\n${spaces}  accessibilityLabel="${a11yLabel}"` : '';
-      
+
       return `${spaces}<${component}
 ${spaces}  source={${source}}
 ${spaces}  ${styleAttr}
@@ -209,7 +223,24 @@ ${spaces}/>`;
     case 'Button': {
       const btn = node as ButtonIR;
       const escapedLabel = escapeJSXText(btn.label);
-      
+
+      // NEW: If button has custom children, render them instead of default reconstruction
+      if (btn.children && btn.children.length > 0) {
+        const childrenJSX = btn.children
+          .map((child) => buildJSX(child, indent + 1, imagePathMap, jsxOverrides, stylesBundle, mappings))
+          .join('\n');
+
+        return `${spaces}<TouchableOpacity
+${spaces}  style={styles.${styleName}}
+${spaces}  onPress={() => {}}
+${spaces}  accessibilityRole="button"
+${spaces}  accessibilityLabel="${escapedLabel}"
+${spaces}>
+${childrenJSX}
+${spaces}</TouchableOpacity>`;
+      }
+
+      // DEFAULT: Reconstruct from label + iconRef (existing behavior for simple buttons)
       let iconJSX = '';
       if (btn.iconRef && btn.iconStyleRef) {
         let isSvg = false;
@@ -221,7 +252,7 @@ ${spaces}/>`;
         } else {
           iconSource = `{ uri: '' } /* TODO: Button icon: ${btn.iconRef} */`;
         }
-        
+
         const component = isSvg ? 'SvgIcon' : 'Image';
         const iconStyleName = toValidIdentifier(btn.iconStyleRef);
         iconJSX = `\n${spaces}  <${component} source={${iconSource}} style={styles.${iconStyleName}} />`;
@@ -240,8 +271,66 @@ ${spaces}</TouchableOpacity>`;
     }
 
     case 'Icon': {
-      // Use iconRef if available, with mapping to local path
       const iconNode = node as IconIR;
+
+      // Check if this is a "vector group" - container with only vector/image children
+      // These should be rendered as a single SVG, not individual elements
+      const isVectorGroup = iconNode.children && iconNode.children.length > 0 &&
+        iconNode.children.every(child =>
+          child.semanticType === 'Icon' ||
+          child.semanticType === 'Image' ||
+          (child as any).type === 'VECTOR' ||
+          (child as any).type === 'ELLIPSE' ||
+          (child as any).type === 'BOOLEAN_OPERATION'
+        );
+
+      // For vector groups: render as single SVG using parent's iconRef
+      // This prevents absolute positioning of individual vector paths
+      if (isVectorGroup && iconNode.iconRef) {
+        let iconSource: string;
+        let isSvg = false;
+        if (imagePathMap?.has(iconNode.iconRef)) {
+          const path = imagePathMap.get(iconNode.iconRef)!;
+          iconSource = `require('${path}')`;
+          isSvg = path.toLowerCase().endsWith('.svg');
+        } else {
+          iconSource = `{ uri: '' } /* TODO: Export as single SVG: ${iconNode.iconRef} */`;
+        }
+        const component = isSvg ? 'SvgIcon' : 'Image';
+        const a11yLabel = deriveA11yLabel(node.name);
+        const a11yProp = a11yLabel ? `\n${spaces}  accessibilityLabel="${a11yLabel}"` : '';
+        const hitSlop = calculateHitSlop(iconNode.size);
+        const hitSlopProp = hitSlop > 0
+          ? `\n${spaces}  hitSlop={{ top: ${hitSlop}, bottom: ${hitSlop}, left: ${hitSlop}, right: ${hitSlop} }}`
+          : '';
+
+        return `${spaces}<TouchableOpacity
+${spaces}  accessibilityRole="button"${a11yProp}${hitSlopProp}
+${spaces}>
+${spaces}  <${component} source={${iconSource}} style={styles.${styleName}} />
+${spaces}</TouchableOpacity>`;
+      }
+
+      // For icons with mixed children (not pure vector group): render children
+      if (iconNode.children && iconNode.children.length > 0 && !isVectorGroup) {
+        const childrenJSX = iconNode.children
+          .map((child) => buildJSX(child, indent + 1, imagePathMap, jsxOverrides, stylesBundle, mappings))
+          .join('\n');
+        const a11yLabel = deriveA11yLabel(node.name);
+        const a11yProp = a11yLabel ? `\n${spaces}  accessibilityLabel="${a11yLabel}"` : '';
+        const hitSlop = calculateHitSlop(iconNode.size);
+        const hitSlopProp = hitSlop > 0
+          ? `\n${spaces}  hitSlop={{ top: ${hitSlop}, bottom: ${hitSlop}, left: ${hitSlop}, right: ${hitSlop} }}`
+          : '';
+
+        return `${spaces}<TouchableOpacity
+${spaces}  accessibilityRole="button"${a11yProp}${hitSlopProp}
+${spaces}>
+${childrenJSX}
+${spaces}</TouchableOpacity>`;
+      }
+
+      // DEFAULT: Use iconRef (existing behavior for simple icons)
       let iconSource: string;
       let isSvg = false;
       if (iconNode.iconRef && imagePathMap?.has(iconNode.iconRef)) {
@@ -258,7 +347,7 @@ ${spaces}</TouchableOpacity>`;
       const hitSlopProp = hitSlop > 0
         ? `\n${spaces}  hitSlop={{ top: ${hitSlop}, bottom: ${hitSlop}, left: ${hitSlop}, right: ${hitSlop} }}`
         : '';
-      
+
       const component = isSvg ? 'SvgIcon' : 'Image';
       const a11yProp = a11yLabel ? `\n${spaces}  accessibilityLabel="${a11yLabel}"` : '';
 
@@ -324,8 +413,8 @@ export function collectStyleNames(node: IRNode): string[] {
       }
     }
 
-    // Recurse into children
-    if (n.semanticType === 'Container' || n.semanticType === 'Card' || n.semanticType === 'Component') {
+    // Recurse into children (check at runtime for all types that might have children)
+    if ('children' in n && n.children) {
       for (const child of n.children) {
         collect(child);
       }

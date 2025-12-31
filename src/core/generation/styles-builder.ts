@@ -5,6 +5,7 @@
 import type { StylesBundle, ExtractedStyle, LayoutMeta, IRNode } from '../types.js';
 import type { TokenMappings } from '../mapping/token-matcher.js';
 import { toValidIdentifier, formatInteger, formatSmart, formatFloat } from './utils.js';
+import { normalizeHex } from '../utils/path-utils.js';
 
 /**
  * Apply scaling function to a value if specified
@@ -34,32 +35,37 @@ function formatDim(val: string | number, scaleFn?: string): string {
 /**
  * Map a color value using token mappings
  * Returns theme path if mapped, raw value otherwise
+ * All colors are normalized to uppercase for consistent lookup
  */
 export function mapColor(hex: string, mappings: TokenMappings): { value: string; mapped: boolean } {
   const colorMappings = mappings.colors || {};
-  const upperHex = hex.toUpperCase();
+  const normHex = normalizeHex(hex);
 
-  // Try case-insensitive lookup
-  const mapped = colorMappings[hex] || colorMappings[upperHex] || colorMappings[hex.toLowerCase()];
-  if (mapped && mapped !== hex) {
+  const mapped = colorMappings[normHex];
+  if (mapped && mapped !== normHex) {
     return { value: mapped, mapped: true };
   }
 
-  return { value: `'${hex}'`, mapped: false };
+  return { value: `'${normHex}'`, mapped: false };
 }
 
 /**
  * Map a numeric value (spacing/radius) using token mappings
+ *
+ * NOTE: Fuzzy matching is handled by token-matcher.ts (matchSpacing/matchRadii).
+ * The TokenMappings already contain fuzzy-matched values, so we only need
+ * to do exact lookup here.
  */
 function mapNumber(value: number, category: 'spacing' | 'radii', mappings: TokenMappings): { value: string; mapped: boolean } {
   const categoryMappings = mappings[category] || {};
 
+  // Try exact lookup (mappings already include fuzzy-matched values from token-matcher)
   const mapped = categoryMappings[value];
   if (mapped && String(mapped) !== String(value)) {
     return { value: mapped, mapped: true };
   }
 
-  // Format unmapped values based on category
+  // Fallback: format unmapped values based on category
   if (category === 'spacing') {
     return { value: formatInteger(value), mapped: false };
   } else {
@@ -147,6 +153,35 @@ interface LayoutWithContext extends LayoutMeta {
 /**
  * Build style properties from ExtractedStyle
  */
+/**
+ * Common device widths for responsive heuristics
+ */
+const DEVICE_WIDTHS = {
+  MIN_FULL_WIDTH: 340,  // Minimum width that looks like "full width"
+  STANDARD: 375,        // iPhone 8/SE size
+  PLUS: 414,            // iPhone Plus/Max size
+};
+
+/**
+ * Detect if a fixed width should be treated as "100%"
+ * Heuristic: if width is close to common device widths, use percentage
+ */
+function shouldUseFullWidth(width: string | number | undefined, parentType?: string): boolean {
+  if (typeof width !== 'number') return false;
+  // If width is >= 340 (common content width), treat as full width in column parent
+  return width >= DEVICE_WIDTHS.MIN_FULL_WIDTH && parentType === 'column';
+}
+
+/**
+ * Detect if height should use flex instead of fixed
+ * Heuristic: very large heights (> 500) in column layouts likely want flex: 1
+ */
+function shouldUseFlex(height: string | number | undefined, parentType?: string): boolean {
+  if (typeof height !== 'number') return false;
+  // If height is very large in a column, it likely wants to fill available space
+  return height >= 500 && parentType === 'column';
+}
+
 function buildStyleProps(
   style: ExtractedStyle,
   layout: LayoutWithContext | undefined,
@@ -162,12 +197,12 @@ function buildStyleProps(
   // 1. Layout props (if container/card)
   if (layout) {
     lines.push(...layoutToStyleProps(layout, mappings, scale));
-    
+
     // Detect root container (no parent, device-sized dimensions)
-    const isRootContainer = !layout.parentType && 
+    const isRootContainer = !layout.parentType &&
       typeof style.width === 'number' && typeof style.height === 'number' &&
       style.width >= 350 && style.height >= 700;
-    
+
     if (isRootContainer) {
       // Root container uses flex instead of fixed device dimensions
       lines.push(`    flex: 1,`);
@@ -176,43 +211,56 @@ function buildStyleProps(
       const { horizontal, vertical } = layout.sizing;
       const { parentType } = layout;
 
-      // Horizontal Sizing
+      // Horizontal Sizing - following Figma's exact approach
       if (horizontal === 'fill') {
         if (parentType === 'row') {
-          lines.push(`    flex: 1,`); // Grow in Row
-        } else {
-          lines.push(`    width: '100%',`); // Stretch in Column
+          lines.push(`    flex: 1,`); // layoutGrow: 1 in row parent
+        } else if (parentType === 'column') {
+          lines.push(`    alignSelf: 'stretch',`); // layoutAlign: STRETCH in column parent
         }
       } else if (horizontal === 'hug') {
-        lines.push(`    alignSelf: 'flex-start',`); // Default hug behavior
-      } else if (style.width !== undefined) {
-        // Fixed
+        // Hug: let content determine width (no explicit width)
+        // No alignSelf needed - this is the default behavior
+      } else if (horizontal === 'fixed' && style.width !== undefined) {
+        // Fixed width - use exact Figma value
         lines.push(`    width: ${formatDim(style.width, scale)},`);
       }
 
-      // Vertical Sizing
+      // Vertical Sizing - following Figma's exact approach
       if (vertical === 'fill') {
         if (parentType === 'column') {
-          lines.push(`    flex: 1,`); // Grow in Column
-        } else {
-          lines.push(`    height: '100%',`); // Stretch in Row
+          lines.push(`    flex: 1,`); // layoutGrow: 1 in column parent
+        } else if (parentType === 'row') {
+          lines.push(`    alignSelf: 'stretch',`); // layoutAlign: STRETCH in row parent
         }
       } else if (vertical === 'hug') {
-         // managed by content
-      } else if (style.height !== undefined) {
-        // Fixed
+        // Hug: let content determine height (no explicit height)
+      } else if (vertical === 'fixed' && style.height !== undefined) {
+        // Fixed height - use exact Figma value
         lines.push(`    height: ${formatDim(style.height, scale)},`);
       }
 
     } else {
-      // Fallback to Fixed if no sizing info (legacy)
-      if (style.width !== undefined) lines.push(`    width: ${formatDim(style.width, scale)},`);
-      if (style.height !== undefined) lines.push(`    height: ${formatDim(style.height, scale)},`);
+      // Fallback to Fixed if no sizing info (legacy) - still apply heuristics
+      if (style.width !== undefined) {
+        if (shouldUseFullWidth(style.width, layout.parentType)) {
+          lines.push(`    width: '100%',`);
+        } else {
+          lines.push(`    width: ${formatDim(style.width, scale)},`);
+        }
+      }
+      if (style.height !== undefined) {
+        if (shouldUseFlex(style.height, layout.parentType)) {
+          lines.push(`    flex: 1,`);
+        } else {
+          lines.push(`    height: ${formatDim(style.height, scale)},`);
+        }
+      }
     }
 
   } else {
-    // Non-layout nodes (Text, Image) - simple fixed sizing for now
-    // TODO: They might also have sizing modes in the future
+    // Non-layout nodes (Text, Image) - keep fixed sizing but omit for small elements
+    // Large fixed dimensions on text/images are usually intentional
     if (style.width !== undefined) lines.push(`    width: ${formatDim(style.width, scale)},`);
     if (style.height !== undefined) lines.push(`    height: ${formatDim(style.height, scale)},`);
   }
@@ -340,17 +388,18 @@ function buildStyleProps(
  * Now context-aware and uses styleRef as key
  */
 function collectLayouts(
-  node: IRNode, 
-  map: Map<string, LayoutWithContext>, 
+  node: IRNode,
+  map: Map<string, LayoutWithContext>,
   parentType?: 'row' | 'column' | 'stack' | 'absolute'
 ): void {
-  if (node.semanticType === 'Container' || node.semanticType === 'Card' || node.semanticType === 'Component') {
+  // Check at runtime for nodes with layout and children (now includes Button/Icon/Image)
+  if ('layout' in node && node.layout && 'children' in node && node.children) {
     // Store layout with parent context
     map.set(node.styleRef, {
       ...node.layout,
       parentType
     });
-    
+
     // Recurse with OUR type as parent
     for (const child of node.children) {
       collectLayouts(child, map, node.layout.type);
@@ -365,10 +414,11 @@ export function buildStyles(
   root: IRNode,
   stylesBundle: StylesBundle,
   mappings: TokenMappings,
-  options?: { 
+  options?: {
     usedStyles?: Set<string>;
     suppressTodos?: boolean;
     scaleFunction?: string;
+    stylePattern?: 'useTheme' | 'StyleSheet' | 'unistyles';
   }
 ): { code: string; unmapped: { colors: string[]; spacing: number[]; radii: number[] } } {
   const unmapped = {
@@ -402,9 +452,21 @@ export function buildStyles(
     }
   }
 
-  const code = `const styles = StyleSheet.create({
+  // Generate code based on style pattern
+  const isUnistyles = options?.stylePattern === 'unistyles';
+
+  let code: string;
+  if (isUnistyles) {
+    // Unistyles: wrap in theme callback - theme is injected by the library
+    code = `const styles = StyleSheet.create(theme => ({
+${styleEntries.join('\n')}
+}));`;
+  } else {
+    // Standard StyleSheet.create
+    code = `const styles = StyleSheet.create({
 ${styleEntries.join('\n')}
 });`;
+  }
 
   return {
     code,

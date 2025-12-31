@@ -1,13 +1,24 @@
 /**
  * Test Figma URLs for e2e tests
  *
- * IMPORTANT: Tests require FIGMA_TOKEN environment variable
+ * Token is loaded from .env file automatically
  * Get token: https://www.figma.com/developers/api#access-tokens
  */
 
+import { config } from 'dotenv';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+// ES Module compatible __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Load .env from project root
+config({ path: resolve(__dirname, '../../.env') });
+
 // Base URL for test file
-export const TEST_FILE_KEY = 'UP4RaLYLk41imjPis2j6an';
-export const TEST_FILE_NAME = 'MARAFET-dev';
+export const TEST_FILE_KEY = 'BlgBBt56cEbSVY2xiSXqkp';
+export const TEST_FILE_NAME = 'MARAFET-dev2';
 export const BASE_URL = `https://www.figma.com/design/${TEST_FILE_KEY}/${TEST_FILE_NAME}`;
 
 /**
@@ -22,7 +33,7 @@ export function createFigmaUrl(nodeId: string): string {
  */
 export const TEST_URLS = {
   // Main test screen
-  mainScreen: createFigmaUrl('2532-25721'),
+  mainScreen: createFigmaUrl('2804-44718'),
 
   // Alternative nodes for testing different patterns
   // TODO: Add after exploring Figma file structure
@@ -68,15 +79,15 @@ export function extractFileKey(figmaUrl: string): string | null {
 }
 
 /**
- * Checks that FIGMA_TOKEN is set
+ * Checks that FIGMA_TOKEN is set (loaded from .env file)
  */
 export function requireFigmaToken(): string {
   const token = process.env.FIGMA_TOKEN;
   if (!token) {
     throw new Error(
-      'FIGMA_TOKEN environment variable is required for e2e tests.\n' +
-      'Get your token from: https://www.figma.com/developers/api#access-tokens\n' +
-      'Run tests with: FIGMA_TOKEN=your_token npm test'
+      'FIGMA_TOKEN not found. Add it to .env file in project root:\n' +
+      'FIGMA_TOKEN=your_token_here\n\n' +
+      'Get your token from: https://www.figma.com/developers/api#access-tokens'
     );
   }
   return token;

@@ -54,8 +54,12 @@ function matchValue(
 /**
  * Match a spacing value to project spacing with "closest neighbor" logic
  * - Exact match first
- * - Then find closest value within tolerance (±2px or 20%)
- * - This allows mapping values like 18 to 16, or 22 to 24
+ * - Then find closest value within tolerance
+ * - For small values (< 20): ±3px tolerance
+ * - For medium values (20-50): ±25% tolerance
+ * - For large values (> 50): ±30% tolerance (or snap to largest token)
+ *
+ * This allows mapping values like 6→4 (xs), 7→8 (sm), 56→48 (3xl), etc.
  */
 function matchSpacing(
   value: number,
@@ -71,23 +75,54 @@ function matchSpacing(
     return exactMatch;
   }
 
+  // Determine tolerance based on value size
+  let tolerance: number;
+  if (value < 20) {
+    tolerance = 3; // Small values: ±3px
+  } else if (value < 50) {
+    tolerance = value * 0.25; // Medium values: ±25%
+  } else {
+    tolerance = value * 0.35; // Large values: ±35%
+  }
+
   // Fuzzy match: find closest value within tolerance
   let closestPath: string | null = null;
   let closestDiff = Infinity;
-  const tolerance = Math.max(2, value * 0.2); // ±2px or 20%, whichever is larger
+
+  // Also track absolute closest (for large outliers)
+  let absoluteClosestPath: string | null = null;
+  let absoluteClosestDiff = Infinity;
 
   for (const [spacingValue, path] of projectSpacing) {
     const numValue = typeof spacingValue === 'number' ? spacingValue : parseFloat(String(spacingValue));
     if (isNaN(numValue)) continue;
 
     const diff = Math.abs(numValue - value);
+
+    // Track absolute closest
+    if (diff < absoluteClosestDiff) {
+      absoluteClosestDiff = diff;
+      absoluteClosestPath = path;
+    }
+
+    // Check within tolerance
     if (diff <= tolerance && diff < closestDiff) {
       closestDiff = diff;
       closestPath = path;
     }
   }
 
-  return closestPath || String(value);
+  // If within tolerance, use that
+  if (closestPath) {
+    return closestPath;
+  }
+
+  // For very large outliers (like 87), snap to absolute closest if within 50%
+  if (value > 30 && absoluteClosestDiff / value < 0.5) {
+    return absoluteClosestPath || String(value);
+  }
+
+  return String(value);
 }
 
 /**

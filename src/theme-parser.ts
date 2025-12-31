@@ -1,6 +1,7 @@
 import { Project, SourceFile, SyntaxKind, Node, ObjectLiteralExpression, PropertyAssignment } from 'ts-morph';
 import { existsSync } from 'fs';
 import { resolve, join, basename } from 'path';
+import { pathComplexity, normalizeHex } from './core/utils/path-utils.js';
 
 /**
  * Color token from theme
@@ -118,24 +119,43 @@ export async function parseThemeFile(
     };
 
     for (const node of themeNodes) {
-      // If node is a function, we resolve it to its return object literal
+      // Get the original variable name (before resolution)
+      const originalName = Node.isVariableDeclaration(node) ? node.getName() : (node as any).getName?.();
+
+      // Resolve to the object literal
       const targetNode = resolveValueNode(node);
-      if (!Node.isObjectLiteralExpression(targetNode)) continue;
+      const targetKind = targetNode?.getKindName?.() || 'unknown';
+
+      if (!Node.isObjectLiteralExpression(targetNode)) {
+        // Debug: log skipped nodes
+        // console.log(`  [skip] ${originalName || 'unnamed'} resolved to ${targetKind}`);
+        continue;
+      }
 
       // Determine the starting path for tokens
-      const nodeName = getObjectLiteralName(targetNode as any) || (node as any).getName?.();
+      // Use original variable name, fall back to object literal name
+      const nodeName = originalName || getObjectLiteralName(targetNode as any);
       let effectivePath = basePath || 'theme';
       if (nodeName && nodeName !== basePath && nodeName !== 'default' && !['theme', 'tokens', 'designTokens'].includes(nodeName)) {
         effectivePath = basePath ? `${basePath}.${nodeName}` : nodeName;
       }
 
+      // Debug: log processed nodes
+      // console.log(`  [process] ${originalName || 'unnamed'} → path: ${effectivePath}`);
+
       // Extract tokens recursively
       const tokens = extractTokensRecursive(targetNode, effectivePath);
       
-      // Merge results
-      for (const [k, v] of tokens.colors) allTokens.colors.set(k, v);
+      // Merge results - prefer simpler paths when same value exists
+      for (const [k, v] of tokens.colors) {
+        const existing = allTokens.colors.get(k);
+        if (!existing || pathComplexity(v.path) < pathComplexity(existing.path)) {
+          allTokens.colors.set(k, v);
+        }
+      }
       for (const [k, v] of tokens.fonts) allTokens.fonts.set(k, v);
       for (const [k, v] of tokens.typography) allTokens.typography.set(k, v);
+      // Spacing and radii use path as key, number as value - just overwrite
       for (const [k, v] of tokens.spacing) allTokens.spacing.set(k, v);
       for (const [k, v] of tokens.radii) allTokens.radii.set(k, v);
       for (const [k, v] of tokens.shadows) allTokens.shadows.set(k, v);
@@ -153,7 +173,19 @@ export async function parseThemeFile(
  */
 function findThemeNodes(sourceFile: SourceFile): Node[] {
   const nodes: Node[] = [];
-  const themeNames = ['theme', 'colors', 'palette', 'tokens', 'designTokens', 'typography', 'spacing', 'radii', 'shadows', 'clientPalette', 'masterPalette', 'clientThemeInstance'];
+  // Include color scale names (gray, accent, etc.) to extract their values directly
+  // Include Unistyles theme names (lightTheme, darkTheme, masterTheme)
+  const themeNames = [
+    'theme', 'colors', 'palette', 'tokens', 'designTokens', 'typography', 'spacing', 'radii', 'shadows',
+    'clientPalette', 'masterPalette', 'clientThemeInstance',
+    'gray', 'accent', 'black', 'white', 'success', 'error', 'gradient', 'opacityPresets',
+    // Unistyles theme names
+    'lightTheme', 'darkTheme', 'masterTheme', 'defaultTheme',
+    // Font token objects
+    'font', 'fonts', 'textStyles',
+    // Margins (Unistyles uses 'margins' for spacing)
+    'margins',
+  ];
 
   // 1. Default export
   const defaultExport = sourceFile.getDefaultExportSymbol();
@@ -191,15 +223,26 @@ function findThemeNodes(sourceFile: SourceFile): Node[] {
     }
   }
 
-  // Filter to unique nodes and map to object literals or functions returning objects
+  // Filter to unique nodes (by resolved target, but keep original for name extraction)
   const finalNodes: Node[] = [];
-  const seen = new Set<Node>();
+  const seen = new Set<string>();
 
   for (const node of nodes) {
+    const nodeName = Node.isVariableDeclaration(node) ? node.getName() : 'unknown';
     const resolved = resolveNodeToTarget(node);
-    if (resolved && !seen.has(resolved)) {
-      finalNodes.push(resolved);
-      seen.add(resolved);
+    if (resolved) {
+      // Use resolved node's position as unique key
+      const key = `${resolved.getStartLineNumber()}-${resolved.getStart()}`;
+      if (!seen.has(key)) {
+        // Push original node (not resolved) to preserve variable name
+        finalNodes.push(node);
+        seen.add(key);
+        // console.log(`  [findNodes] ADDED ${nodeName} (key: ${key})`);
+      } else {
+        // console.log(`  [findNodes] SKIP ${nodeName} (duplicate key: ${key})`);
+      }
+    } else {
+      // console.log(`  [findNodes] SKIP ${nodeName} (could not resolve)`);
     }
   }
 
@@ -225,7 +268,7 @@ function resolveNodeToTarget(node: Node): Node | null {
 
       if (Node.isObjectLiteralExpression(target)) return target;
       if (Node.isArrowFunction(target) || Node.isFunctionExpression(target)) return target;
-      
+
       // Follow reference
       if (Node.isIdentifier(target)) {
         const refs = target.getDefinitions();
@@ -234,6 +277,11 @@ function resolveNodeToTarget(node: Node): Node | null {
           if (decl && decl !== node) return resolveNodeToTarget(decl);
         }
       }
+
+      // Handle CallExpression (e.g., createTheme('client'))
+      if (Node.isCallExpression(target)) {
+        return resolveNodeToTarget(target);
+      }
     }
   }
   
@@ -241,6 +289,26 @@ function resolveNodeToTarget(node: Node): Node | null {
   if (Node.isPropertyAssignment(node)) {
     const init = node.getInitializer();
     if (init) return resolveNodeToTarget(init);
+  }
+
+  // Check call expression (e.g., createTheme('client'))
+  if (Node.isCallExpression(node)) {
+    const expression = node.getExpression();
+    if (Node.isIdentifier(expression)) {
+      const funcName = expression.getText();
+      const sourceFile = node.getSourceFile();
+      const funcDecl = sourceFile.getFunction(funcName);
+      if (funcDecl) {
+        const body = funcDecl.getBody();
+        if (body && Node.isBlock(body)) {
+          const returnStmt = body.getStatements().find(s => Node.isReturnStatement(s));
+          if (returnStmt && Node.isReturnStatement(returnStmt)) {
+            const returnExpr = returnStmt.getExpression();
+            if (returnExpr) return resolveNodeToTarget(returnExpr);
+          }
+        }
+      }
+    }
   }
 
   return null;
@@ -254,6 +322,12 @@ function resolveValueNode(node: Node): Node {
   // 0. Unwrap AsExpression or Parentheses
   if (Node.isAsExpression(node) || Node.isParenthesizedExpression(node)) {
     return resolveValueNode(node.getExpression());
+  }
+
+  // 0b. Handle VariableDeclaration directly
+  if (Node.isVariableDeclaration(node)) {
+    const init = node.getInitializer();
+    if (init) return resolveValueNode(init);
   }
 
   // 1. Resolve Identifiers
@@ -274,9 +348,27 @@ function resolveValueNode(node: Node): Node {
     const expression = node.getExpression();
     const name = node.getName();
     const baseObj = resolveValueNode(expression);
-    
+
     if (Node.isObjectLiteralExpression(baseObj)) {
       const prop = baseObj.getProperty(name);
+      if (prop && (Node.isPropertyAssignment(prop) || Node.isShorthandPropertyAssignment(prop))) {
+        const init = Node.isPropertyAssignment(prop) ? prop.getInitializer() : prop.getNameNode();
+        if (init) return resolveValueNode(init);
+      }
+    }
+  }
+
+  // 2b. Resolve Element Access (base[10], gray[10])
+  if (Node.isElementAccessExpression(node)) {
+    const expression = node.getExpression();
+    const argument = node.getArgumentExpression();
+    const baseObj = resolveValueNode(expression);
+    // console.log(`  [ElementAccess] ${node.getText()} → base resolved to: ${baseObj?.getKindName()}`);
+
+    if (Node.isObjectLiteralExpression(baseObj) && argument) {
+      // Get the key (e.g., 10 from gray[10])
+      const keyText = argument.getText().replace(/['"]/g, '');
+      const prop = baseObj.getProperty(keyText);
       if (prop && (Node.isPropertyAssignment(prop) || Node.isShorthandPropertyAssignment(prop))) {
         const init = Node.isPropertyAssignment(prop) ? prop.getInitializer() : prop.getNameNode();
         if (init) return resolveValueNode(init);
@@ -292,6 +384,33 @@ function resolveValueNode(node: Node): Node {
     }
     if (Node.isObjectLiteralExpression(body)) {
       return body;
+    }
+  }
+
+  // 4. Resolve Call Expressions (e.g., createTheme('client'))
+  if (Node.isCallExpression(node)) {
+    const expression = node.getExpression();
+
+    // Get the function being called
+    if (Node.isIdentifier(expression)) {
+      const funcName = expression.getText();
+      const sourceFile = node.getSourceFile();
+
+      // Find the function declaration
+      const funcDecl = sourceFile.getFunction(funcName);
+      if (funcDecl) {
+        const body = funcDecl.getBody();
+        if (body && Node.isBlock(body)) {
+          // Find return statement
+          const returnStmt = body.getStatements().find(s => Node.isReturnStatement(s));
+          if (returnStmt && Node.isReturnStatement(returnStmt)) {
+            const returnExpr = returnStmt.getExpression();
+            if (returnExpr) {
+              return resolveValueNode(returnExpr);
+            }
+          }
+        }
+      }
     }
   }
 
@@ -340,15 +459,41 @@ function extractTokensRecursive(
   const properties = node.getProperties();
 
   for (const prop of properties) {
+    // Handle spread operators (e.g., ...grayColors)
+    if (Node.isSpreadAssignment(prop)) {
+      const spreadExpr = prop.getExpression();
+      const spreadName = spreadExpr.getText();
+      const resolvedSpread = resolveValueNode(spreadExpr);
+
+      // If spread resolves to an object literal, inline its properties
+      if (Node.isObjectLiteralExpression(resolvedSpread)) {
+        extractTokensRecursive(resolvedSpread, currentPath, tokens);
+      }
+      continue;
+    }
+
     if (!Node.isPropertyAssignment(prop)) continue;
 
     const rawPropName = prop.getName();
     // Strip quotes if present (prop.getName() returns 'key' for quoted keys)
     const propName = rawPropName.replace(/^['"]|['"]$/g, '');
-    // Use bracket notation for keys that aren't valid JS identifiers (e.g., '2xl', '3d')
-    const isValidIdentifier = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(propName);
-    const propPath = isValidIdentifier 
-      ? `${currentPath}.${propName}` 
+
+    // Generate semantic property name for numeric keys in color/scale objects
+    // e.g., gray[10] → gray.gray10, accent[60] → accent.accent60
+    let semanticPropName = propName;
+    if (/^\d+$/.test(propName)) {
+      // Numeric key - extract parent name for semantic naming
+      const pathParts = currentPath.split('.');
+      const parentName = pathParts[pathParts.length - 1]?.replace(/[\[\]']/g, '');
+      if (parentName && ['gray', 'accent', 'spacing', 'radii'].includes(parentName.toLowerCase())) {
+        semanticPropName = `${parentName}${propName}`; // gray10, accent60
+      }
+    }
+
+    // Use bracket notation only for keys that can't be identifiers (after semantic naming attempt)
+    const isValidIdentifier = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(semanticPropName);
+    const propPath = isValidIdentifier
+      ? `${currentPath}.${semanticPropName}`
       : `${currentPath}['${propName}']`;
     const initializer = prop.getInitializer();
     if (!initializer) continue;
@@ -455,14 +600,15 @@ function isColorValue(value: string): boolean {
 
 /**
  * Normalizes color to uppercase 6-digit hex format if possible
+ * Uses shared normalizeHex utility for consistency
  */
 function normalizeColorValue(value: string): string {
   if (value.startsWith('#')) {
-    let hex = value.replace('#', '').toUpperCase();
+    let hex = value.replace('#', '');
     if (hex.length === 3) {
       hex = hex.split('').map(c => c + c).join('');
     }
-    return `#${hex}`;
+    return normalizeHex(`#${hex}`);
   }
   return value;
 }
@@ -674,6 +820,7 @@ function isSpacingValue(propName: string): boolean {
   const spacingKeywords = [
     'spacing',
     'margin',
+    'margins', // Unistyles uses 'margins' for spacing
     'padding',
     'gap',
     'gutter',

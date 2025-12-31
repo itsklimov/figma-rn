@@ -1,21 +1,53 @@
+/**
+ * Test Generation Script
+ *
+ * Fetches a Figma node and generates React Native code.
+ * Automatically loads FIGMA_TOKEN from .env file.
+ *
+ * Usage:
+ *   npx tsx scripts/test-generation.mts [figma-url]
+ */
+
+import fs from 'fs';
+import path from 'path';
 import { FigmaClient } from '../src/api/client.js';
 import { transformNode } from '../src/api/transformers.js';
 import { transformToScreenIR } from '../src/core/pipeline.js';
 import { generateComponent } from '../src/core/generation/index.js';
 import type { TokenMappings } from '../src/core/mapping/token-matcher.js';
 
-const FIGMA_URL = 'https://www.figma.com/design/UP4RaLYLk41imjPis2j6an/MARAFET-dev?node-id=2726-74525&m=dev';
+// Load .env file if it exists
+function loadEnv(): void {
+  const envPath = path.join(process.cwd(), '.env');
+  if (fs.existsSync(envPath)) {
+    const content = fs.readFileSync(envPath, 'utf-8');
+    for (const line of content.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const match = trimmed.match(/^([^=]+)=\s*["']?([^"']*)["']?$/);
+      if (match && !process.env[match[1].trim()]) {
+        process.env[match[1].trim()] = match[2].trim();
+      }
+    }
+  }
+}
+
+loadEnv();
+
+const DEFAULT_URL = 'https://www.figma.com/design/UP4RaLYLk41imjPis2j6an/MARAFET-dev?node-id=2726-74525&m=dev';
 
 async function main() {
+  const figmaUrl = process.argv[2] || DEFAULT_URL;
   const token = process.env.FIGMA_TOKEN;
+
   if (!token) {
-    console.error('Error: FIGMA_TOKEN required');
+    console.error('Error: FIGMA_TOKEN required (set in .env or environment)');
     process.exit(1);
   }
 
-  console.log('Fetching Figma node...');
+  console.log('Fetching Figma node from:', figmaUrl);
   const client = new FigmaClient(token);
-  const result = await client.fetchNodeByUrl(FIGMA_URL);
+  const result = await client.fetchNodeByUrl(figmaUrl);
   const nodeId = Object.keys(result.nodes)[0];
   const rawNode = result.nodes[nodeId];
 
