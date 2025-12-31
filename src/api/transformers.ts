@@ -21,6 +21,7 @@ import type {
 
 /**
  * Convert RGBA (0-1 range) to hex string + rgba object
+ * Output is always uppercase (#RRGGBB or #RRGGBBAA)
  */
 export function transformColor(raw: { r: number; g: number; b: number; a?: number }): Color {
   const r = Math.round(raw.r * 255);
@@ -28,7 +29,7 @@ export function transformColor(raw: { r: number; g: number; b: number; a?: numbe
   const b = Math.round(raw.b * 255);
   const a = raw.a ?? 1;
 
-  const toHex = (n: number) => n.toString(16).padStart(2, '0');
+  const toHex = (n: number) => n.toString(16).padStart(2, '0').toUpperCase();
   const hex = `#${toHex(r)}${toHex(g)}${toHex(b)}${a < 1 ? toHex(Math.round(a * 255)) : ''}`;
 
   return {

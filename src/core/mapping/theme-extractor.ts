@@ -1,5 +1,6 @@
 import { readFile } from 'fs/promises';
 import { pathToFileURL } from 'url';
+import { pathComplexity } from '../utils/path-utils.js';
 
 /**
  * Project tokens extracted from theme file
@@ -237,9 +238,13 @@ export async function extractProjectTokens(themePath: string): Promise<ProjectTo
   return tokens;
 }
 
+
 /**
  * Merge multiple project tokens into one
  * Useful when tokens are split across multiple files (colors.ts, typography.ts, etc.)
+ *
+ * When the same value exists with different paths, prefers simpler/flatter paths.
+ * This ensures flat API paths win over nested ones when both are available.
  */
 export function mergeProjectTokens(tokenSets: ProjectTokens[]): ProjectTokens {
   const merged: ProjectTokens = {};
@@ -249,8 +254,14 @@ export function mergeProjectTokens(tokenSets: ProjectTokens[]): ProjectTokens {
       if (!merged[category]) {
         merged[category] = new Map();
       }
-      for (const [val, path] of values.entries()) {
-        merged[category].set(val, path);
+      for (const [val, newPath] of values.entries()) {
+        const existingPath = merged[category].get(val);
+
+        // If value doesn't exist, add it
+        // If value exists, prefer the simpler path
+        if (!existingPath || pathComplexity(newPath) < pathComplexity(existingPath)) {
+          merged[category].set(val, newPath);
+        }
       }
     }
   }

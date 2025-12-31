@@ -62,7 +62,7 @@ describe('shouldFilter', () => {
   describe('system UI elements', () => {
     it('should filter StatusBar', () => {
       const node = createNode({ name: 'StatusBar' });
-      expect(shouldFilter(node)).toBe('pattern-match');
+      expect(shouldFilter(node)).toBe('status-bar');
     });
 
     it('should filter Status Bar', () => {
@@ -79,7 +79,7 @@ describe('shouldFilter', () => {
 
     it('should filter HomeIndicator', () => {
       const node = createNode({ name: 'HomeIndicator' });
-      expect(shouldFilter(node)).toBe('pattern-match');
+      expect(shouldFilter(node)).toBe('home-indicator');
     });
   });
 
