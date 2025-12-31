@@ -271,6 +271,7 @@ export function generateComponent(
       suppressTodos: options?.suppressTodos,
       scaleFunction: options?.scaleFunction,
       stylePattern: options?.stylePattern,
+      hasProjectTheme: options?.hasProjectTheme,
     }
   );
 
@@ -384,9 +385,10 @@ ${jsx}
   // Add safeArea style if SafeAreaView is used
   if (needsSafeArea) {
     // Insert safeArea style at the beginning of the styles
+    // Support both standard StyleSheet.create({ and Unistyles StyleSheet.create(theme => ({
     finalStylesCode = finalStylesCode.replace(
-      /const styles = StyleSheet\.create\(\{/,
-      `const styles = StyleSheet.create({
+      /const styles = StyleSheet\.create\((?:theme => )?\(\{/,
+      `const styles = StyleSheet.create(${options?.stylePattern === 'unistyles' ? 'theme => ' : ''}({
   safeArea: {
     flex: 1,
   },`

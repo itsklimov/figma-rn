@@ -775,6 +775,7 @@ async function generateFigmaConfig(projectRoot: string): Promise<FigmaConfig> {
     '**/@(styles|theme)/generated/tokens.{ts,js}',
     '**/@(styles|theme)/compiled/tokens.{ts,js}',
     '**/styles/tokens.{ts,js}',
+    '**/styles/primitives.{ts,js}',
     '**/design-tokens.{ts,js}',
     // Individual token files
     '**/@(styles|theme|constants|tokens)/**/@(colors|palette)*.{ts,js}',
@@ -926,6 +927,19 @@ async function generateFigmaConfig(projectRoot: string): Promise<FigmaConfig> {
     if (deps['react-native-unistyles']) {
       hasUnistyles = true;
       console.error(`   🎨 Detected react-native-unistyles`);
+
+      // CRITICAL: When Unistyles is detected, prioritize Unistyles file first
+      // The merger will prefer simpler paths from Unistyles over primitives
+      // But we need primitives for resolving imported references (like margins, radius)
+      const unistylesFiles = tokenFiles.filter(f => f.toLowerCase().includes('unistyles'));
+      const nonUnistylesFiles = tokenFiles.filter(f => !f.toLowerCase().includes('unistyles'));
+
+      if (unistylesFiles.length > 0) {
+        // Reorder: Unistyles first (takes priority), then primitives (for resolution)
+        tokenFiles.length = 0;
+        tokenFiles.push(...unistylesFiles, ...nonUnistylesFiles);
+        console.error(`   ⚠️ Unistyles detected - prioritizing Unistyles paths, using primitives for resolution only`);
+      }
     }
   } catch {
     // Default to react-native

@@ -136,7 +136,10 @@ export async function parseThemeFile(
       // Use original variable name, fall back to object literal name
       const nodeName = originalName || getObjectLiteralName(targetNode as any);
       let effectivePath = basePath || 'theme';
-      if (nodeName && nodeName !== basePath && nodeName !== 'default' && !['theme', 'tokens', 'designTokens'].includes(nodeName)) {
+      // Exclude common theme object names that represent the root theme
+      // For Unistyles: clientTheme/masterTheme are the runtime theme object
+      const rootThemeNames = ['theme', 'tokens', 'designTokens', 'clientTheme', 'masterTheme', 'lightTheme', 'darkTheme'];
+      if (nodeName && nodeName !== basePath && nodeName !== 'default' && !rootThemeNames.includes(nodeName)) {
         effectivePath = basePath ? `${basePath}.${nodeName}` : nodeName;
       }
 
@@ -183,8 +186,12 @@ function findThemeNodes(sourceFile: SourceFile): Node[] {
     'lightTheme', 'darkTheme', 'masterTheme', 'defaultTheme',
     // Font token objects
     'font', 'fonts', 'textStyles',
-    // Margins (Unistyles uses 'margins' for spacing)
-    'margins',
+    // Spacing variations (support both 'margins' and 'spacing')
+    'margins', 'spacing',
+    // Radii variations (support both 'radius' and 'radii')
+    'radius', 'radii',
+    // Additional semantic token names
+    'clientAccent', 'masterAccent', 'semantic', 'clientGradient', 'masterGradient',
   ];
 
   // 1. Default export
@@ -485,8 +492,9 @@ function extractTokensRecursive(
       // Numeric key - extract parent name for semantic naming
       const pathParts = currentPath.split('.');
       const parentName = pathParts[pathParts.length - 1]?.replace(/[\[\]']/g, '');
-      if (parentName && ['gray', 'accent', 'spacing', 'radii'].includes(parentName.toLowerCase())) {
-        semanticPropName = `${parentName}${propName}`; // gray10, accent60
+      // Support both singular and plural forms (margins/spacing, radius/radii)
+      if (parentName && ['gray', 'accent', 'spacing', 'margins', 'radii', 'radius'].includes(parentName.toLowerCase())) {
+        semanticPropName = `${parentName}${propName}`; // gray10, accent60, margins16
       }
     }
 

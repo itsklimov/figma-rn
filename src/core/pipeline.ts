@@ -145,8 +145,9 @@ function collectStyles(
         hashToRef.set(hash, finalRef);
         return;
       }
-      // Name collision with different content!
-      finalRef = `${n.styleRef}_${counter++}`;
+      // Name collision with different content - use suffix without underscore
+      // to avoid mismatch with toValidIdentifier which strips underscores
+      finalRef = `${n.styleRef}${counter++}`;
     }
 
     // 3. Register new style
@@ -261,7 +262,45 @@ export function extractStyles(
   // Extract tokens from collected styles
   const tokens = extractTokens(styles);
 
+  // Also collect layout spacing values (gap, padding) from IR tree
+  collectLayoutSpacing(ir, tokens.spacing);
+
   return { styles, tokens };
+}
+
+/**
+ * Collect gap and padding values from IR tree layout metadata
+ * These are separate from ExtractedStyle and need explicit collection
+ */
+function collectLayoutSpacing(node: IRNode, spacing: Record<string, number>): void {
+  // Collect from current node's layout
+  if ('layout' in node && node.layout) {
+    const layout = node.layout as any;
+
+    // Collect gap
+    if (layout.gap > 0 && !Object.values(spacing).includes(layout.gap)) {
+      const index = Object.keys(spacing).length;
+      spacing[`spacing_${index}`] = layout.gap;
+    }
+
+    // Collect padding
+    if (layout.padding) {
+      const { top, right, bottom, left } = layout.padding;
+      for (const val of [top, right, bottom, left]) {
+        if (val > 0 && !Object.values(spacing).includes(val)) {
+          const index = Object.keys(spacing).length;
+          spacing[`spacing_${index}`] = val;
+        }
+      }
+    }
+  }
+
+  // Recurse into children
+  if ('children' in node && node.children) {
+    for (const child of node.children) {
+      collectLayoutSpacing(child, spacing);
+    }
+  }
 }
 
 /**
