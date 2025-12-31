@@ -207,18 +207,39 @@ export function inferCrossAxisAlign(
  */
 /**
  * Extract sizing behavior (Fixed/Fill/Hug) for horizontal and vertical axes
+ *
+ * Figma sizing modes:
+ * - FIXED: Explicit dimension set
+ * - AUTO (or undefined): Hug contents - dimension determined by children
+ *
+ * In Figma API, when primaryAxisSizingMode is NOT present, it means AUTO (hug).
  */
 function extractSizing(
-  node: NormalizedNode, 
+  node: NormalizedNode,
   parentLayoutType: LayoutType | undefined
 ): LayoutMeta['sizing'] {
+  // Determine node's own layout direction
+  const myLayoutType = node.figmaLayout?.mode || (detectLayoutType(node) === 'row' ? 'horizontal' : 'vertical');
+
+  // Default to 'hug' - only set 'fixed' when explicitly FIXED in Figma
+  // This matches Figma's behavior where undefined sizing mode means AUTO (hug)
   const result: LayoutMeta['sizing'] = {
-    horizontal: 'fixed',
-    vertical: 'fixed'
+    horizontal: 'hug',
+    vertical: 'hug'
   };
 
-  // 1. "Fill Container" (layoutGrow = 1)
-  // Depends on parent direction
+  // Set to 'fixed' only when Figma explicitly says FIXED
+  if (node.primaryAxisSizingMode === 'FIXED') {
+    if (myLayoutType === 'horizontal') result.horizontal = 'fixed';
+    else result.vertical = 'fixed';
+  }
+
+  if (node.counterAxisSizingMode === 'FIXED') {
+    if (myLayoutType === 'horizontal') result.vertical = 'fixed';
+    else result.horizontal = 'fixed';
+  }
+
+  // "Fill Container" (layoutGrow = 1) - overrides to fill on main axis
   if (node.layoutGrow === 1 && parentLayoutType) {
     if (parentLayoutType === 'row') {
       result.horizontal = 'fill';
@@ -227,33 +248,13 @@ function extractSizing(
     }
   }
 
-  // 2. "Fill Container" (layoutAlign = STRETCH) on Cross Axis
+  // "Fill Container" (layoutAlign = STRETCH) - overrides to fill on cross axis
   if (node.layoutAlign === 'STRETCH' && parentLayoutType) {
     if (parentLayoutType === 'row') {
       result.vertical = 'fill';
     } else if (parentLayoutType === 'column') {
       result.horizontal = 'fill';
     }
-  }
-
-  // 3. "Hug Contents" (primaryAxisSizingMode = AUTO) on Main Axis
-  // Depends on node's OWN direction (which we infer from layoutMode if present, or detectLayoutType?)
-  // Actually, primaryAxisSizingMode is a property of the FRAME itself.
-  // If I am a ROW, my primary axis is horizontal.
-  // We can use node.figmaLayout.mode or detectLayoutType(node)
-  
-  // Note: We need to know OUR layout type to map primary/counter to H/V.
-  // We can re-detect it or assume figmaLayout matches if present.
-  const myLayoutType = node.figmaLayout?.mode || (detectLayoutType(node) === 'row' ? 'horizontal' : 'vertical');
-
-  if (node.primaryAxisSizingMode === 'AUTO') {
-    if (myLayoutType === 'horizontal') result.horizontal = 'hug';
-    else result.vertical = 'hug';
-  }
-
-  if (node.counterAxisSizingMode === 'AUTO') {
-    if (myLayoutType === 'horizontal') result.vertical = 'hug';
-    else result.horizontal = 'hug';
   }
 
   return result;

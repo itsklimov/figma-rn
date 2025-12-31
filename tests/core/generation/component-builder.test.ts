@@ -265,7 +265,7 @@ describe('generateComponent', () => {
     };
 
     const mappings: TokenMappings = {
-      colors: { '#3b82f6': 'theme.colors.primary' },
+      colors: { '#3B82F6': 'theme.colors.primary' },
       spacing: {},
       radii: {},
       typography: {},
@@ -275,7 +275,7 @@ describe('generateComponent', () => {
     const result = generateComponent(screen, mappings);
 
     expect(result.code).toContain('backgroundColor: theme.colors.primary');
-    expect(result.unmappedTokens.colors).not.toContain('#3b82f6');
+    expect(result.unmappedTokens.colors).not.toContain('#3B82F6');
   });
 });
 

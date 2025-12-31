@@ -18,12 +18,14 @@ import type {
   CornerRadius,
   TypographyInfo,
   ButtonIR,
+  SafeAreaInsets,
 } from './types.js';
-import { normalizeTree } from './normalize/index.js';
+import { normalizeTree, type FilterOptions } from './normalize/index.js';
 import { addLayoutInfo } from './layout/index.js';
 import { mapConstraints } from './layout/constraint-mapper.js';
 import { recognizeSemantics } from './recognize/index.js';
 import { extractStyleFromProps, extractTokens, createEmptyStylesBundle } from './styles/index.js';
+import { detectSafeArea, type SafeAreaDetectionResult } from './detection/index.js';
 import { BoundingBox } from '../api/types.js';
 
 /**
@@ -194,18 +196,35 @@ function collectStyles(
 import { defaultConventions } from '../api/config.js';
 
 /**
+ * Stage 0: Detect Safe Area
+ * Identify OS chrome elements and calculate safe area insets
+ * This runs BEFORE normalization to extract layout info before filtering
+ */
+export function detectSafeAreaInsets(node: FigmaNode): SafeAreaDetectionResult {
+  return detectSafeArea(node);
+}
+
+/**
  * Stage 1: Normalize
  * Filter out hidden/irrelevant nodes and unwrap useless groups
+ * Uses excludeIds from safe area detection to filter OS chrome
  */
 export function normalize(
   node: FigmaNode,
-  options?: PipelineOptions
+  options?: PipelineOptions,
+  safeAreaResult?: SafeAreaDetectionResult
 ): NormalizedNode | null {
   const ignorePatterns = options?.ignorePatterns || [
     ...defaultConventions.ignorePatterns,
     ...defaultConventions.annotationPatterns,
   ];
-  return normalizeTree(node, ignorePatterns);
+
+  const filterOptions: FilterOptions = {
+    ignorePatterns,
+    excludeIds: safeAreaResult?.excludeIds,
+  };
+
+  return normalizeTree(node, filterOptions);
 }
 
 /**
@@ -249,6 +268,7 @@ export function extractStyles(
  * Main pipeline: Transform FigmaNode to ScreenIR
  *
  * Pipeline stages:
+ * 0. Detect Safe Area: Identify OS chrome and extract insets BEFORE filtering
  * 1. Normalize: Filter hidden nodes, unwrap useless groups
  * 2. Add Layout: Detect row/column/stack, extract padding/gap
  * 3. Recognize: Classify into semantic types (Container, Text, Button, etc.)
@@ -258,8 +278,12 @@ export function transformToScreenIR(
   input: FigmaNode,
   options?: PipelineOptions
 ): ScreenIR {
-  // Stage 1: Normalize
-  const normalized = normalize(input, options);
+  // Stage 0: Detect Safe Area (BEFORE filtering)
+  // This extracts layout information from OS chrome elements before we remove them
+  const safeAreaResult = detectSafeAreaInsets(input);
+
+  // Stage 1: Normalize (using safe area excludeIds)
+  const normalized = normalize(input, options, safeAreaResult);
 
   if (normalized === null) {
     // Root node was filtered out - return empty screen
@@ -272,7 +296,7 @@ export function transformToScreenIR(
         semanticType: 'Container',
         boundingBox: { x: 0, y: 0, width: 0, height: 0 },
         styleRef: 'style_empty',
-          layout: {
+        layout: {
           type: 'column',
           gap: 0,
           padding: { top: 0, right: 0, bottom: 0, left: 0 },
@@ -286,6 +310,8 @@ export function transformToScreenIR(
         children: [],
       },
       stylesBundle: createEmptyStylesBundle(),
+      safeAreaInsets: safeAreaResult.insets,
+      hasSafeAreaLayout: safeAreaResult.hasSafeAreaLayout,
     };
   }
 
@@ -303,6 +329,8 @@ export function transformToScreenIR(
     name: input.name,
     root: ir,
     stylesBundle,
+    safeAreaInsets: safeAreaResult.insets,
+    hasSafeAreaLayout: safeAreaResult.hasSafeAreaLayout,
   };
 }
 
@@ -310,6 +338,7 @@ export function transformToScreenIR(
  * Export individual stages for debugging/testing
  */
 export const stages = {
+  detectSafeAreaInsets,
   normalize,
   addLayout,
   recognize,

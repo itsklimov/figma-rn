@@ -14,13 +14,43 @@ const DEFAULT_IGNORE_PATTERNS = [
   '*measurement*',
   '*redline*',
   '*spec*',
-  'StatusBar',
-  'Status Bar',
-  'Home Indicator',
-  'HomeIndicator',
-  'iPhone*Overlay',
   '*-guide',
   '*_guide',
+];
+
+/**
+ * OS component patterns - these are device chrome elements that should never be rendered
+ * Includes iOS status bar, home indicator, Android navigation bar, etc.
+ */
+const OS_COMPONENT_PATTERNS = [
+  // iOS Status Bar variations
+  'StatusBar',
+  'Status Bar',
+  'Status bar',
+  'status bar',
+  '_StatusBar*',
+  '*StatusBar*',
+  // iOS Home Indicator variations
+  'Home Indicator',
+  'Home indicator',
+  'HomeIndicator',
+  'home indicator',
+  '*Home Indicator*',
+  '*HomeIndicator*',
+  // iOS Device overlays
+  'iPhone*Overlay',
+  'iPhone*Frame',
+  'Device Frame',
+  'Device Overlay',
+  // Android system UI
+  'Navigation Bar',
+  'NavigationBar',
+  'System Bar',
+  'SystemBar',
+  // Generic device chrome
+  '*Device Chrome*',
+  '*Safe Area*',
+  'SafeArea',
 ];
 
 /**
@@ -46,6 +76,41 @@ function matchesAnyPattern(name: string, patterns: string[]): boolean {
 }
 
 /**
+ * Check if node is an OS component (device chrome that shouldn't be rendered)
+ */
+function isOSComponent(node: FigmaNode): FilterReason | null {
+  const name = node.name.toLowerCase();
+
+  // Pattern-based OS component detection
+  if (matchesAnyPattern(node.name, OS_COMPONENT_PATTERNS)) {
+    if (name.includes('status') && name.includes('bar')) {
+      return 'status-bar';
+    }
+    if (name.includes('home') && name.includes('indicator')) {
+      return 'home-indicator';
+    }
+    return 'os-component';
+  }
+
+  // Heuristic detection for status bars
+  if (name.includes('status') && name.includes('bar')) {
+    return 'status-bar';
+  }
+
+  // Heuristic detection for home indicators
+  if (name.includes('home') && name.includes('indicator')) {
+    return 'home-indicator';
+  }
+
+  // Heuristic detection for navigation bars (Android)
+  if (name.includes('navigation') && name.includes('bar')) {
+    return 'os-component';
+  }
+
+  return null;
+}
+
+/**
  * Determine if a node should be filtered and why
  */
 export function shouldFilter(
@@ -57,25 +122,15 @@ export function shouldFilter(
     return 'hidden';
   }
 
-  // Name-based pattern matching
+  // OS component detection (highest priority - filter early)
+  const osReason = isOSComponent(node);
+  if (osReason !== null) {
+    return osReason;
+  }
+
+  // Name-based pattern matching for annotations, guides, etc.
   if (matchesAnyPattern(node.name, ignorePatterns)) {
     return 'pattern-match';
-  }
-
-  // Status bar detection (by name or position)
-  const isStatusBar =
-    node.name.toLowerCase().includes('status') &&
-    node.name.toLowerCase().includes('bar');
-  if (isStatusBar) {
-    return 'status-bar';
-  }
-
-  // Home indicator detection
-  const isHomeIndicator =
-    node.name.toLowerCase().includes('home') &&
-    node.name.toLowerCase().includes('indicator');
-  if (isHomeIndicator) {
-    return 'home-indicator';
   }
 
   return null;
@@ -147,14 +202,31 @@ function toNormalizedNode(node: FigmaNode): NormalizedNode {
 }
 
 /**
+ * Filter options for normalization
+ */
+export interface FilterOptions {
+  /** Pattern-based filtering for annotations, guides, etc. */
+  ignorePatterns?: string[];
+  /** Specific node IDs to exclude (e.g., from safe area detection) */
+  excludeIds?: Set<string>;
+}
+
+/**
  * Recursively filter a Figma node tree
  * Returns null if the node itself should be filtered
  */
 export function filterNode(
   node: FigmaNode,
-  ignorePatterns?: string[]
+  options?: FilterOptions
 ): NormalizedNode | null {
-  // Check if this node should be filtered
+  const { ignorePatterns, excludeIds } = options || {};
+
+  // Check if this node is in the exclude list (from safe area detection)
+  if (excludeIds?.has(node.id)) {
+    return null;
+  }
+
+  // Check if this node should be filtered by pattern/rules
   const filterReason = shouldFilter(node, ignorePatterns);
   if (filterReason !== null) {
     return null;
@@ -166,7 +238,7 @@ export function filterNode(
   // Recursively filter children
   if (node.children && node.children.length > 0) {
     normalizedNode.children = node.children
-      .map(child => filterNode(child, ignorePatterns))
+      .map(child => filterNode(child, options))
       .filter((child): child is NormalizedNode => child !== null);
   }
 
@@ -176,10 +248,18 @@ export function filterNode(
 /**
  * Filter the entire tree starting from root
  * This is the main entry point for the filter module
+ *
+ * @param root - Root FigmaNode to filter
+ * @param optionsOrPatterns - Either FilterOptions object or legacy string[] of patterns
  */
 export function filterTree(
   root: FigmaNode,
-  ignorePatterns?: string[]
+  optionsOrPatterns?: FilterOptions | string[]
 ): NormalizedNode | null {
-  return filterNode(root, ignorePatterns);
+  // Support both new FilterOptions and legacy string[] signature
+  const options: FilterOptions = Array.isArray(optionsOrPatterns)
+    ? { ignorePatterns: optionsOrPatterns }
+    : optionsOrPatterns || {};
+
+  return filterNode(root, options);
 }

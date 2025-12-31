@@ -4,21 +4,23 @@
  */
 
 import type { DesignTokens, ExtractedStyle } from '../types.js';
+import { normalizeHex } from '../utils/path-utils.js';
 
 /**
  * Convert a color hex to a readable name
+ * Uses uppercase hex for consistent comparison
  */
 function colorToName(hex: string, index: number): string {
-  // Try to derive a semantic name from common colors
-  const lower = hex.toLowerCase();
+  // Normalize to uppercase for consistent comparison
+  const upper = normalizeHex(hex);
 
   // Common color mappings
-  if (lower === '#ffffff' || lower === '#fff') return 'white';
-  if (lower === '#000000' || lower === '#000') return 'black';
-  if (lower.startsWith('#f') && lower.length === 7) {
-    const r = parseInt(lower.slice(1, 3), 16);
-    const g = parseInt(lower.slice(3, 5), 16);
-    const b = parseInt(lower.slice(5, 7), 16);
+  if (upper === '#FFFFFF' || upper === '#FFF') return 'white';
+  if (upper === '#000000' || upper === '#000') return 'black';
+  if (upper.startsWith('#F') && upper.length === 7) {
+    const r = parseInt(upper.slice(1, 3), 16);
+    const g = parseInt(upper.slice(3, 5), 16);
+    const b = parseInt(upper.slice(5, 7), 16);
     if (r > 200 && g > 200 && b > 200) return `gray${index}Light`;
     if (r > 200 && g < 100 && b < 100) return `red${index}`;
     if (r < 100 && g > 200 && b < 100) return `green${index}`;
