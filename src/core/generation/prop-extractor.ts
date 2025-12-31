@@ -1,6 +1,7 @@
 import { IRNode, RepeaterIR, TextIR, ImageIR, StylesBundle, SemanticType } from '../types.js';
 import { toValidIdentifier } from './utils.js';
 import { detectContentPattern } from './semantic-naming.js';
+import { isMeaningfulPropName } from '../extraction/text-props-extractor.js';
 
 export interface ExtractedProps {
   props: Record<string, { type: 'string' | 'image' | 'style'; value: string; defaultValue: string; property?: string }>;
@@ -181,23 +182,29 @@ export function extractProps(
             propName = 'dateTime';
           }
         }
-        
-        let finalName = propName;
-        let counter = 1;
-        while (props[finalName] && props[finalName].value !== textNode.text) {
-          finalName = `${propName}${counter++}`;
-        }
 
-        if (!props[finalName]) {
-          props[finalName] = {
-            type: 'string',
-            value: textNode.text,
-            defaultValue: textNode.text,
-          };
+        // Filter: Skip creating props for meaningless names
+        if (!isMeaningfulPropName(propName)) {
+          // Don't create a prop, but traverse children
+          node.propName = undefined;
+        } else {
+          let finalName = propName;
+          let counter = 1;
+          while (props[finalName] && props[finalName].value !== textNode.text) {
+            finalName = `${propName}${counter++}`;
+          }
+
+          if (!props[finalName]) {
+            props[finalName] = {
+              type: 'string',
+              value: textNode.text,
+              defaultValue: textNode.text,
+            };
+          }
+
+          node.propName = finalName;
+          contentMap.set(contentKey, finalName);
         }
-        
-        node.propName = finalName;
-        contentMap.set(contentKey, finalName);
       }
     }
 
@@ -209,23 +216,35 @@ export function extractProps(
       if (contentMap.has(contentKey)) {
         node.propName = contentMap.get(contentKey);
       } else {
-        const propName = toValidIdentifier(nodeName);
-        let finalName = propName;
-        let counter = 1;
-        while (props[finalName] && props[finalName].value !== imageNode.imageRef) {
-          finalName = `${propName}${counter++}`;
+        let propName = toValidIdentifier(nodeName);
+
+        // Try ancestry-based naming for generic image names
+        const derivedName = deriveNameFromAncestry(nodeName, 'Image', ancestry);
+        if (derivedName) {
+          propName = derivedName;
         }
 
-        if (!props[finalName]) {
-          props[finalName] = {
-            type: 'image',
-            value: imageNode.imageRef || '',
-            defaultValue: imageNode.imageRef || '',
-          };
+        // Filter: Skip creating props for meaningless names
+        if (!isMeaningfulPropName(propName)) {
+          node.propName = undefined;
+        } else {
+          let finalName = propName;
+          let counter = 1;
+          while (props[finalName] && props[finalName].value !== imageNode.imageRef) {
+            finalName = `${propName}${counter++}`;
+          }
+
+          if (!props[finalName]) {
+            props[finalName] = {
+              type: 'image',
+              value: imageNode.imageRef || '',
+              defaultValue: imageNode.imageRef || '',
+            };
+          }
+
+          node.propName = finalName;
+          contentMap.set(contentKey, finalName);
         }
-        
-        node.propName = finalName;
-        contentMap.set(contentKey, finalName);
       }
     }
 
