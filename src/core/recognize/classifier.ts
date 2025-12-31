@@ -255,11 +255,11 @@ function generateStyleRef(node: LayoutNode): string {
   }
 
   // 3. Fallback: use semantic type + index-like suffix from ID
-  // e.g. "container_123" instead of just "style_123"
+  // e.g. "container123" - NO underscore to avoid mismatch with toValidIdentifier
   // We use the last part of ID to keep it deterministic but shorter
   const safeId = node.id.replace(/[^a-zA-Z0-9]/g, '_');
   const shortId = safeId.split('_').pop() || safeId;
-  
+
   // Use lowercased semantic type if available, otherwise 'element'
   // We can't easily access the inferred semantic type here without cyclic deps or refactoring
   // So we'll use a rough guess based on node type
@@ -268,7 +268,7 @@ function generateStyleRef(node: LayoutNode): string {
   else if (node.type === 'VECTOR') prefix = 'icon';
   else if (node.children && node.children.length > 0) prefix = 'container';
 
-  return `${prefix}_${shortId}`;
+  return `${prefix}${shortId}`;
 }
 
 /**
@@ -366,7 +366,7 @@ function processChildrenWithRepeaters(children: LayoutNode[]): IRNode[] {
           type: 'column', gap: 0, padding: {top:0,right:0,bottom:0,left:0}, 
           mainAlign: 'start', crossAlign: 'start', sizing: {horizontal:'fixed', vertical:'fixed'}
         },
-        styleRef: `style_${toValidIdentifier(baseName)}_repeater`,
+        styleRef: `style${toValidIdentifier(baseName)}Repeater`,
         boundingBox: current.boundingBox, // roughly
       } as RepeaterIR);
       
