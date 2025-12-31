@@ -5,6 +5,7 @@
 import type { StylesBundle, ExtractedStyle, LayoutMeta, IRNode } from '../types.js';
 import type { TokenMappings } from '../mapping/token-matcher.js';
 import { toValidIdentifier, formatInteger, formatSmart, formatFloat } from './utils.js';
+import { normalizeHex } from '../utils/path-utils.js';
 
 /**
  * Apply scaling function to a value if specified
@@ -34,79 +35,37 @@ function formatDim(val: string | number, scaleFn?: string): string {
 /**
  * Map a color value using token mappings
  * Returns theme path if mapped, raw value otherwise
+ * All colors are normalized to uppercase for consistent lookup
  */
 export function mapColor(hex: string, mappings: TokenMappings): { value: string; mapped: boolean } {
   const colorMappings = mappings.colors || {};
-  const upperHex = hex.toUpperCase();
+  const normHex = normalizeHex(hex);
 
-  // Try case-insensitive lookup
-  const mapped = colorMappings[hex] || colorMappings[upperHex] || colorMappings[hex.toLowerCase()];
-  if (mapped && mapped !== hex) {
+  const mapped = colorMappings[normHex];
+  if (mapped && mapped !== normHex) {
     return { value: mapped, mapped: true };
   }
 
-  return { value: `'${hex}'`, mapped: false };
+  return { value: `'${normHex}'`, mapped: false };
 }
 
 /**
  * Map a numeric value (spacing/radius) using token mappings
- * Uses fuzzy matching when exact value not found
+ *
+ * NOTE: Fuzzy matching is handled by token-matcher.ts (matchSpacing/matchRadii).
+ * The TokenMappings already contain fuzzy-matched values, so we only need
+ * to do exact lookup here.
  */
 function mapNumber(value: number, category: 'spacing' | 'radii', mappings: TokenMappings): { value: string; mapped: boolean } {
   const categoryMappings = mappings[category] || {};
 
-  // Try exact match first
+  // Try exact lookup (mappings already include fuzzy-matched values from token-matcher)
   const mapped = categoryMappings[value];
   if (mapped && String(mapped) !== String(value)) {
     return { value: mapped, mapped: true };
   }
 
-  // Fuzzy match: find closest value within STRICT tolerance
-  // We use strict tolerance to match Figma values exactly
-  if (category === 'spacing') {
-    // Strict tolerance: only ±1px to ensure precision
-    const tolerance = 1;
-
-    let closestPath: string | null = null;
-    let closestDiff = Infinity;
-
-    for (const [spacingValue, path] of Object.entries(categoryMappings)) {
-      const numValue = parseFloat(spacingValue);
-      if (isNaN(numValue)) continue;
-
-      const diff = Math.abs(numValue - value);
-      if (diff <= tolerance && diff < closestDiff) {
-        closestDiff = diff;
-        closestPath = path;
-      }
-    }
-
-    if (closestPath) {
-      return { value: closestPath, mapped: true };
-    }
-  } else if (category === 'radii') {
-    // Radii fuzzy matching: ±2px or 15%
-    const tolerance = Math.max(2, value * 0.15);
-    let closestPath: string | null = null;
-    let closestDiff = Infinity;
-
-    for (const [radiiValue, path] of Object.entries(categoryMappings)) {
-      const numValue = parseFloat(radiiValue);
-      if (isNaN(numValue)) continue;
-
-      const diff = Math.abs(numValue - value);
-      if (diff <= tolerance && diff < closestDiff) {
-        closestDiff = diff;
-        closestPath = path;
-      }
-    }
-
-    if (closestPath) {
-      return { value: closestPath, mapped: true };
-    }
-  }
-
-  // Format unmapped values based on category
+  // Fallback: format unmapped values based on category
   if (category === 'spacing') {
     return { value: formatInteger(value), mapped: false };
   } else {
@@ -455,10 +414,11 @@ export function buildStyles(
   root: IRNode,
   stylesBundle: StylesBundle,
   mappings: TokenMappings,
-  options?: { 
+  options?: {
     usedStyles?: Set<string>;
     suppressTodos?: boolean;
     scaleFunction?: string;
+    stylePattern?: 'useTheme' | 'StyleSheet' | 'unistyles';
   }
 ): { code: string; unmapped: { colors: string[]; spacing: number[]; radii: number[] } } {
   const unmapped = {
@@ -492,9 +452,21 @@ export function buildStyles(
     }
   }
 
-  const code = `const styles = StyleSheet.create({
+  // Generate code based on style pattern
+  const isUnistyles = options?.stylePattern === 'unistyles';
+
+  let code: string;
+  if (isUnistyles) {
+    // Unistyles: wrap in theme callback - theme is injected by the library
+    code = `const styles = StyleSheet.create(theme => ({
+${styleEntries.join('\n')}
+}));`;
+  } else {
+    // Standard StyleSheet.create
+    code = `const styles = StyleSheet.create({
 ${styleEntries.join('\n')}
 });`;
+  }
 
   return {
     code,

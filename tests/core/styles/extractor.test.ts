@@ -22,7 +22,7 @@ describe('fillsToBackground', () => {
     ];
     const result = fillsToBackground(fills);
 
-    expect(result.backgroundColor).toBe('#3b82f6');
+    expect(result.backgroundColor).toBe('#3B82F6');
     expect(result.backgroundGradient).toBeUndefined();
   });
 
@@ -46,7 +46,7 @@ describe('fillsToBackground', () => {
     expect(result.backgroundColor).toBeUndefined();
     expect(result.backgroundGradient).toBeDefined();
     expect(result.backgroundGradient?.type).toBe('linear');
-    expect(result.backgroundGradient?.colors).toEqual(['#ff0000', '#0000ff']);
+    expect(result.backgroundGradient?.colors).toEqual(['#FF0000', '#0000FF']);
     expect(result.backgroundGradient?.positions).toEqual([0, 1]);
     expect(result.backgroundGradient?.angle).toBe(45);
   });
@@ -72,7 +72,7 @@ describe('strokesToBorder', () => {
     ];
     const result = strokesToBorder(strokes);
 
-    expect(result.borderColor).toBe('#e5e7eb');
+    expect(result.borderColor).toBe('#E5E7EB');
     expect(result.borderWidth).toBe(1);
   });
 
@@ -96,7 +96,7 @@ describe('effectsToShadow', () => {
     const result = effectsToShadow(effects);
 
     expect(result).toBeDefined();
-    expect(result?.color).toBe('#00000033');
+    expect(result?.color).toBe('#00000033'); // Note: shadow color includes alpha, stays as input hex
     expect(result?.offsetX).toBe(0);
     expect(result?.offsetY).toBe(4);
     expect(result?.blur).toBe(8);
@@ -171,7 +171,7 @@ describe('typographyToStyle', () => {
     expect(result?.lineHeight).toBe(24);
     expect(result?.letterSpacing).toBe(0);
     expect(result?.textAlign).toBe('left');
-    expect(result?.color).toBe('#1f2937');
+    expect(result?.color).toBe('#1F2937');
   });
 
   it('should use default color if no fills', () => {
@@ -207,8 +207,8 @@ describe('extractStyleFromProps', () => {
     });
 
     expect(result.id).toBe('style_1');
-    expect(result.backgroundColor).toBe('#ffffff');
-    expect(result.borderColor).toBe('#e5e7eb');
+    expect(result.backgroundColor).toBe('#FFFFFF');
+    expect(result.borderColor).toBe('#E5E7EB');
     expect(result.borderWidth).toBe(1);
     expect(result.borderRadius).toBe(8);
     expect(result.shadow).toBeDefined();

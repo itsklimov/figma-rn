@@ -5,6 +5,8 @@
  * Alpha channel is now considered for matching solid vs transparent colors.
  */
 
+import { pathComplexity } from '../utils/path-utils.js';
+
 type Lab = [number, number, number];
 
 /**
@@ -133,20 +135,6 @@ export function labDistance(a: Lab, b: Lab): number {
   const da = a[1] - b[1];
   const db = a[2] - b[2];
   return Math.sqrt(dL * dL + da * da + db * db);
-}
-
-/**
- * Calculate path complexity (simpler paths are preferred)
- * Lower score = simpler path
- */
-function pathComplexity(path: string): number {
-  let score = 0;
-  score += (path.match(/\./g) || []).length * 1;      // Each dot adds 1
-  score += (path.match(/\[/g) || []).length * 2;      // Each bracket adds 2
-  score += path.includes('overlay') ? 10 : 0;          // Overlay paths are deprioritized
-  score += path.includes('opacity') ? 10 : 0;          // Opacity paths are deprioritized
-  score += path.includes('Preset') ? 5 : 0;            // Preset paths are deprioritized
-  return score;
 }
 
 /**
@@ -279,7 +267,7 @@ export function findClosestColor(
     try {
       const themeLab = xyzToLab(...linearRgbToXyz(...toRgb(themeHex).map(srgbToLinear) as [number, number, number]));
       const distance = labDistance(targetLab, themeLab);
-      const complexity = pathComplexity(themePath);
+      const complexity = pathComplexity(themePath, { deprioritizeOverlays: true });
 
       // Prefer lower distance, then lower complexity
       if (distance <= threshold) {
@@ -297,7 +285,7 @@ export function findClosestColor(
 
   // If we have exact matches, pick the one with simplest path
   if (exactMatches.length > 0) {
-    exactMatches.sort((a, b) => pathComplexity(a.path) - pathComplexity(b.path));
+    exactMatches.sort((a, b) => pathComplexity(a.path, { deprioritizeOverlays: true }) - pathComplexity(b.path, { deprioritizeOverlays: true }));
     return exactMatches[0].path;
   }
 

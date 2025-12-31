@@ -215,7 +215,7 @@ export interface FigmaConfig {
   framework: 'expo' | 'react-native' | 'ignite';
   
   // Style pattern detection
-  stylePattern: 'useTheme' | 'StyleSheet';
+  stylePattern: 'useTheme' | 'StyleSheet' | 'unistyles';
 }
 
 /**
@@ -758,6 +758,7 @@ async function generateFigmaConfig(projectRoot: string): Promise<FigmaConfig> {
   const utils: FigmaConfig['utils'] = {};
   let framework: FigmaConfig['framework'] = 'react-native';
   let stylePattern: FigmaConfig['stylePattern'] = 'StyleSheet';
+  let hasUnistyles = false;
   let importPrefix = '@app';
   let scaleFunctionName: string | undefined;
   let componentsDir: string | undefined;
@@ -766,6 +767,10 @@ async function generateFigmaConfig(projectRoot: string): Promise<FigmaConfig> {
   // 1. DISCOVER TOKEN FILES
   // ============================================================================
   const tokenPatterns = [
+    // Unistyles config (highest priority when using react-native-unistyles)
+    '**/unistyles.{ts,js}',
+    '**/unistyles.config.{ts,js}',
+    'src/unistyles.{ts,js}',
     // Consolidated/generated files (highest priority)
     '**/@(styles|theme)/generated/tokens.{ts,js}',
     '**/@(styles|theme)/compiled/tokens.{ts,js}',
@@ -777,6 +782,9 @@ async function generateFigmaConfig(projectRoot: string): Promise<FigmaConfig> {
     '**/@(styles|theme|constants|tokens)/**/@(spacing|space)*.{ts,js}',
     '**/@(styles|theme|constants|tokens)/**/@(shadows|shadow)*.{ts,js}',
     '**/@(styles|theme|constants|tokens)/**/@(radii|radius)*.{ts,js}',
+    // Font files (for typography)
+    '**/@(styles|theme)/font.{ts,js}',
+    '**/@(styles|theme)/fonts.{ts,js}',
     // Theme index files
     '**/@(styles|theme)/index.{ts,js}',
     '**/@(styles|theme)/theme.{ts,js}',
@@ -904,15 +912,21 @@ async function generateFigmaConfig(projectRoot: string): Promise<FigmaConfig> {
   }
 
   // ============================================================================
-  // 4. DETECT FRAMEWORK
+  // 4. DETECT FRAMEWORK AND STYLING LIBRARY
   // ============================================================================
   try {
     const packageJsonPath = join(projectRoot, 'package.json');
     const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf-8'));
     const deps = { ...packageJson.dependencies, ...packageJson.devDependencies };
-    
+
     if (deps['expo']) framework = 'expo';
     else if (deps['ignite-cli']) framework = 'ignite';
+
+    // Detect Unistyles
+    if (deps['react-native-unistyles']) {
+      hasUnistyles = true;
+      console.error(`   🎨 Detected react-native-unistyles`);
+    }
   } catch {
     // Default to react-native
   }
@@ -944,7 +958,10 @@ async function generateFigmaConfig(projectRoot: string): Promise<FigmaConfig> {
   // ============================================================================
   const manifest = await loadManifest(projectRoot);
   if (manifest?.config.stylePattern) {
-    stylePattern = manifest.config.stylePattern as 'useTheme' | 'StyleSheet';
+    stylePattern = manifest.config.stylePattern as FigmaConfig['stylePattern'];
+  } else if (hasUnistyles) {
+    // Unistyles takes priority - it has its own theme injection
+    stylePattern = 'unistyles';
   } else if (hooks.useTheme) {
     stylePattern = 'useTheme';
   }

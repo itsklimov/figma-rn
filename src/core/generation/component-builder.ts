@@ -54,8 +54,8 @@ export interface GenerationOptions {
   scaleFunction?: string;
   /** Path to scaling function for import generation */
   scaleFunctionPath?: string;
-  /** Style pattern: useTheme or StyleSheet */
-  stylePattern?: 'useTheme' | 'StyleSheet';
+  /** Style pattern: useTheme, StyleSheet, or unistyles */
+  stylePattern?: 'useTheme' | 'StyleSheet' | 'unistyles';
   /** Path to useTheme hook if discovered */
   useThemeHookPath?: string;
   /** Import prefix from tsconfig (e.g., '@app') */
@@ -266,10 +266,11 @@ export function generateComponent(
     screen.root,
     screen.stylesBundle,
     mappings,
-    { 
+    {
       usedStyles,
       suppressTodos: options?.suppressTodos,
-      scaleFunction: options?.scaleFunction
+      scaleFunction: options?.scaleFunction,
+      stylePattern: options?.stylePattern,
     }
   );
 

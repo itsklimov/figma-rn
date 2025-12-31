@@ -187,4 +187,79 @@ describe('buildImports', () => {
     expect(result).toContain("import React from 'react';");
     expect(result).toContain("from 'react-native'");
   });
+
+  describe('Unistyles support', () => {
+    it('should import StyleSheet from react-native-unistyles when using unistyles pattern', () => {
+      const container: ContainerIR = {
+        id: '1:1',
+        name: 'container',
+        semanticType: 'Container',
+        boundingBox: baseBoundingBox,
+        styleRef: 'style_1',
+        layout: baseLayout,
+        children: [],
+      };
+
+      const result = buildImports(container, [], undefined, {
+        importPrefix: '@app',
+        stylePattern: 'unistyles',
+        hasProjectTheme: true,
+      });
+
+      expect(result).toContain("import { StyleSheet } from 'react-native-unistyles';");
+      expect(result).not.toMatch(/import \{[^}]*StyleSheet[^}]*\} from 'react-native'/);
+    });
+
+    it('should not include separate theme import for unistyles', () => {
+      const container: ContainerIR = {
+        id: '1:1',
+        name: 'container',
+        semanticType: 'Container',
+        boundingBox: baseBoundingBox,
+        styleRef: 'style_1',
+        layout: baseLayout,
+        children: [],
+      };
+
+      const result = buildImports(container, [], undefined, {
+        importPrefix: '@app',
+        stylePattern: 'unistyles',
+        hasProjectTheme: true,
+        themeImportPath: '@app/styles',
+      });
+
+      expect(result).not.toContain("import { theme }");
+      expect(result).not.toContain("import { useTheme }");
+    });
+
+    it('should still import other RN components normally with unistyles', () => {
+      const container: ContainerIR = {
+        id: '1:1',
+        name: 'container',
+        semanticType: 'Container',
+        boundingBox: baseBoundingBox,
+        styleRef: 'style_1',
+        layout: baseLayout,
+        children: [
+          {
+            id: '1:2',
+            name: 'title',
+            semanticType: 'Text',
+            boundingBox: baseBoundingBox,
+            styleRef: 'style_2',
+            text: 'Hello',
+          } as TextIR,
+        ],
+      };
+
+      const result = buildImports(container, [], undefined, {
+        importPrefix: '@app',
+        stylePattern: 'unistyles',
+        hasProjectTheme: true,
+      });
+
+      expect(result).toContain("import { Text, View } from 'react-native';");
+      expect(result).toContain("import { StyleSheet } from 'react-native-unistyles';");
+    });
+  });
 });

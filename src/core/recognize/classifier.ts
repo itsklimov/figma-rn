@@ -104,9 +104,9 @@ export function isIcon(
   }
 
   // Small frames/groups with vectors inside
-  if ((node.type === 'FRAME' || node.type === 'GROUP') && node.children.length > 0) {
+  if ((node.type === 'FRAME' || node.type === 'GROUP') && (node.children?.length ?? 0) > 0) {
     // All children should be vectors
-    return node.children.every(
+    return node.children!.every(
       child =>
         child.type === 'VECTOR' ||
         child.type === 'BOOLEAN_OPERATION' ||
@@ -125,7 +125,7 @@ export function isIcon(
  */
 export function isButton(node: LayoutNode): boolean {
   // Must have children
-  if (node.children.length === 0) {
+  if (!node.children?.length) {
     return false;
   }
 
@@ -165,7 +165,7 @@ export function isButton(node: LayoutNode): boolean {
  */
 export function isCard(node: LayoutNode): boolean {
   // Must have children
-  if (node.children.length === 0) {
+  if (!node.children?.length) {
     return false;
   }
 
@@ -275,7 +275,7 @@ function generateStyleRef(node: LayoutNode): string {
  * Extract button label from children
  */
 function extractButtonLabel(node: LayoutNode): string {
-  const textChild = node.children.find(child => child.type === 'TEXT' && child.text);
+  const textChild = node.children?.find(child => child.type === 'TEXT' && child.text);
   return textChild?.text ?? 'Button';
 }
 
@@ -283,7 +283,7 @@ function extractButtonLabel(node: LayoutNode): string {
  * Extract button icon reference from children
  */
 function extractButtonIcon(node: LayoutNode): string | undefined {
-  const iconChild = node.children.find(child => isIcon(child));
+  const iconChild = node.children?.find(child => isIcon(child));
   return iconChild ? generateStyleRef(iconChild) : undefined;
 }
 
@@ -335,7 +335,7 @@ function processChildrenWithRepeaters(children: LayoutNode[]): IRNode[] {
       
       const sameName = baseName.length > 2 && baseName === nextBaseName;
       const sameComponent = (current as any).componentId && (current as any).componentId === (next as any).componentId;
-      const sameTypeAndStructure = current.type === next.type && current.children.length === next.children.length;
+      const sameTypeAndStructure = current.type === next.type && (current.children?.length ?? 0) === (next.children?.length ?? 0);
 
       if ((sameName || sameComponent) && sameTypeAndStructure) {
         count++;
@@ -396,7 +396,7 @@ export function toIRNode(node: LayoutNode): IRNode {
 
   switch (semanticType) {
     case 'Component': {
-      const children = node.children.map(child => toIRNode(child));
+      const children = (node.children ?? []).map(child => toIRNode(child));
       // Create a temporary node to extract props from
       const tempNode = { ...baseProps, semanticType: 'Component', children } as IRNode;
       const { props } = extractProps(tempNode);
@@ -426,7 +426,7 @@ export function toIRNode(node: LayoutNode): IRNode {
 
     case 'Image': {
       const imageRef = node.fills?.find(f => f.type === 'image');
-      const children = node.children && node.children.length > 0
+      const children = node.children?.length
         ? processChildrenWithRepeaters(node.children)
         : undefined;
 
@@ -440,7 +440,7 @@ export function toIRNode(node: LayoutNode): IRNode {
     }
 
     case 'Icon': {
-      const children = node.children && node.children.length > 0
+      const children = node.children?.length
         ? processChildrenWithRepeaters(node.children)
         : undefined;
 
@@ -455,9 +455,9 @@ export function toIRNode(node: LayoutNode): IRNode {
     }
 
     case 'Button': {
-      const textChild = node.children.find(child => child.type === 'TEXT' && child.text);
-      const iconChild = node.children.find(child => isIcon(child));
-      const children = node.children && node.children.length > 0
+      const textChild = node.children?.find(child => child.type === 'TEXT' && child.text);
+      const iconChild = node.children?.find(child => isIcon(child));
+      const children = node.children?.length
         ? processChildrenWithRepeaters(node.children)
         : undefined;
 
@@ -481,7 +481,7 @@ export function toIRNode(node: LayoutNode): IRNode {
         ...baseProps,
         semanticType: 'Card',
         layout: node.layout,
-        children: processChildrenWithRepeaters(node.children),
+        children: processChildrenWithRepeaters(node.children ?? []),
       } as CardIR;
 
     case 'Container':
@@ -490,7 +490,7 @@ export function toIRNode(node: LayoutNode): IRNode {
         ...baseProps,
         semanticType: 'Container',
         layout: node.layout,
-        children: processChildrenWithRepeaters(node.children),
+        children: processChildrenWithRepeaters(node.children ?? []),
       } as ContainerIR;
   }
 }

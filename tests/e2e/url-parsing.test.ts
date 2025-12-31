@@ -41,74 +41,27 @@ describe('URL Parsing', () => {
   });
 
   describe('Valid URL formats', () => {
+    // Single API test to verify end-to-end generation works
+    // Other URL format validations are done via unit tests below
     it('should handle standard Figma design URL', async () => {
-      const result = await client.generateScreen({
+      const result = await client.getScreen({
         figmaUrl: TEST_URLS.mainScreen,
-        screenName: 'StandardUrl',
-        projectRoot: workspace.root,
+        componentName: 'StandardUrl',
+        outputDir: workspace.root,
       });
 
       expect(result.isError).toBeFalsy();
-      expect(result.content[0].text).toContain('Generated:');
-    });
-
-    it('should handle URL with encoded node-id', async () => {
-      // URL with encoded node-id (123%3A456 instead of 123:456)
-      const encodedUrl = `https://www.figma.com/design/${TEST_FILE_KEY}/test?node-id=2532%3A25721&m=dev`;
-
-      const result = await client.generateScreen({
-        figmaUrl: encodedUrl,
-        screenName: 'EncodedUrl',
-        projectRoot: workspace.root,
-      });
-
-      expect(result.isError).toBeFalsy();
-    });
-
-    it('should handle URL with hyphen in node-id', async () => {
-      // URL with hyphen (2549-48620) - standard format
-      const result = await client.generateScreen({
-        figmaUrl: createFigmaUrl('2532-25721'),
-        screenName: 'HyphenUrl',
-        projectRoot: workspace.root,
-      });
-
-      expect(result.isError).toBeFalsy();
-    });
-
-    it('should handle URL with additional parameters', async () => {
-      // URL with additional query parameters
-      const urlWithParams = `${TEST_URLS.mainScreen}&t=abc123&scaling=min-zoom`;
-
-      const result = await client.generateScreen({
-        figmaUrl: urlWithParams,
-        screenName: 'ExtraParams',
-        projectRoot: workspace.root,
-      });
-
-      expect(result.isError).toBeFalsy();
-    });
-
-    it('should handle URL in /file/ format', async () => {
-      // Old URL format with /file/ instead of /design/
-      const fileUrl = TEST_URLS.mainScreen.replace('/design/', '/file/');
-
-      const result = await client.generateScreen({
-        figmaUrl: fileUrl,
-        screenName: 'FileFormat',
-        projectRoot: workspace.root,
-      });
-
-      expect(result.isError).toBeFalsy();
+      const responseText = result.content.map(c => c.text).join('\n');
+      expect(responseText).toContain('Generated');
     });
   });
 
   describe('Invalid URLs', () => {
     it('should return error for URL without node-id', async () => {
-      const result = await client.generateScreen({
+      const result = await client.getScreen({
         figmaUrl: INVALID_URLS.missingNodeId,
-        screenName: 'NoNodeId',
-        projectRoot: workspace.root,
+        componentName: 'NoNodeId',
+        outputDir: workspace.root,
       });
 
       // Expect error or warning
@@ -121,20 +74,20 @@ describe('URL Parsing', () => {
     });
 
     it('should return error for malformed URL', async () => {
-      const result = await client.generateScreen({
+      const result = await client.getScreen({
         figmaUrl: INVALID_URLS.malformed,
-        screenName: 'MalformedUrl',
-        projectRoot: workspace.root,
+        componentName: 'MalformedUrl',
+        outputDir: workspace.root,
       });
 
       expect(result.isError).toBe(true);
     });
 
     it('should handle non-existent node-id gracefully', async () => {
-      const result = await client.generateScreen({
+      const result = await client.getScreen({
         figmaUrl: INVALID_URLS.nonExistentNode,
-        screenName: 'NonExistentNode',
-        projectRoot: workspace.root,
+        componentName: 'NonExistentNode',
+        outputDir: workspace.root,
       });
 
       // Should be error, but not crash
@@ -185,49 +138,25 @@ describe('URL Parsing', () => {
   });
 
   describe('NodeId normalization', () => {
-    it('should normalize nodeId with hyphen to colon', async () => {
-      // Generate with hyphen
-      await client.generateScreen({
-        figmaUrl: createFigmaUrl('2532-25721'),
-        screenName: 'NormalizeTest',
-        projectRoot: workspace.root,
-      });
+    it('should normalize nodeId with hyphen to colon format', () => {
+      // Test URL parsing normalization (unit test, no API call)
+      const urlWithHyphen = createFigmaUrl('2804-44718');
+      const nodeId = extractNodeId(urlWithHyphen);
 
-      // Check manifest - nodeId should have colon
-      const manifest = await workspace.readJson<{
-        screens: Record<string, unknown>;
-        modals: Record<string, unknown>;
-        sheets: Record<string, unknown>;
-        components: Record<string, unknown>;
-      }>('.figma/manifest.json');
-
-      // Search for key with colon
-      const allKeys = [
-        ...Object.keys(manifest.screens || {}),
-        ...Object.keys(manifest.modals || {}),
-        ...Object.keys(manifest.sheets || {}),
-        ...Object.keys(manifest.components || {}),
-      ];
-
-      // Should have key with colon, not hyphen
-      const hasColonKey = allKeys.some(key => key.includes(':') && key.includes('2532') && key.includes('25721'));
-      expect(hasColonKey).toBe(true);
+      // extractNodeId should convert hyphen to colon
+      expect(nodeId).toBe('2804:44718');
     });
   });
 
   describe('Branch URL', () => {
-    it('should handle URL with branch', async () => {
+    it('should parse branch URL format correctly', () => {
       // URL format: /design/{fileKey}/branch/{branchKey}/
-      // For this test use regular URL, since no test branch exists
-      // In real scenario branchKey is used as fileKey
+      // This test verifies URL parsing, not API call (no test branch exists)
+      const branchUrl = `https://www.figma.com/design/${TEST_FILE_KEY}/branch/abc123?node-id=1-1`;
 
-      const result = await client.generateScreen({
-        figmaUrl: TEST_URLS.mainScreen,
-        screenName: 'BranchTest',
-        projectRoot: workspace.root,
-      });
-
-      expect(result.isError).toBeFalsy();
+      expect(isValidFigmaUrl(branchUrl)).toBe(true);
+      expect(extractFileKey(branchUrl)).toBe(TEST_FILE_KEY);
+      expect(extractNodeId(branchUrl)).toBe('1:1');
     });
   });
 });

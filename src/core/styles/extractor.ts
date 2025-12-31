@@ -16,22 +16,18 @@ import type {
 
 /**
  * Resolve effective color by combining base color with fill opacity
+ * Output is always uppercase (#RRGGBB or #RRGGBBAA)
  */
 function resolveEffectiveColor(color: { hex: string; rgba: { r: number; g: number; b: number; a: number } }, opacity: number): string {
   const finalAlpha = color.rgba.a * opacity;
+  const toHex = (n: number) => n.toString(16).padStart(2, '0').toUpperCase();
+
   if (finalAlpha >= 0.995) {
-    // Return standard 6-digit hex (normalized)
-    const r = color.rgba.r.toString(16).padStart(2, '0');
-    const g = color.rgba.g.toString(16).padStart(2, '0');
-    const b = color.rgba.b.toString(16).padStart(2, '0');
-    return `#${r}${g}${b}`.toLowerCase();
+    // Return standard 6-digit hex (normalized to uppercase)
+    return `#${toHex(color.rgba.r)}${toHex(color.rgba.g)}${toHex(color.rgba.b)}`;
   } else {
     // Return 8-digit hex for semi-transparent colors
-    const r = color.rgba.r.toString(16).padStart(2, '0');
-    const g = color.rgba.g.toString(16).padStart(2, '0');
-    const b = color.rgba.b.toString(16).padStart(2, '0');
-    const a = Math.round(finalAlpha * 255).toString(16).padStart(2, '0');
-    return `#${r}${g}${b}${a}`.toLowerCase();
+    return `#${toHex(color.rgba.r)}${toHex(color.rgba.g)}${toHex(color.rgba.b)}${toHex(Math.round(finalAlpha * 255))}`;
   }
 }
 

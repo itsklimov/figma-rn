@@ -15,8 +15,8 @@ export interface ImportConfig {
   useThemeHookPath?: string;
   /** Path to theme/styles directory */
   themeImportPath?: string;
-  /** Style pattern: useTheme uses hooks, StyleSheet uses direct imports */
-  stylePattern: 'useTheme' | 'StyleSheet';
+  /** Style pattern: useTheme uses hooks, StyleSheet uses direct imports, unistyles uses react-native-unistyles */
+  stylePattern: 'useTheme' | 'StyleSheet' | 'unistyles';
   /** Has project theme tokens */
   hasProjectTheme: boolean;
   /** Scaling function name */
@@ -80,7 +80,7 @@ function generateThemeImport(config: ImportConfig): string | null {
   // 1. Hook import
   if (config.stylePattern === 'useTheme' && config.useThemeHookPath) {
     const cleanPath = config.useThemeHookPath
-      .replace(/^(src|app)\//, '')
+      .replace(/^(.*\/)?(src|app)\//, '')  // Remove everything up to and including /src/ or /app/, or just src/ if at start
       .replace(/\.(ts|tsx|js|jsx)$/, '');
     imports.push(`import { useTheme } from '${config.importPrefix}/${cleanPath}';`);
   }
@@ -95,7 +95,7 @@ function generateThemeImport(config: ImportConfig): string | null {
   // 3. Scaling function import
   if (config.scaleFunction && config.scaleFunctionPath) {
     const cleanPath = config.scaleFunctionPath
-      .replace(/^(src|app)\//, '')
+      .replace(/^(.*\/)?(src|app)\//, '')  // Remove everything up to and including /src/ or /app/, or just src/ if at start
       .replace(/\.(ts|tsx|js|jsx)$/, '');
     imports.push(`import { ${config.scaleFunction} } from '${config.importPrefix}/${cleanPath}';`);
   }
@@ -107,7 +107,7 @@ function generateThemeImport(config: ImportConfig): string | null {
  * Build import statements from IR tree
  */
 export function buildImports(
-  root: IRNode, 
+  root: IRNode,
   extraImports: string[] = [],
   stylesBundle?: StylesBundle,
   config?: ImportConfig
@@ -115,16 +115,31 @@ export function buildImports(
   const rnComponents = new Set<string>(['StyleSheet']);
 
   collectComponents(root, rnComponents);
-  
+
   // Add extra imports (like ImageSourcePropType)
   extraImports.forEach(i => rnComponents.add(i));
+
+  // For Unistyles, StyleSheet comes from react-native-unistyles
+  const isUnistyles = config?.stylePattern === 'unistyles';
+  if (isUnistyles) {
+    rnComponents.delete('StyleSheet');
+  }
 
   const sorted = Array.from(rnComponents).sort();
 
   const lines = [
     `import React from 'react';`,
-    `import { ${sorted.join(', ')} } from 'react-native';`,
   ];
+
+  // React Native imports (without StyleSheet for Unistyles)
+  if (sorted.length > 0) {
+    lines.push(`import { ${sorted.join(', ')} } from 'react-native';`);
+  }
+
+  // Unistyles: import StyleSheet from react-native-unistyles
+  if (isUnistyles) {
+    lines.push(`import { StyleSheet } from 'react-native-unistyles';`);
+  }
 
   // Add LinearGradient if needed
   if (hasGradients(root, stylesBundle)) {
@@ -132,7 +147,8 @@ export function buildImports(
   }
 
   // Add theme/hook import based on config
-  if (config) {
+  // Skip for Unistyles - theme is injected via StyleSheet.create callback
+  if (config && !isUnistyles) {
     const themeImport = generateThemeImport(config);
     if (themeImport) {
       lines.push(themeImport);
