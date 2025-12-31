@@ -23,6 +23,29 @@ export function isGenericName(name: string): boolean {
 }
 
 /**
+ * Check if text content is empty or just a placeholder
+ * Returns true for empty strings, placeholders, or purely whitespace
+ */
+function hasEmptyOrPlaceholderContent(text: string | undefined): boolean {
+  if (!text || text.trim().length === 0) {
+    return true;
+  }
+
+  // Common placeholder patterns
+  const placeholderPatterns = [
+    /^placeholder$/i,
+    /^lorem ipsum/i,
+    /^text$/i,
+    /^label$/i,
+    /^xxx+$/i,
+    /^___+$/,
+    /^\.\.\.$/, // "..."
+  ];
+
+  return placeholderPatterns.some(pattern => pattern.test(text.trim()));
+}
+
+/**
  * Derive a meaningful prop name from ancestry when the node's own name is generic
  */
 export function deriveNameFromAncestry(
@@ -183,8 +206,11 @@ export function extractProps(
           }
         }
 
-        // Filter: Skip creating props for meaningless names
-        if (!isMeaningfulPropName(propName)) {
+        // Filter: Only skip if BOTH name is meaningless AND content is empty/placeholder
+        // If content is meaningful (real text), create prop even if name is generic
+        const shouldFilter = !isMeaningfulPropName(propName) && hasEmptyOrPlaceholderContent(textNode.text);
+
+        if (shouldFilter) {
           // Don't create a prop, but traverse children
           node.propName = undefined;
         } else {
@@ -224,8 +250,11 @@ export function extractProps(
           propName = derivedName;
         }
 
-        // Filter: Skip creating props for meaningless names
-        if (!isMeaningfulPropName(propName)) {
+        // Filter: Only skip if BOTH name is meaningless AND image reference is empty/invalid
+        // Keep image props if they have valid image references, even if name is generic
+        const shouldFilter = !isMeaningfulPropName(propName) && (!imageNode.imageRef || imageNode.imageRef.trim().length === 0);
+
+        if (shouldFilter) {
           node.propName = undefined;
         } else {
           let finalName = propName;
