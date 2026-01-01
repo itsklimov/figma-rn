@@ -179,4 +179,108 @@ export const font = {
       expect(typoEntries.length).toBeGreaterThan(0);
     });
   });
+
+  describe('Typography variant matching (regular vs bold)', () => {
+    it('should map weight 400 to .regular paths, not .bold paths', async () => {
+      const tokens = await extractProjectTokens(fontThemePath);
+
+      expect(tokens.typography).toBeDefined();
+
+      // Weight 400 with fontSize 17, lineHeight 22 should map to body.regular, NOT body.bold
+      const regularKey = '*-17-400-22';
+      const regularPath = tokens.typography?.get(regularKey);
+
+      expect(regularPath).toBeDefined();
+      expect(regularPath).toContain('regular');
+      expect(regularPath).not.toContain('bold');
+    });
+
+    it('should map weight 600/700 to .bold paths, not .regular paths', async () => {
+      const tokens = await extractProjectTokens(fontThemePath);
+
+      expect(tokens.typography).toBeDefined();
+
+      // Weight 600 with fontSize 17, lineHeight 22 should map to body.bold, NOT body.regular
+      const boldKey = '*-17-600-22';
+      const boldPath = tokens.typography?.get(boldKey);
+
+      expect(boldPath).toBeDefined();
+      expect(boldPath).toContain('bold');
+      expect(boldPath).not.toContain('regular');
+    });
+
+    it('should not create bold weight keys for .regular paths', async () => {
+      const tokens = await extractProjectTokens(fontThemePath);
+
+      // caption only has .regular variant (fontSize 12, lineHeight 16)
+      // Weight 600 key should NOT exist for caption since there's no bold variant
+      const captionBoldKey = '*-12-600-16';
+      const captionBoldPath = tokens.typography?.get(captionBoldKey);
+
+      // Should be undefined since caption.bold doesn't exist
+      expect(captionBoldPath).toBeUndefined();
+    });
+
+    it('should create weight 400/500 keys for .regular paths', async () => {
+      const tokens = await extractProjectTokens(fontThemePath);
+
+      // caption.regular should have 400 and 500 weight keys
+      const caption400Key = '*-12-400-16';
+      const caption500Key = '*-12-500-16';
+
+      expect(tokens.typography?.get(caption400Key)).toContain('caption');
+      expect(tokens.typography?.get(caption500Key)).toContain('caption');
+    });
+  });
+
+  describe('Token collision protection (pathComplexity)', () => {
+    const collisionThemePath = join(testDir, 'collision-theme.ts');
+
+    beforeAll(async () => {
+      // Create a theme file with duplicate values at different paths
+      const collisionTheme = `
+export const theme = {
+  spacing: {
+    base: 16,
+    nested: {
+      deep: {
+        value: 16,  // Same value as base, but deeper path
+      }
+    }
+  },
+  radii: {
+    sm: 8,
+    legacy: {
+      deprecated: {
+        borderRadius: 8,  // Same value as sm, but deeper path
+      }
+    }
+  },
+};
+`;
+      await writeFile(collisionThemePath, collisionTheme);
+    });
+
+    afterAll(async () => {
+      try { await unlink(collisionThemePath); } catch {}
+    });
+
+    it('should prefer simpler spacing paths when same value exists', async () => {
+      const tokens = await extractProjectTokens(collisionThemePath);
+
+      // Value 16 should map to theme.spacing.base (simpler), not theme.spacing.nested.deep.value
+      const spacingPath = tokens.spacing?.get(16);
+      expect(spacingPath).toBeDefined();
+      expect(spacingPath).toBe('theme.spacing.base');
+    });
+
+    it('should prefer simpler radii paths when same value exists', async () => {
+      const tokens = await extractProjectTokens(collisionThemePath);
+
+      // Value 8 should map to theme.radii.sm (simpler), not theme.radii.legacy.deprecated.borderRadius
+      const radiiPath = tokens.radii?.get(8);
+      expect(radiiPath).toBeDefined();
+      expect(radiiPath).toBe('theme.radii.sm');
+    });
+  });
 });

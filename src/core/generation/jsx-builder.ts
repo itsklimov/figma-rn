@@ -15,7 +15,9 @@ const MIN_TOUCH_TARGET = 44;
  * Derive a valid JS style name from node name
  */
 function deriveStyleName(node: IRNode): string {
-  return toValidIdentifier(node.styleRef);
+  // styleRef is already a valid identifier from generateStyleRef()
+  // No need to transform again - it causes casing issues
+  return node.styleRef;
 }
 
 /**
@@ -254,11 +256,11 @@ ${spaces}</TouchableOpacity>`;
         }
 
         const component = isSvg ? 'SvgIcon' : 'Image';
-        const iconStyleName = toValidIdentifier(btn.iconStyleRef);
+        const iconStyleName = btn.iconStyleRef; // Already valid from generateStyleRef()
         iconJSX = `\n${spaces}  <${component} source={${iconSource}} style={styles.${iconStyleName}} />`;
       }
 
-      const textStyleName = btn.textStyleRef ? toValidIdentifier(btn.textStyleRef) : `${styleName}Text`;
+      const textStyleName = btn.textStyleRef ? btn.textStyleRef : `${styleName}Text`;
 
       return `${spaces}<TouchableOpacity
 ${spaces}  style={styles.${styleName}}
@@ -401,13 +403,13 @@ export function collectStyleNames(node: IRNode): string[] {
     if (n.semanticType === 'Button') {
       const btn = n as ButtonIR;
       if (btn.textStyleRef) {
-        names.push(toValidIdentifier(btn.textStyleRef));
+        names.push(btn.textStyleRef); // Already valid from generateStyleRef()
       } else {
         names.push(`${styleName}Text`);
       }
-      
+
       if (btn.iconStyleRef) {
-        names.push(toValidIdentifier(btn.iconStyleRef));
+        names.push(btn.iconStyleRef); // Already valid from generateStyleRef()
       } else if ((btn as any).iconRef) {
         names.push(`${styleName}Icon`);
       }

@@ -8,6 +8,57 @@ import { toValidIdentifier, formatInteger, formatSmart, formatFloat } from './ut
 import { normalizeHex } from '../utils/path-utils.js';
 
 /**
+ * Shadow size categories based on blur radius
+ * Maps blur radius ranges to semantic shadow sizes
+ */
+const SHADOW_SIZE_RANGES = [
+  { maxRadius: 2, size: 'none' },
+  { maxRadius: 6, size: 'sm' },
+  { maxRadius: 12, size: 'md' },
+  { maxRadius: Infinity, size: 'lg' },
+];
+
+/**
+ * Find fuzzy shadow match by blur radius
+ * Falls back to semantic shadow tokens (theme.shadows.sm/md/lg) based on shadow intensity
+ *
+ * @param blur - Shadow blur radius from Figma
+ * @param shadowMappings - Available shadow mappings (may contain theme paths)
+ * @param hasProjectTheme - Whether project has theme infrastructure
+ * @returns Theme path like 'theme.shadows.md' or null if no fuzzy match available
+ */
+function findFuzzyShadowMatch(
+  blur: number,
+  shadowMappings: Record<string, string>,
+  hasProjectTheme: boolean = false
+): string | null {
+  // Determine shadow size category based on blur radius
+  const category = SHADOW_SIZE_RANGES.find(r => blur <= r.maxRadius);
+  if (!category) return null;
+
+  const targetSize = category.size;
+
+  // Skip 'none' - no point in spreading an empty shadow
+  if (targetSize === 'none') return null;
+
+  // 1. First, look for exact size match in shadow mappings
+  // e.g., 'theme.shadows.md' matches size 'md'
+  for (const themePath of Object.values(shadowMappings)) {
+    if (themePath.endsWith(`.${targetSize}`)) {
+      return themePath;
+    }
+  }
+
+  // 2. If project has theme infrastructure, assume semantic shadows exist
+  // This is a reasonable assumption for well-structured design systems
+  if (hasProjectTheme) {
+    return `theme.shadows.${targetSize}`;
+  }
+
+  return null;
+}
+
+/**
  * Apply scaling function to a value if specified
  */
 function applyScaling(value: string | number, scaleFunction?: string): string {
@@ -187,11 +238,12 @@ function buildStyleProps(
   layout: LayoutWithContext | undefined,
   mappings: TokenMappings,
   unmapped: { colors: Set<string>; spacing: Set<number>; radii: Set<number> },
-  options?: { suppressTodos?: boolean; scaleFunction?: string }
+  options?: { suppressTodos?: boolean; scaleFunction?: string; hasProjectTheme?: boolean }
 ): string {
   const lines: string[] = [];
   const suppress = options?.suppressTodos;
   const scale = options?.scaleFunction;
+  const hasProjectTheme = options?.hasProjectTheme ?? false;
   const sc = (val: string | number) => applyScaling(val, scale);
 
   // 1. Layout props (if container/card)
@@ -332,21 +384,31 @@ function buildStyleProps(
   if (style.shadow) {
     const { color, offsetX, offsetY, blur, spread } = style.shadow;
     const shadowMappings = mappings.shadows || {};
-    
-    // Find if this shadow is mapped
+
+    // 1. Try exact match by shadow key
     const shadowKey = `${offsetX ?? 0},${offsetY ?? 0},${blur ?? 0},${spread ?? 0}`;
     const mappedShadow = shadowMappings[shadowKey];
 
     if (mappedShadow && mappedShadow !== shadowKey) {
+      // Exact match found
       lines.push(`    ...${mappedShadow},`);
     } else {
-      const { value: shadowColor, mapped } = mapColor(color, mappings);
-      lines.push(`    shadowColor: ${shadowColor},${!mapped && !suppress ? ' // TODO: map to theme' : ''}`);
-      lines.push(`    shadowOffset: { width: ${formatSmart(offsetX)}, height: ${formatSmart(offsetY)} },`);
-      lines.push(`    shadowOpacity: 1,`);
-      lines.push(`    shadowRadius: ${formatSmart(blur)},`);
-      lines.push(`    elevation: ${Math.ceil(blur / 2)},`); 
-      if (!mapped) unmapped.colors.add(color);
+      // 2. Try fuzzy match by blur radius
+      const fuzzyMatch = findFuzzyShadowMatch(blur ?? 0, shadowMappings, hasProjectTheme);
+
+      if (fuzzyMatch) {
+        // Fuzzy match found - use semantic shadow token
+        lines.push(`    ...${fuzzyMatch},`);
+      } else {
+        // 3. No match - generate raw shadow values
+        const { value: shadowColor, mapped } = mapColor(color, mappings);
+        lines.push(`    shadowColor: ${shadowColor},${!mapped && !suppress ? ' // TODO: map to theme' : ''}`);
+        lines.push(`    shadowOffset: { width: ${formatSmart(offsetX)}, height: ${formatSmart(offsetY)} },`);
+        lines.push(`    shadowOpacity: 1,`);
+        lines.push(`    shadowRadius: ${formatSmart(blur)},`);
+        lines.push(`    elevation: ${Math.ceil(blur / 2)},`);
+        if (!mapped) unmapped.colors.add(color);
+      }
     }
   }
 
@@ -419,6 +481,7 @@ export function buildStyles(
     suppressTodos?: boolean;
     scaleFunction?: string;
     stylePattern?: 'useTheme' | 'StyleSheet' | 'unistyles';
+    hasProjectTheme?: boolean;
   }
 ): { code: string; unmapped: { colors: string[]; spacing: number[]; radii: number[] } } {
   const unmapped = {

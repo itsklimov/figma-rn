@@ -4,7 +4,9 @@
 
 import type { IRNode, ContainerIR, CardIR, TextIR, ButtonIR, StylesBundle } from '../types.js';
 import type { ComponentHint } from './types.js';
+import type { TokenMappings } from '../mapping/token-matcher.js';
 import { getStyleVariations } from '../utils/diffing.js';
+import { mapColor } from '../generation/styles-builder.js';
 
 /** Minimum occurrences to extract a component */
 const MIN_OCCURRENCES = 2;
@@ -25,18 +27,40 @@ function getStructuralFingerprint(node: IRNode): string {
 }
 
 /**
- * Extract variable props from a node (text content, labels, etc.)
+ * Helper to map a color value using TokenMappings
+ * Returns the mapped theme path if available, otherwise the raw hex
  */
-export function extractVariableProps(node: IRNode, stylesBundle?: StylesBundle): Record<string, string> {
+function mapColorValue(hex: string, mappings?: TokenMappings): string {
+  if (!mappings) return hex;
+  const { value, mapped } = mapColor(hex, mappings);
+  // mapColor returns quoted strings for unmapped values, so extract the path or hex
+  return mapped ? value : hex;
+}
+
+/**
+ * Extract variable props from a node (text content, labels, etc.)
+ * When TokenMappings are provided, colors are mapped to theme tokens
+ */
+export function extractVariableProps(
+  node: IRNode,
+  stylesBundle?: StylesBundle,
+  mappings?: TokenMappings
+): Record<string, string> {
   const props: Record<string, string> = {};
 
   // Extract visual style variations if stylesBundle is available
   if (stylesBundle && node.styleRef) {
     const style = stylesBundle.styles[node.styleRef];
     if (style) {
-      if (style.backgroundColor) props['backgroundColor'] = style.backgroundColor;
-      if (style.typography?.color) props['color'] = style.typography.color;
-      if (style.borderColor) props['borderColor'] = style.borderColor;
+      if (style.backgroundColor) {
+        props['backgroundColor'] = mapColorValue(style.backgroundColor, mappings);
+      }
+      if (style.typography?.color) {
+        props['color'] = mapColorValue(style.typography.color, mappings);
+      }
+      if (style.borderColor) {
+        props['borderColor'] = mapColorValue(style.borderColor, mappings);
+      }
     }
   }
 
@@ -48,7 +72,7 @@ export function extractVariableProps(node: IRNode, stylesBundle?: StylesBundle):
       if (stylesBundle && node.styleRef) {
         const style = stylesBundle.styles[node.styleRef];
         if (style?.typography?.color) {
-          props['color'] = style.typography.color;
+          props['color'] = mapColorValue(style.typography.color, mappings);
         }
       }
       break;
@@ -65,7 +89,7 @@ export function extractVariableProps(node: IRNode, stylesBundle?: StylesBundle):
       const container = node as ContainerIR | CardIR;
       if ('children' in node && (node as any).children) {
         (node as any).children.forEach((child: IRNode, index: number) => {
-          const childProps = extractVariableProps(child, stylesBundle);
+          const childProps = extractVariableProps(child, stylesBundle, mappings);
           for (const [key, value] of Object.entries(childProps)) {
             props[`child${index}_${key}`] = value;
           }
@@ -147,12 +171,17 @@ function collectNodes(
 
 /**
  * Merge props variations from multiple instances
+ * When TokenMappings are provided, colors are mapped to theme tokens
  */
-export function mergePropsVariations(instances: IRNode[], stylesBundle?: StylesBundle): Record<string, string[]> {
+export function mergePropsVariations(
+  instances: IRNode[],
+  stylesBundle?: StylesBundle,
+  mappings?: TokenMappings
+): Record<string, string[]> {
   const variations: Record<string, string[]> = {};
 
   for (const instance of instances) {
-    const props = extractVariableProps(instance, stylesBundle);
+    const props = extractVariableProps(instance, stylesBundle, mappings);
     for (const [key, value] of Object.entries(props)) {
       if (!variations[key]) {
         variations[key] = [];
@@ -170,15 +199,21 @@ export function mergePropsVariations(instances: IRNode[], stylesBundle?: StylesB
  * Detect repeated blocks that should be extracted into components
  *
  * @param root - Root IR node to analyze
+ * @param stylesBundle - Optional styles bundle for extracting style variations
+ * @param mappings - Optional token mappings for mapping colors to theme tokens
  * @returns List of component extraction hints
  *
  * @example
  * ```typescript
- * const hints = detectRepetitions(screenIR.root);
+ * const hints = detectRepetitions(screenIR.root, stylesBundle, mappings);
  * // hints: [{ componentName: 'ProductCard', instanceIds: ['1:5', '1:10'], propsVariations: { text: ['Item 1', 'Item 2'] } }]
  * ```
  */
-export function detectRepetitions(root: IRNode, stylesBundle?: StylesBundle): ComponentHint[] {
+export function detectRepetitions(
+  root: IRNode,
+  stylesBundle?: StylesBundle,
+  mappings?: TokenMappings
+): ComponentHint[] {
   const nodesByFingerprint = new Map<string, IRNode[]>();
   collectNodes(root, nodesByFingerprint);
 
@@ -191,7 +226,7 @@ export function detectRepetitions(root: IRNode, stylesBundle?: StylesBundle): Co
     // Use the first instance to generate the component name
     const componentName = generateComponentName(nodes[0]);
     const instanceIds = nodes.map(n => n.id);
-    const propsVariations = mergePropsVariations(nodes, stylesBundle);
+    const propsVariations = mergePropsVariations(nodes, stylesBundle, mappings);
 
     hints.push({
       componentName,

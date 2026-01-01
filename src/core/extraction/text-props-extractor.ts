@@ -26,18 +26,121 @@ export interface ExtractedTextProps {
 
 /**
  * Check if a prop name is meaningful (not generic)
+ *
+ * Filters out:
+ * - Generic names: text, element, label, frame, group, container
+ * - Auto-generated numbered variants: text_12345, element_67890
+ * - Figma auto-names: Frame 1234, Vector 56, Rectangle 78, etc.
+ * - Path/shape names: path102, ellipse2460, union, subtract
+ * - Style-prefixed numbers: style3000, style2345
+ * - Single letters: a, b, c
+ * - Pure numbers: 123, 456
  */
-function isMeaningfulPropName(name: string): boolean {
-  // Skip generic names like "text", "element", "label" alone
-  const genericNames = ['text', 'element', 'label', 'frame', 'group', 'container'];
-  if (genericNames.includes(name.toLowerCase())) {
+export function isMeaningfulPropName(name: string): boolean {
+  if (!name || name.length === 0) {
     return false;
   }
-  // Skip auto-generated names like "text_12345"
-  if (/^(text|element|container|frame|group)_\d+$/i.test(name)) {
+
+  const lowerName = name.toLowerCase();
+
+  // Skip generic names
+  const genericNames = ['text', 'element', 'label', 'frame', 'group', 'container', 'view', 'box', 'wrapper', 'row', 'column'];
+  if (genericNames.includes(lowerName)) {
     return false;
   }
-  return name.length > 0;
+
+  // Skip auto-generated names like "text_12345" or "element1"
+  if (/^(text|element|container|frame|group|view|box|wrapper|row|column)_?\d*$/i.test(name)) {
+    return false;
+  }
+
+  // Skip Figma auto-names: Frame 1234, Vector 56, etc.
+  if (/^(Frame|Vector|Rectangle|Ellipse|Line|Star|Instance|Polygon|Boolean|Component|Group)\s*\d*$/i.test(name)) {
+    return false;
+  }
+
+  // Skip path/shape names: path102, ellipse2460, union1
+  if (/^(path|ellipse|union|subtract|intersect|vector|rectangle|line|polygon|star)\d*$/i.test(name)) {
+    return false;
+  }
+
+  // Skip vector layer names: vector39Stroke, vector39Fill
+  if (/^vector\d+(stroke|fill)?$/i.test(name)) {
+    return false;
+  }
+
+  // Skip style-prefixed numbers: style3000
+  if (/^style\d+$/i.test(name)) {
+    return false;
+  }
+
+  // Skip single letters
+  if (/^[a-zA-Z]$/.test(name)) {
+    return false;
+  }
+
+  // Skip pure numbers
+  if (/^\d+$/.test(name)) {
+    return false;
+  }
+
+  // Skip generic numbered elements: element1, item2
+  if (/^(element|item|child|node)\d+$/i.test(name)) {
+    return false;
+  }
+
+  // Skip container numbered variants: container51275
+  if (/^container\d+$/i.test(name)) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Result of shouldCreateProp() check
+ */
+export interface PropCreationResult {
+  create: boolean;
+  reason?: string;
+  existingPropName?: string;
+}
+
+/**
+ * Determines whether a prop should be created for a node.
+ */
+export function shouldCreateProp(
+  node: { name: string; semanticType: string; text?: string },
+  existingProps: Map<string, string>
+): PropCreationResult {
+  const { name, semanticType, text } = node;
+
+  if (!isMeaningfulPropName(name)) {
+    return {
+      create: false,
+      reason: `Name "${name}" is not meaningful`,
+    };
+  }
+
+  if (semanticType === 'Text' && text) {
+    const contentKey = `text:${text}`;
+    if (existingProps.has(contentKey)) {
+      return {
+        create: false,
+        reason: `Duplicate text content`,
+        existingPropName: existingProps.get(contentKey),
+      };
+    }
+  }
+
+  if (semanticType !== 'Text' && semanticType !== 'Image' && !text) {
+    return {
+      create: false,
+      reason: `Structural node has no text content`,
+    };
+  }
+
+  return { create: true };
 }
 
 /**
