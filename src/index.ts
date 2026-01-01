@@ -549,7 +549,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         // Screenshot
         if (genResult.screenshotPath) {
           response += `## 📸 Screenshot\n\n`;
-          response += `\`${genResult.screenshotPath}\`\n\n`;
+          response += `\`{PROJECT_ROOT}/${genResult.screenshotPath}\`\n\n`;
         }
 
         // ═══════════════════════════════════════════════════════════════
@@ -590,13 +590,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         response += `\n`;
         response += `### Files to Compare\n`;
-        response += `- **Screenshot:** \`${genResult.screenshotPath || 'N/A'}\`\n`;
-        response += `- **Code:** \`${genResult.indexPath}\`\n\n`;
+        response += `- **Screenshot:** \`{PROJECT_ROOT}/${genResult.screenshotPath || 'N/A'}\`\n`;
+        response += `- **Code:** \`{PROJECT_ROOT}/${genResult.indexPath}\`\n\n`;
         response += `Use Read tool on screenshot to visually verify the generated code matches the design.\n\n`;
 
         response += `---\n\n`;
-        response += `**Code written to**: \`${genResult.indexPath}\`\n\n`;
-        response += `**Folder**: \`${genResult.folder}\`\n\n`;
+        response += `**Code written to**: \`{PROJECT_ROOT}/${genResult.indexPath}\`\n\n`;
+        response += `**Folder**: \`{PROJECT_ROOT}/${genResult.folder}\`\n\n`;
         response += `**To use**: \`${genResult.copyCommand}\`\n`;
 
         return {
@@ -668,14 +668,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
           response += `**Files** (${screen.files.length}):\n`;
           for (const file of screen.files) {
-            response += `- \`${file.path}\` (${file.type})\n`;
+            response += `- \`{PROJECT_ROOT}/${file.path}\` (${file.type})\n`;
           }
           response += `\n`;
 
           // Show first file code (main component)
           if (screen.files.length > 0) {
             const mainFile = screen.files[0];
-            response += `**${mainFile.path}**:\n\n`;
+            response += `**{PROJECT_ROOT}/${mainFile.path}**:\n\n`;
             response += `\`\`\`typescript\n${mainFile.content.slice(0, 2000)}${mainFile.content.length > 2000 ? '\n// ... (truncated)' : ''}\n\`\`\`\n\n`;
           }
         }
