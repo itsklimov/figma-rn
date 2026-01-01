@@ -148,6 +148,10 @@ export function transformFills(raw: any): Fill[] {
   const fills: Fill[] = [];
 
   for (const fill of raw.fills) {
+    // Skip hidden fills (visible: false)
+    if (fill.visible === false) {
+      continue;
+    }
     const opacity = fill.opacity ?? 1;
     if (opacity === 0) {
       continue;
@@ -195,6 +199,10 @@ export function transformStroke(raw: any): Stroke | null {
   }
 
   const stroke = raw.strokes[0];
+  // Skip hidden strokes (visible: false)
+  if (stroke.visible === false) {
+    return null;
+  }
   if (stroke.type !== 'SOLID' || !stroke.color) {
     return null;
   }

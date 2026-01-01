@@ -63,6 +63,57 @@ function deriveA11yLabel(nodeName: string): string {
 }
 
 /**
+ * Keyboard/system UI detection patterns
+ * These are elements that typically shouldn't be custom-rendered as they're provided by the OS
+ */
+const KEYBOARD_PATTERNS = [
+  /keys?\s*layout/i,
+  /keyboard/i,
+  /numpad/i,
+  /keypad/i,
+];
+
+const KEY_COMPONENT_PATTERNS = [
+  /^component\s*\/?\s*key$/i,
+  /^key\s*(text|label|button)$/i,
+];
+
+/**
+ * Detect if a node represents a keyboard or key input element
+ * These are typically OS-provided and shouldn't need custom rendering
+ */
+function isKeyboardElement(node: IRNode): { isKeyboard: boolean; reason?: string } {
+  // Check if node name matches keyboard patterns
+  for (const pattern of KEYBOARD_PATTERNS) {
+    if (pattern.test(node.name || '')) {
+      return { isKeyboard: true, reason: `name matches pattern: ${node.name}` };
+    }
+  }
+
+  // Check if it's a key component
+  for (const pattern of KEY_COMPONENT_PATTERNS) {
+    if (pattern.test(node.name || '')) {
+      return { isKeyboard: true, reason: `key component: ${node.name}` };
+    }
+  }
+
+  // Check for keyboard-like structure: container with many similar small children
+  // (grid of keys typically has 9-12+ children arranged in rows)
+  const nodeChildren = (node as any).children as IRNode[] | undefined;
+  if (nodeChildren && nodeChildren.length >= 9) {
+    const textChildren = nodeChildren.filter(
+      (c) => c.semanticType === 'Text' || (c as any).children?.some((gc: any) => gc.semanticType === 'Text')
+    );
+    // If most children contain single-character or key-like text, it's likely a keyboard
+    if (textChildren.length >= 9) {
+      return { isKeyboard: true, reason: 'grid structure with many key-like children' };
+    }
+  }
+
+  return { isKeyboard: false };
+}
+
+/**
  * Generate LinearGradient props from ExtractedStyle.backgroundGradient
  */
 function buildGradientProps(
@@ -96,6 +147,22 @@ ${spaces}  end={{ x: ${end.x.toFixed(2)}, y: ${end.y.toFixed(2)} }}`;
 }
 
 /**
+ * Options for semantic state support in JSX generation
+ */
+export interface BuildJSXOptions {
+  /** Override root wrapper element (e.g., 'Pressable' for interactive items) */
+  wrapperOverride?: 'Pressable';
+  /** State prop name for conditional styling (e.g., 'isOn', 'isSelected') */
+  stateProp?: string;
+  /** Suffix for selected state styles (default: 'Selected') */
+  selectedStyleSuffix?: string;
+  /** Additional props to add to root element */
+  rootProps?: string[];
+  /** Whether this is the root node (internal use) */
+  _isRoot?: boolean;
+}
+
+/**
  * Build JSX string from IR node tree
  *
  * @param node - IR node to transform
@@ -103,6 +170,8 @@ ${spaces}  end={{ x: ${end.x.toFixed(2)}, y: ${end.y.toFixed(2)} }}`;
  * @param imagePathMap - Optional mapping from imageRef to local file path
  * @param jsxOverrides - Optional overrides for specific node IDs
  * @param stylesBundle - Optional styles bundle to check for gradients
+ * @param mappings - Optional token mappings
+ * @param options - Optional semantic state options
  * @returns JSX string
  */
 export function buildJSX(
@@ -111,7 +180,8 @@ export function buildJSX(
   imagePathMap?: Map<string, string>,
   jsxOverrides?: Map<string, string>,
   stylesBundle?: StylesBundle,
-  mappings?: TokenMappings
+  mappings?: TokenMappings,
+  options?: BuildJSXOptions
 ): string {
   // Check for overrides (e.g. valid FlatList for a container)
   if (jsxOverrides?.has(node.id)) {
@@ -126,51 +196,113 @@ export function buildJSX(
   const style = stylesBundle?.styles[node.styleRef];
   const hasGradient = style?.backgroundGradient != null;
 
+  // Check if this is the root node for semantic state handling
+  const isRoot = options?._isRoot !== false && indent <= 2;
+  const stateProp = options?.stateProp;
+  const selectedSuffix = options?.selectedStyleSuffix || 'Selected';
+  const usesPressable = isRoot && options?.wrapperOverride === 'Pressable';
+
+  // Check for conditional rendering (node.conditionalProp wraps element in {prop && ...})
+  const conditionalProp = (node as any).conditionalProp as string | undefined;
+
+  // Helper to generate style attribute with optional conditional styling
+  const getConditionalStyleAttr = (baseStyleName: string, applyState: boolean): string => {
+    if (applyState && stateProp) {
+      return `style={[styles.${baseStyleName}, ${stateProp} && styles.${baseStyleName}${selectedSuffix}]}`;
+    }
+    return getStyleAttribute(node, baseStyleName);
+  };
+
+  // Child options - pass through state but mark as non-root
+  const childOptions: BuildJSXOptions | undefined = options ? { ...options, _isRoot: false } : undefined;
+
+  // Result to be wrapped in conditional if needed
+  let result: string;
+
   switch (node.semanticType) {
     case 'Container':
     case 'Card': {
+      const children = node.children || [];
+
+      // Check for keyboard/system UI elements and add TODO warning
+      const keyboardCheck = isKeyboardElement(node);
+      const keyboardWarning = keyboardCheck.isKeyboard
+        ? `${spaces}{/* TODO: This appears to be a keyboard layout (${keyboardCheck.reason}). Consider using the system keyboard instead via TextInput with appropriate keyboardType. */}\n`
+        : '';
+
       // Handle gradient wrapping for containers
       if (hasGradient && style?.backgroundGradient) {
         const gradientProps = buildGradientProps(style.backgroundGradient, spaces, mappings);
-        const children = node.children || [];
         const styleAttr = getStyleAttribute(node, styleName);
-        
+
         if (children.length === 0) {
-          return `${spaces}<LinearGradient
+          result = `${keyboardWarning}${spaces}<LinearGradient
 ${gradientProps}
 ${spaces}  ${styleAttr}
 ${spaces}/>`;
+          break;
         }
         const childrenJSX = children
-          .map((child) => buildJSX(child, indent + 1, imagePathMap, jsxOverrides, stylesBundle, mappings))
+          .map((child) => buildJSX(child, indent + 1, imagePathMap, jsxOverrides, stylesBundle, mappings, childOptions))
           .join('\n');
-        return `${spaces}<LinearGradient
+        result = `${keyboardWarning}${spaces}<LinearGradient
 ${gradientProps}
 ${spaces}  ${styleAttr}
 ${spaces}>
 ${childrenJSX}
 ${spaces}</LinearGradient>`;
+        break;
+      }
+
+      // Pressable wrapper for interactive semantic state components
+      if (usesPressable) {
+        const pressableStyleAttr = getConditionalStyleAttr(styleName, true);
+        const rootPropsStr = options?.rootProps?.length
+          ? '\n' + options.rootProps.map(p => `${spaces}  ${p}`).join('\n')
+          : '';
+
+        if (children.length === 0) {
+          result = `${keyboardWarning}${spaces}<Pressable
+${spaces}  ${pressableStyleAttr}${rootPropsStr}
+${spaces}/>`;
+          break;
+        }
+        const pressableChildrenJSX = children
+          .map((child) => buildJSX(child, indent + 1, imagePathMap, jsxOverrides, stylesBundle, mappings, childOptions))
+          .join('\n');
+        result = `${keyboardWarning}${spaces}<Pressable
+${spaces}  ${pressableStyleAttr}${rootPropsStr}
+${spaces}>
+${pressableChildrenJSX}
+${spaces}</Pressable>`;
+        break;
       }
 
       // Regular View
-      const children = node.children || [];
-      const styleAttr = getStyleAttribute(node, styleName);
-      
+      const viewStyleAttr = getStyleAttribute(node, styleName);
+
       if (children.length === 0) {
-        return `${spaces}<View ${styleAttr} />`;
+        result = `${keyboardWarning}${spaces}<View ${viewStyleAttr} />`;
+        break;
       }
-      const childrenJSX = children
-        .map((child) => buildJSX(child, indent + 1, imagePathMap, jsxOverrides, stylesBundle, mappings))
+      const viewChildrenJSX = children
+        .map((child) => buildJSX(child, indent + 1, imagePathMap, jsxOverrides, stylesBundle, mappings, childOptions))
         .join('\n');
-      return `${spaces}<View ${styleAttr}>
-${childrenJSX}
+      result = `${keyboardWarning}${spaces}<View ${viewStyleAttr}>
+${viewChildrenJSX}
 ${spaces}</View>`;
+      break;
     }
 
     case 'Text': {
       const content = node.propName ? `{${node.propName}}` : escapeJSXText(node.text);
-      const styleAttr = getStyleAttribute(node, styleName);
-      return `${spaces}<Text ${styleAttr}>${content}</Text>`;
+      // Apply conditional styling to text with propName (dynamic content)
+      const applyStateToText = !!node.propName && !!stateProp;
+      const textStyleAttr = applyStateToText
+        ? `style={[styles.${styleName}, ${stateProp} && styles.${styleName}${selectedSuffix}]}`
+        : getStyleAttribute(node, styleName);
+      result = `${spaces}<Text ${textStyleAttr}>${content}</Text>`;
+      break;
     }
 
     case 'Image': {
@@ -178,48 +310,51 @@ ${spaces}</View>`;
 
       // NEW: If image has children (overlays), render as View container
       if (imgNode.children && imgNode.children.length > 0) {
-        const childrenJSX = imgNode.children
-          .map((child) => buildJSX(child, indent + 1, imagePathMap, jsxOverrides, stylesBundle, mappings))
+        const imgChildrenJSX = imgNode.children
+          .map((child) => buildJSX(child, indent + 1, imagePathMap, jsxOverrides, stylesBundle, mappings, childOptions))
           .join('\n');
-        const styleAttr = getStyleAttribute(node, styleName);
+        const imgStyleAttr = getStyleAttribute(node, styleName);
 
-        return `${spaces}<View ${styleAttr}>
-${childrenJSX}
+        result = `${spaces}<View ${imgStyleAttr}>
+${imgChildrenJSX}
 ${spaces}</View>`;
+        break;
       }
 
       // DEFAULT: Render as simple Image component
-      const styleAttr = getStyleAttribute(node, styleName);
+      const imgStyleAttr = getStyleAttribute(node, styleName);
       if (imgNode.propName) {
-        return `${spaces}<Image
+        result = `${spaces}<Image
 ${spaces}  source={${imgNode.propName}}
-${spaces}  ${styleAttr}
+${spaces}  ${imgStyleAttr}
 ${spaces}  accessibilityRole="image"
 ${spaces}/>`;
+        break;
       }
 
       // Use imageRef if available, with mapping to local path
-      let source: string;
-      let isSvg = false;
+      let imgSource: string;
+      let imgIsSvg = false;
       if (imgNode.imageRef && imagePathMap?.has(imgNode.imageRef)) {
         const path = imagePathMap.get(imgNode.imageRef)!;
-        source = `require('${path}')`;
-        isSvg = path.toLowerCase().endsWith('.svg');
+        imgSource = `require('${path}')`;
+        imgIsSvg = path.toLowerCase().endsWith('.svg');
       } else if (imgNode.imageRef) {
-        source = `{ uri: '' } /* TODO: Image ref: ${imgNode.imageRef} */`;
+        imgSource = `{ uri: '' } /* TODO: Image ref: ${imgNode.imageRef} */`;
       } else {
-        source = `{ uri: '' } /* TODO: Add image source */`;
+        imgSource = `{ uri: '' } /* TODO: Add image source */`;
       }
 
-      const component = isSvg ? 'SvgIcon' : 'Image';
-      const a11yLabel = deriveA11yLabel(node.name);
-      const a11yProp = a11yLabel ? `\n${spaces}  accessibilityLabel="${a11yLabel}"` : '';
+      const imgComponent = imgIsSvg ? 'SvgIcon' : 'Image';
+      const imgA11yLabel = deriveA11yLabel(node.name);
+      const imgA11yProp = imgA11yLabel ? `\n${spaces}  accessibilityLabel="${imgA11yLabel}"` : '';
 
-      return `${spaces}<${component}
-${spaces}  source={${source}}
-${spaces}  ${styleAttr}
-${spaces}  accessibilityRole="image"${a11yProp}
+      result = `${spaces}<${imgComponent}
+${spaces}  source={${imgSource}}
+${spaces}  ${imgStyleAttr}
+${spaces}  accessibilityRole="image"${imgA11yProp}
 ${spaces}/>`;
+      break;
     }
 
     case 'Button': {
@@ -228,41 +363,42 @@ ${spaces}/>`;
 
       // NEW: If button has custom children, render them instead of default reconstruction
       if (btn.children && btn.children.length > 0) {
-        const childrenJSX = btn.children
-          .map((child) => buildJSX(child, indent + 1, imagePathMap, jsxOverrides, stylesBundle, mappings))
+        const btnChildrenJSX = btn.children
+          .map((child) => buildJSX(child, indent + 1, imagePathMap, jsxOverrides, stylesBundle, mappings, childOptions))
           .join('\n');
 
-        return `${spaces}<TouchableOpacity
+        result = `${spaces}<TouchableOpacity
 ${spaces}  style={styles.${styleName}}
 ${spaces}  onPress={() => {}}
 ${spaces}  accessibilityRole="button"
 ${spaces}  accessibilityLabel="${escapedLabel}"
 ${spaces}>
-${childrenJSX}
+${btnChildrenJSX}
 ${spaces}</TouchableOpacity>`;
+        break;
       }
 
       // DEFAULT: Reconstruct from label + iconRef (existing behavior for simple buttons)
       let iconJSX = '';
       if (btn.iconRef && btn.iconStyleRef) {
-        let isSvg = false;
-        let iconSource: string;
+        let btnIsSvg = false;
+        let btnIconSource: string;
         if (imagePathMap?.has(btn.iconRef)) {
           const path = imagePathMap.get(btn.iconRef)!;
-          iconSource = `require('${path}')`;
-          isSvg = path.toLowerCase().endsWith('.svg');
+          btnIconSource = `require('${path}')`;
+          btnIsSvg = path.toLowerCase().endsWith('.svg');
         } else {
-          iconSource = `{ uri: '' } /* TODO: Button icon: ${btn.iconRef} */`;
+          btnIconSource = `{ uri: '' } /* TODO: Button icon: ${btn.iconRef} */`;
         }
 
-        const component = isSvg ? 'SvgIcon' : 'Image';
-        const iconStyleName = btn.iconStyleRef; // Already valid from generateStyleRef()
-        iconJSX = `\n${spaces}  <${component} source={${iconSource}} style={styles.${iconStyleName}} />`;
+        const btnComponent = btnIsSvg ? 'SvgIcon' : 'Image';
+        const iconStyleName = btn.iconStyleRef;
+        iconJSX = `\n${spaces}  <${btnComponent} source={${btnIconSource}} style={styles.${iconStyleName}} />`;
       }
 
       const textStyleName = btn.textStyleRef ? btn.textStyleRef : `${styleName}Text`;
 
-      return `${spaces}<TouchableOpacity
+      result = `${spaces}<TouchableOpacity
 ${spaces}  style={styles.${styleName}}
 ${spaces}  onPress={() => {}}
 ${spaces}  accessibilityRole="button"
@@ -270,13 +406,13 @@ ${spaces}  accessibilityLabel="${escapedLabel}"
 ${spaces}>${iconJSX}
 ${spaces}  <Text style={styles.${textStyleName}}>${escapedLabel}</Text>
 ${spaces}</TouchableOpacity>`;
+      break;
     }
 
     case 'Icon': {
       const iconNode = node as IconIR;
 
       // Check if this is a "vector group" - container with only vector/image children
-      // These should be rendered as a single SVG, not individual elements
       const isVectorGroup = iconNode.children && iconNode.children.length > 0 &&
         iconNode.children.every(child =>
           child.semanticType === 'Icon' ||
@@ -287,7 +423,6 @@ ${spaces}</TouchableOpacity>`;
         );
 
       // For vector groups: render as single SVG using parent's iconRef
-      // This prevents absolute positioning of individual vector paths
       if (isVectorGroup && iconNode.iconRef) {
         let iconSource: string;
         let isSvg = false;
@@ -298,94 +433,109 @@ ${spaces}</TouchableOpacity>`;
         } else {
           iconSource = `{ uri: '' } /* TODO: Export as single SVG: ${iconNode.iconRef} */`;
         }
-        const component = isSvg ? 'SvgIcon' : 'Image';
-        const a11yLabel = deriveA11yLabel(node.name);
-        const a11yProp = a11yLabel ? `\n${spaces}  accessibilityLabel="${a11yLabel}"` : '';
+        const iconComponent = isSvg ? 'SvgIcon' : 'Image';
+        const iconA11yLabel = deriveA11yLabel(node.name);
+        const iconA11yProp = iconA11yLabel ? `\n${spaces}  accessibilityLabel="${iconA11yLabel}"` : '';
         const hitSlop = calculateHitSlop(iconNode.size);
         const hitSlopProp = hitSlop > 0
           ? `\n${spaces}  hitSlop={{ top: ${hitSlop}, bottom: ${hitSlop}, left: ${hitSlop}, right: ${hitSlop} }}`
           : '';
 
-        return `${spaces}<TouchableOpacity
-${spaces}  accessibilityRole="button"${a11yProp}${hitSlopProp}
+        result = `${spaces}<TouchableOpacity
+${spaces}  accessibilityRole="button"${iconA11yProp}${hitSlopProp}
 ${spaces}>
-${spaces}  <${component} source={${iconSource}} style={styles.${styleName}} />
+${spaces}  <${iconComponent} source={${iconSource}} style={styles.${styleName}} />
 ${spaces}</TouchableOpacity>`;
+        break;
       }
 
       // For icons with mixed children (not pure vector group): render children
       if (iconNode.children && iconNode.children.length > 0 && !isVectorGroup) {
-        const childrenJSX = iconNode.children
-          .map((child) => buildJSX(child, indent + 1, imagePathMap, jsxOverrides, stylesBundle, mappings))
+        const iconChildrenJSX = iconNode.children
+          .map((child) => buildJSX(child, indent + 1, imagePathMap, jsxOverrides, stylesBundle, mappings, childOptions))
           .join('\n');
-        const a11yLabel = deriveA11yLabel(node.name);
-        const a11yProp = a11yLabel ? `\n${spaces}  accessibilityLabel="${a11yLabel}"` : '';
-        const hitSlop = calculateHitSlop(iconNode.size);
-        const hitSlopProp = hitSlop > 0
-          ? `\n${spaces}  hitSlop={{ top: ${hitSlop}, bottom: ${hitSlop}, left: ${hitSlop}, right: ${hitSlop} }}`
+        const iconA11yLabel2 = deriveA11yLabel(node.name);
+        const iconA11yProp2 = iconA11yLabel2 ? `\n${spaces}  accessibilityLabel="${iconA11yLabel2}"` : '';
+        const hitSlop2 = calculateHitSlop(iconNode.size);
+        const hitSlopProp2 = hitSlop2 > 0
+          ? `\n${spaces}  hitSlop={{ top: ${hitSlop2}, bottom: ${hitSlop2}, left: ${hitSlop2}, right: ${hitSlop2} }}`
           : '';
 
-        return `${spaces}<TouchableOpacity
-${spaces}  accessibilityRole="button"${a11yProp}${hitSlopProp}
+        result = `${spaces}<TouchableOpacity
+${spaces}  accessibilityRole="button"${iconA11yProp2}${hitSlopProp2}
 ${spaces}>
-${childrenJSX}
+${iconChildrenJSX}
 ${spaces}</TouchableOpacity>`;
+        break;
       }
 
       // DEFAULT: Use iconRef (existing behavior for simple icons)
-      let iconSource: string;
-      let isSvg = false;
+      let defaultIconSource: string;
+      let defaultIsSvg = false;
       if (iconNode.iconRef && imagePathMap?.has(iconNode.iconRef)) {
         const path = imagePathMap.get(iconNode.iconRef)!;
-        iconSource = `require('${path}')`;
-        isSvg = path.toLowerCase().endsWith('.svg');
+        defaultIconSource = `require('${path}')`;
+        defaultIsSvg = path.toLowerCase().endsWith('.svg');
       } else if (iconNode.iconRef) {
-        iconSource = `{ uri: '' } /* TODO: Icon ref: ${iconNode.iconRef} */`;
+        defaultIconSource = `{ uri: '' } /* TODO: Icon ref: ${iconNode.iconRef} */`;
       } else {
-        iconSource = `{ uri: '' } /* TODO: Add icon source */`;
+        defaultIconSource = `{ uri: '' } /* TODO: Add icon source */`;
       }
-      const hitSlop = calculateHitSlop(iconNode.size);
-      const a11yLabel = deriveA11yLabel(node.name);
-      const hitSlopProp = hitSlop > 0
-        ? `\n${spaces}  hitSlop={{ top: ${hitSlop}, bottom: ${hitSlop}, left: ${hitSlop}, right: ${hitSlop} }}`
+      const defaultHitSlop = calculateHitSlop(iconNode.size);
+      const defaultA11yLabel = deriveA11yLabel(node.name);
+      const defaultHitSlopProp = defaultHitSlop > 0
+        ? `\n${spaces}  hitSlop={{ top: ${defaultHitSlop}, bottom: ${defaultHitSlop}, left: ${defaultHitSlop}, right: ${defaultHitSlop} }}`
         : '';
 
-      const component = isSvg ? 'SvgIcon' : 'Image';
-      const a11yProp = a11yLabel ? `\n${spaces}  accessibilityLabel="${a11yLabel}"` : '';
+      const defaultComponent = defaultIsSvg ? 'SvgIcon' : 'Image';
+      const defaultA11yProp = defaultA11yLabel ? `\n${spaces}  accessibilityLabel="${defaultA11yLabel}"` : '';
 
-      return `${spaces}<TouchableOpacity
-${spaces}  accessibilityRole="button"${a11yProp}${hitSlopProp}
+      result = `${spaces}<TouchableOpacity
+${spaces}  accessibilityRole="button"${defaultA11yProp}${defaultHitSlopProp}
 ${spaces}>
-${spaces}  <${component} source={${iconSource}} style={styles.${styleName}} />
+${spaces}  <${defaultComponent} source={${defaultIconSource}} style={styles.${styleName}} />
 ${spaces}</TouchableOpacity>`;
+      break;
     }
 
     case 'Component': {
       const componentName = (node as any).componentName;
-      const comp = node as any; // Cast to access props
-      const props = comp.props || {};
-      const propEntries = Object.keys(props);
-      
+      const comp = node as any;
+      const compProps = comp.props || {};
+      const propEntries = Object.keys(compProps);
+
       if (propEntries.length > 0) {
         const attributes = propEntries.map(p => `${p}={${p}}`).join(' ');
-        return `${spaces}<${componentName} ${attributes} />`;
+        result = `${spaces}<${componentName} ${attributes} />`;
+      } else {
+        result = `${spaces}<${componentName} />`;
       }
-      
-      return `${spaces}<${componentName} />`;
+      break;
     }
 
     case 'Repeater': {
       const repeater = node as RepeaterIR;
-      return `${spaces}{${repeater.dataPropName}.map((item, index) => (
+      result = `${spaces}{${repeater.dataPropName}.map((item, index) => (
 ${spaces}  <${repeater.itemComponentName} key={index} {...item} />
 ${spaces}))}`;
+      break;
     }
 
     default: {
       // Fallback for any unknown type
-      return `${spaces}<View style={styles.${styleName}} />`;
+      result = `${spaces}<View style={styles.${styleName}} />`;
+      break;
     }
   }
+
+  // Apply conditional wrapper if node has conditionalProp
+  if (conditionalProp && result) {
+    return `${spaces}{${conditionalProp} && (
+${result.replace(new RegExp(`^${spaces}`), spaces + '  ')}
+${spaces})}`;
+  }
+
+  return result;
 }
 
 /**

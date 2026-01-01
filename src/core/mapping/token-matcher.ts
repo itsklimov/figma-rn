@@ -52,14 +52,17 @@ function matchValue(
 }
 
 /**
- * Match a spacing value to project spacing with "closest neighbor" logic
- * - Exact match first
- * - Then find closest value within tolerance
- * - For small values (< 20): ±3px tolerance
- * - For medium values (20-50): ±25% tolerance
- * - For large values (> 50): ±30% tolerance (or snap to largest token)
+ * Match a spacing value to project spacing with percentage-based tolerance
  *
- * This allows mapping values like 6→4 (xs), 7→8 (sm), 56→48 (3xl), etc.
+ * Key principles:
+ * - Use percentage-based tolerance to avoid aggressive rounding on small values
+ * - 6px → 4px (33% error) is NOT acceptable
+ * - 5px → 6px (20% error) IS acceptable
+ * - When equidistant, prefer rounding UP (more whitespace is safer for UI)
+ *
+ * Tolerance rules:
+ * - For all values: max(1px, value * 0.20) = 20% tolerance with 1px minimum
+ * - For large values (> 50): relaxed to 25% to allow snapping to token scale
  */
 function matchSpacing(
   value: number,
@@ -75,21 +78,16 @@ function matchSpacing(
     return exactMatch;
   }
 
-  // Determine tolerance based on value size
-  let tolerance: number;
-  if (value < 20) {
-    tolerance = 3; // Small values: ±3px
-  } else if (value < 50) {
-    tolerance = value * 0.25; // Medium values: ±25%
-  } else {
-    tolerance = value * 0.35; // Large values: ±35%
-  }
+  // Percentage-based tolerance: 20% with 1px minimum
+  // This prevents aggressive rounding like 6→4 (33% error)
+  // But allows reasonable matches like 5→4 (20% error) or 7→8 (14% error)
+  const tolerancePercent = value > 50 ? 0.25 : 0.20;
+  const tolerance = Math.max(1, value * tolerancePercent);
 
-  // Fuzzy match: find closest value within tolerance
-  let closestPath: string | null = null;
-  let closestDiff = Infinity;
+  // Collect all matches within tolerance
+  const candidates: Array<{ path: string; numValue: number; diff: number }> = [];
 
-  // Also track absolute closest (for large outliers)
+  // Also track absolute closest (for fallback on large values)
   let absoluteClosestPath: string | null = null;
   let absoluteClosestDiff = Infinity;
 
@@ -105,23 +103,30 @@ function matchSpacing(
       absoluteClosestPath = path;
     }
 
-    // Check within tolerance
-    if (diff <= tolerance && diff < closestDiff) {
-      closestDiff = diff;
-      closestPath = path;
+    // Collect candidates within tolerance
+    if (diff <= tolerance) {
+      candidates.push({ path, numValue, diff });
     }
   }
 
-  // If within tolerance, use that
-  if (closestPath) {
-    return closestPath;
+  // If we have candidates within tolerance, pick the best one
+  if (candidates.length > 0) {
+    // Sort by diff (ascending), then by value (descending) to prefer rounding UP
+    candidates.sort((a, b) => {
+      if (a.diff !== b.diff) return a.diff - b.diff;
+      // When equidistant, prefer the larger value (round UP for safer UI spacing)
+      return b.numValue - a.numValue;
+    });
+    return candidates[0].path;
   }
 
-  // For very large outliers (like 87), snap to absolute closest if within 50%
-  if (value > 30 && absoluteClosestDiff / value < 0.5) {
+  // For large values (> 30), allow snapping to absolute closest if within 40%
+  // This handles cases like 87 → 80 or 56 → 48
+  if (value > 30 && absoluteClosestDiff / value < 0.40) {
     return absoluteClosestPath || String(value);
   }
 
+  // No good match - return raw value to preserve design intent
   return String(value);
 }
 
