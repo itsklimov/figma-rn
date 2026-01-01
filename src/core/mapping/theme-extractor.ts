@@ -164,74 +164,95 @@ export async function extractProjectTokens(themePath: string): Promise<ProjectTo
     tokens.colors.set(val, simplifyPath(token.path));
   }
 
-  // 2. Convert typography - create keys for ALL font weight variants
+  // 2. Convert typography - create keys based on path variant (.regular/.bold)
+  // This prevents collision when multiple tokens share same fontSize+lineHeight
   if (themeTokens.typography) {
     for (const [path, token] of themeTokens.typography.entries()) {
-       const fontSize = token.fontSize || 0;
+      const fontSize = token.fontSize || 0;
       const lineHeight = token.lineHeight || 0;
-      const explicitWeight = token.fontWeight; // Capture explicit weight if present
+      const explicitWeight = token.fontWeight;
+      const simplePath = simplifyPath(path);
+      const pathLower = simplePath.toLowerCase();
+
+      // Detect variant from path suffix
+      const isBoldPath = pathLower.endsWith('.bold') || pathLower.endsWith('.semibold');
+      const isRegularPath = pathLower.endsWith('.regular') || pathLower.endsWith('.medium');
+
       // Any is needed because we extended TypographyStyleToken with variant fields
       const tokenAny = token as any;
-      
-      // Get font family variants if available
       const fontFamilyRegular = tokenAny.fontFamilyRegular || token.fontFamily || '';
       const fontFamilyBold = tokenAny.fontFamilyBold || token.fontFamily || '';
-      
-      // Create key for regular weight (400)
-      // Match by fontSize primarily (font families differ between Figma and theme)
-      const regularKey = `*-${fontSize}-400-${lineHeight}`;
-      const simplePath = simplifyPath(path);
-      tokens.typography.set(regularKey, simplePath);
-      
-      // Also create with explicit fontFamily for exact match
-      if (fontFamilyRegular) {
-        const regularKeyWithFamily = `${fontFamilyRegular}-${fontSize}-400-${lineHeight}`;
-        tokens.typography.set(regularKeyWithFamily, simplePath);
-      }
-      
-      // Create key for bold weight (600)
-      const boldKey = `*-${fontSize}-600-${lineHeight}`;
-      tokens.typography.set(boldKey, simplePath);
-      
-      // Also create with explicit fontFamily for exact match
-      if (fontFamilyBold) {
-        const boldKeyWithFamily = `${fontFamilyBold}-${fontSize}-600-${lineHeight}`;
-        tokens.typography.set(boldKeyWithFamily, simplePath);
-      }
-      
-      // Create key for weight 500 (maps to regular) and 700 (maps to bold)
-      tokens.typography.set(`*-${fontSize}-500-${lineHeight}`, simplePath);
-      tokens.typography.set(`*-${fontSize}-700-${lineHeight}`, simplePath);
 
-      // Handle explicit weight if present (e.g. 700, 300, etc.)
-      if (explicitWeight) {
-         tokens.typography.set(`*-${fontSize}-${explicitWeight}-${lineHeight}`, simplePath);
-         if (token.fontFamily) {
-            tokens.typography.set(`${token.fontFamily}-${fontSize}-${explicitWeight}-${lineHeight}`, simplePath);
-         }
+      if (isBoldPath) {
+        // Bold variant: only create 600, 700 weight keys
+        tokens.typography.set(`*-${fontSize}-600-${lineHeight}`, simplePath);
+        tokens.typography.set(`*-${fontSize}-700-${lineHeight}`, simplePath);
+        if (fontFamilyBold) {
+          tokens.typography.set(`${fontFamilyBold}-${fontSize}-600-${lineHeight}`, simplePath);
+          tokens.typography.set(`${fontFamilyBold}-${fontSize}-700-${lineHeight}`, simplePath);
+        }
+      } else if (isRegularPath) {
+        // Regular variant: only create 400, 500 weight keys
+        tokens.typography.set(`*-${fontSize}-400-${lineHeight}`, simplePath);
+        tokens.typography.set(`*-${fontSize}-500-${lineHeight}`, simplePath);
+        if (fontFamilyRegular) {
+          tokens.typography.set(`${fontFamilyRegular}-${fontSize}-400-${lineHeight}`, simplePath);
+          tokens.typography.set(`${fontFamilyRegular}-${fontSize}-500-${lineHeight}`, simplePath);
+        }
+      } else {
+        // Unknown variant - use explicit fontWeight or infer from fontFamily name
+        let inferredWeight = explicitWeight || 400;
+        if (!explicitWeight && token.fontFamily) {
+          const familyLower = token.fontFamily.toLowerCase();
+          if (familyLower.includes('bold')) inferredWeight = 700;
+          else if (familyLower.includes('semibold')) inferredWeight = 600;
+          else if (familyLower.includes('medium')) inferredWeight = 500;
+        }
+
+        // Create key for inferred weight
+        tokens.typography.set(`*-${fontSize}-${inferredWeight}-${lineHeight}`, simplePath);
+        if (token.fontFamily) {
+          tokens.typography.set(`${token.fontFamily}-${fontSize}-${inferredWeight}-${lineHeight}`, simplePath);
+        }
+
+        // Also create adjacent weight for flexibility (±100)
+        const adjacentWeight = inferredWeight >= 600 ? inferredWeight - 100 : inferredWeight + 100;
+        tokens.typography.set(`*-${fontSize}-${adjacentWeight}-${lineHeight}`, simplePath);
       }
     }
   }
 
-  // 3. Convert spacing
+  // 3. Convert spacing - prefer simpler paths when same value exists
   if (themeTokens.spacing) {
     for (const [path, val] of themeTokens.spacing.entries()) {
-      tokens.spacing.set(val, simplifyPath(path));
+      const newPath = simplifyPath(path);
+      const existingPath = tokens.spacing.get(val);
+      if (!existingPath || pathComplexity(newPath) < pathComplexity(existingPath)) {
+        tokens.spacing.set(val, newPath);
+      }
     }
   }
 
-  // 4. Convert radii
+  // 4. Convert radii - prefer simpler paths when same value exists
   if (themeTokens.radii) {
     for (const [path, val] of themeTokens.radii.entries()) {
-      tokens.radii.set(val, simplifyPath(path));
+      const newPath = simplifyPath(path);
+      const existingPath = tokens.radii.get(val);
+      if (!existingPath || pathComplexity(newPath) < pathComplexity(existingPath)) {
+        tokens.radii.set(val, newPath);
+      }
     }
   }
 
-  // 5. Convert shadows
+  // 5. Convert shadows - prefer simpler paths when same shadow key exists
   if (themeTokens.shadows) {
     for (const [path, v] of themeTokens.shadows.entries()) {
       const shadowKey = `${v.offsetX ?? v.x ?? 0},${v.offsetY ?? v.y ?? 0},${v.blur ?? v.radius ?? 0},${v.spread ?? 0}`;
-      tokens.shadows.set(shadowKey, simplifyPath(path));
+      const newPath = simplifyPath(path);
+      const existingPath = tokens.shadows.get(shadowKey);
+      if (!existingPath || pathComplexity(newPath) < pathComplexity(existingPath)) {
+        tokens.shadows.set(shadowKey, newPath);
+      }
     }
   }
 
