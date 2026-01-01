@@ -117,9 +117,26 @@ export function shouldFilter(
   node: FigmaNode,
   ignorePatterns: string[] = DEFAULT_IGNORE_PATTERNS
 ): FilterReason | null {
-  // Hidden nodes
+  // Hidden nodes (visible: false)
   if (node.visible === false) {
     return 'hidden';
+  }
+
+  // Zero opacity nodes - completely transparent
+  if (node.opacity === 0) {
+    return 'zero-opacity';
+  }
+
+  // No render bounds - Figma determined this node renders nothing
+  // This catches cases where fills are all invisible, strokes are hidden, etc.
+  // Exception: Container nodes (FRAME, GROUP) may have null render bounds but visible children
+  if (node.hasRenderBounds === false) {
+    const isContainer = node.type === 'FRAME' || node.type === 'GROUP' || node.type === 'COMPONENT' || node.type === 'INSTANCE';
+    const hasChildren = node.children && node.children.length > 0;
+    // Only filter if it's a leaf node or all children would also be filtered
+    if (!isContainer || !hasChildren) {
+      return 'no-render';
+    }
   }
 
   // OS component detection (highest priority - filter early)
