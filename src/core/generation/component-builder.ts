@@ -518,7 +518,7 @@ function generateRepeaterParts(
 
   // 1. Identify dynamic fields by comparing children
   const template = repeater.children[0];
-  const variations = mergePropsVariations(repeater.children, stylesBundle);
+  const variations = mergePropsVariations(repeater.children, stylesBundle, mappings);
   
   // 2. Detect semantic state (e.g., 1-of-N = isSelected)
   const stateResult = detectSemanticState(repeater.children, variations, stylesBundle);
@@ -534,27 +534,27 @@ function generateRepeaterParts(
     stateStyles = stateResult.state.stateStyles;
     
     dataItems = repeater.children.map((child, idx) => {
-      const rawValues = extractVariableProps(child, stylesBundle);
+      const rawValues = extractVariableProps(child, stylesBundle, mappings);
       const itemData: Record<string, any> = {};
-      
+
       // Add semantic state prop
       itemData[semanticPropName!] = stateResult.state!.instanceStates.get(child.id) ?? false;
-      
+
       // Only add non-style props (text content, etc.)
       // Get text from child0_text
       const textValue = rawValues['child0_text'] || rawValues['text'] || '';
       if (textValue) {
         itemData['text'] = textValue;
       }
-      
+
       return itemData;
     });
   } else {
     // Fallback: use existing style-based variation extraction
     const { props: templateProps } = extractProps(template, stylesBundle, variations);
-    
+
     dataItems = repeater.children.map(child => {
-      const rawValues = extractVariableProps(child, stylesBundle);
+      const rawValues = extractVariableProps(child, stylesBundle, mappings);
       const itemData: Record<string, string> = {};
       
       for (const propName of Object.keys(templateProps)) {
