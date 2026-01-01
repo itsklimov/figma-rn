@@ -528,27 +528,71 @@ function generateRepeaterParts(
   let semanticPropName: string | undefined;
   let stateStyles: Record<string, any> | undefined;
   
+  // Build text props mapping from template for dynamic component generation
+  // Maps prop name -> { path: child path, isPrimary: boolean }
+  type TextPropInfo = { path: string; isPrimary: boolean; nodeIndex: number[] };
+  const textPropsMap = new Map<string, TextPropInfo>();
+
   if (stateResult.hasSemanticState && stateResult.state) {
     // Semantic state detected! Generate data with state flags, not style values
     semanticPropName = stateResult.state.propName;
     stateStyles = stateResult.state.stateStyles;
-    
-    dataItems = repeater.children.map((child, idx) => {
+
+    // First pass: analyze template to build text props mapping
+    const templateRawValues = extractVariableProps(template, stylesBundle, mappings);
+    const templateTextKeys = Object.keys(templateRawValues)
+      .filter(k => k.endsWith('_text') || k === 'text')
+      .sort((a, b) => a.split('_').length - b.split('_').length);
+
+    for (const key of templateTextKeys) {
+      const value = templateRawValues[key];
+      if (!value) continue;
+
+      // Parse the path to get node indices (e.g., "child1_child0_text" -> [1, 0])
+      const pathParts = key.replace(/_text$/, '').split('_');
+      const nodeIndex = pathParts
+        .filter(p => p.startsWith('child'))
+        .map(p => parseInt(p.replace('child', ''), 10));
+
+      // Derive semantic prop name from the key path
+      let propName: string;
+      if (key === 'text' || key === 'child0_text') {
+        propName = 'text';
+        textPropsMap.set(propName, { path: key, isPrimary: true, nodeIndex });
+      } else {
+        // Use a more semantic name based on depth and content pattern
+        const isBadgePattern = /^[+\-−]?\d/.test(value.trim());
+        if (isBadgePattern) {
+          propName = 'badge';
+        } else {
+          const depth = nodeIndex.length;
+          propName = depth > 1 ? `text${depth}` : 'secondaryText';
+        }
+        textPropsMap.set(propName, { path: key, isPrimary: false, nodeIndex });
+      }
+    }
+
+    // Second pass: extract values for all instances using the mapping
+    dataItems = repeater.children.map((child) => {
       const rawValues = extractVariableProps(child, stylesBundle, mappings);
       const itemData: Record<string, any> = {};
 
       // Add semantic state prop
       itemData[semanticPropName!] = stateResult.state!.instanceStates.get(child.id) ?? false;
 
-      // Only add non-style props (text content, etc.)
-      // Get text from child0_text
-      const textValue = rawValues['child0_text'] || rawValues['text'] || '';
-      if (textValue) {
-        itemData['text'] = textValue;
+      // Extract text props using the mapping
+      for (const [propName, info] of textPropsMap.entries()) {
+        const value = rawValues[info.path];
+        if (value) {
+          itemData[propName] = value;
+        }
       }
 
       return itemData;
     });
+
+    // Attach textPropsMap to state for component generation
+    (stateResult.state as any).textPropsMap = textPropsMap;
   } else {
     // Fallback: use existing style-based variation extraction
     const { props: templateProps } = extractProps(template, stylesBundle, variations);
@@ -660,33 +704,72 @@ function generateSubComponent(
   
   if (semanticState && semanticState.propType === 'boolean') {
     // Semantic state detected - generate isSelected-style interface
-    const propName = semanticState.propName; // e.g., "isSelected"
+    const statePropName = semanticState.propName; // e.g., "isSelected"
     const interfaceName = `${component.componentName}Props`;
-    
-    const propLines = [
-      `  /** Text to display */\n  text: string;`,
-      `  /** Whether this item is in the ${semanticState.type} state */\n  ${propName}?: boolean;`,
-      `  /** Called when item is pressed */\n  onPress?: () => void;`,
-    ];
-    
+
+    // Get text props mapping from semantic state (built in generateRepeaterParts)
+    const textPropsMap: Map<string, { path: string; isPrimary: boolean; nodeIndex: number[] }> =
+      (semanticState as any).textPropsMap || new Map();
+
+    // Helper to find node by index path in the IR tree and set propName
+    const findNodeByPath = (indices: number[]): any => {
+      let current: any = implementationNode;
+      for (const idx of indices) {
+        if (!current?.children?.[idx]) return null;
+        current = current.children[idx];
+      }
+      return current;
+    };
+
+    // Build prop interface lines dynamically
+    const propLines: string[] = [];
+    const propNames: string[] = [];
+
+    // Mark text nodes with propName and optional containers with conditionalProp
+    for (const [propName, info] of textPropsMap.entries()) {
+      const isOptional = !info.isPrimary;
+      const comment = info.isPrimary ? 'Text to display' : `Optional ${propName} text`;
+      propLines.push(`  /** ${comment} */\n  ${propName}${isOptional ? '?' : ''}: string;`);
+      propNames.push(propName);
+
+      // Set propName on the text node so buildJSX renders {propName}
+      const textNode = findNodeByPath(info.nodeIndex);
+      if (textNode) {
+        textNode.propName = propName;
+      }
+
+      // For non-primary (optional) props, set conditionalProp on the container parent
+      if (isOptional && info.nodeIndex.length > 1) {
+        const containerIndex = info.nodeIndex.slice(0, -1);
+        const containerNode = findNodeByPath(containerIndex);
+        if (containerNode) {
+          containerNode.conditionalProp = propName;
+        }
+      }
+    }
+
+    // Add state and handler props
+    propLines.push(`  /** Whether this item is in the ${semanticState.type} state */\n  ${statePropName}?: boolean;`);
+    propLines.push(`  /** Called when item is pressed */\n  onPress?: () => void;`);
+
     propsInterface = `interface ${interfaceName} {\n${propLines.join('\n')}\n}\n\n`;
-    propsDestructure = `{ text, ${propName} = false, onPress }: ${interfaceName}`;
-    
-    // Generate JSX with conditional styling
-    const containerStyleRef = implementationNode.styleRef || 'container';
-    const textChild = (implementationNode as any).children?.find((c: any) => c.semanticType === 'Text') ?? null;
-    const textStyleRef = textChild?.styleRef || 'text';
-    
-    // Use Pressable for interactive items
-    const jsx = `    <Pressable 
-      style={[styles.${containerStyleRef}, ${propName} && styles.${containerStyleRef}Selected]}
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityState={{ selected: ${propName} }}
-    >
-      <Text style={[styles.${textStyleRef}, ${propName} && styles.${textStyleRef}Selected]}>{text}</Text>
-    </Pressable>`;
-    
+    propsDestructure = `{ ${propNames.join(', ')}, ${statePropName} = false, onPress }: ${interfaceName}`;
+
+    // Use buildJSX with semantic state options for proper rendering
+    // This automatically handles gradients, images, and any other features
+    const jsxOptions: import('./jsx-builder.js').BuildJSXOptions = {
+      wrapperOverride: 'Pressable',
+      stateProp: statePropName,
+      selectedStyleSuffix: 'Selected',
+      rootProps: [
+        'onPress={onPress}',
+        'accessibilityRole="button"',
+        `accessibilityState={{ selected: ${statePropName} }}`,
+      ],
+    };
+
+    const jsx = buildJSX(implementationNode, 2, options?.imagePathMap, undefined, stylesBundle, mappings, jsxOptions);
+
     return `${propsInterface}function ${component.componentName}(${propsDestructure}) {
   return (
 ${jsx}
