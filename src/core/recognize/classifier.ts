@@ -59,6 +59,23 @@ export function isImage(node: LayoutNode): boolean {
 }
 
 /**
+ * Check if a node contains only vector children (for logo/icon detection)
+ */
+function isVectorOnlyContainer(node: LayoutNode): boolean {
+  if ((node.type !== 'FRAME' && node.type !== 'GROUP') || !node.children?.length) {
+    return false;
+  }
+  return node.children.every(
+    child =>
+      child.type === 'VECTOR' ||
+      child.type === 'BOOLEAN_OPERATION' ||
+      child.type === 'LINE' ||
+      child.type === 'ELLIPSE' ||
+      child.type === 'REGULAR_POLYGON'
+  );
+}
+
+/**
  * Check if a node is an icon
  * Icons are small vectors or images
  */
@@ -71,7 +88,7 @@ export function isIcon(
   // Vector types are almost always icons (SVGs)
   // We check size constraints for classification (Icon vs Image)
   // But they will be exported as SVG in both cases.
-  const isVectorType = 
+  const isVectorType =
     node.type === 'VECTOR' ||
     node.type === 'BOOLEAN_OPERATION' ||
     node.type === 'STAR' ||
@@ -92,8 +109,19 @@ export function isIcon(
     return false;
   }
 
-  // Must be roughly square (aspect ratio close to 1) for containers/images
+  // Check aspect ratio with different limits based on content type
   const aspectRatio = width / height;
+
+  // Vector-only containers (logos like MIR, VISA) can be wider - allow up to 5:1 ratio
+  // These are typically card brand logos or payment icons
+  if (isVectorOnlyContainer(node)) {
+    if (aspectRatio < 0.2 || aspectRatio > 5) {
+      return false;
+    }
+    return true;
+  }
+
+  // For image fills and mixed content, keep stricter aspect ratio (0.5 to 2.0)
   if (aspectRatio < 0.5 || aspectRatio > 2) {
     return false;
   }
@@ -101,19 +129,6 @@ export function isIcon(
   // Small images can be icons
   if (isImage(node)) {
     return true;
-  }
-
-  // Small frames/groups with vectors inside
-  if ((node.type === 'FRAME' || node.type === 'GROUP') && (node.children?.length ?? 0) > 0) {
-    // All children should be vectors
-    return node.children!.every(
-      child =>
-        child.type === 'VECTOR' ||
-        child.type === 'BOOLEAN_OPERATION' ||
-        child.type === 'LINE' ||
-        child.type === 'ELLIPSE' ||
-        child.type === 'REGULAR_POLYGON'
-    );
   }
 
   return false;
