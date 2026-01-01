@@ -249,6 +249,19 @@ export function findClosestColor(
       continue;
     }
 
+    // For transparent sources, require alpha values to be similar
+    // This prevents matching shadow 5% to backdrop 50% (same RGB, different alpha)
+    if (!sourceIsSolid) {
+      const sourceAlpha = getAlpha(hex);
+      const themeAlpha = getAlpha(themeHex);
+      const alphaDiff = Math.abs(sourceAlpha - themeAlpha);
+
+      // Skip if alpha differs by more than 10%
+      if (alphaDiff > 0.1) {
+        continue;
+      }
+    }
+
     // Normalize theme hex for comparison
     let normThemeHex: string;
     try {
@@ -296,5 +309,11 @@ export function findClosestColor(
 
   // Fallback: try semantic color matching based on luminance
   // This helps match dark text colors to theme.text.primary, etc.
-  return findSemanticFallback(hex, themeColors);
+  // BUT: Skip semantic fallback for transparent colors - they need exact matches
+  // Otherwise we might match a 5% black shadow to "textOnGradient" just because it contains "text"
+  if (sourceIsSolid) {
+    return findSemanticFallback(hex, themeColors);
+  }
+
+  return null;
 }
