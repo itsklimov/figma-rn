@@ -25,6 +25,8 @@ export type { BoundingBox, Padding, Fill, Stroke, Effect, CornerRadius, Typograp
  */
 export type FilterReason =
   | 'hidden'
+  | 'zero-opacity'
+  | 'no-render'
   | 'annotation'
   | 'measurement'
   | 'status-bar'

@@ -315,6 +315,8 @@ export interface FigmaNode {
   blendMode?: string;
   /** Whether node is visible */
   visible?: boolean;
+  /** Whether node has render bounds (false = Figma determined it renders nothing) */
+  hasRenderBounds?: boolean;
   /** Whether node is locked */
   locked?: boolean;
   /** Component properties (for component/instance nodes) */

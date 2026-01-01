@@ -107,12 +107,15 @@ export function transformEffects(raw: any): Effect[] {
   const effects: Effect[] = [];
 
   for (const effect of raw.effects) {
+    // Skip hidden effects
     if (effect.visible === false) {
       continue;
     }
 
     if (effect.type === 'DROP_SHADOW' || effect.type === 'INNER_SHADOW') {
       if (!effect.color) continue;
+      // Skip fully transparent shadows (alpha = 0)
+      if (effect.color.a === 0) continue;
 
       const shadowEffect: ShadowEffect = {
         type: effect.type === 'DROP_SHADOW' ? 'drop-shadow' : 'inner-shadow',
@@ -158,6 +161,8 @@ export function transformFills(raw: any): Fill[] {
     }
 
     if (fill.type === 'SOLID' && fill.color) {
+      // Skip fully transparent solid fills (alpha = 0)
+      if (fill.color.a === 0) continue;
       fills.push({
         type: 'solid',
         color: transformColor(fill.color),
@@ -203,14 +208,24 @@ export function transformStroke(raw: any): Stroke | null {
   if (stroke.visible === false) {
     return null;
   }
+  // Skip fully transparent strokes
+  const strokeOpacity = stroke.opacity ?? 1;
+  if (strokeOpacity === 0) {
+    return null;
+  }
+  // Skip zero-weight strokes
+  const strokeWeight = raw.strokeWeight ?? 1;
+  if (strokeWeight === 0) {
+    return null;
+  }
   if (stroke.type !== 'SOLID' || !stroke.color) {
     return null;
   }
 
   return {
     color: transformColor(stroke.color),
-    weight: raw.strokeWeight ?? 1,
-    opacity: stroke.opacity ?? 1,
+    weight: strokeWeight,
+    opacity: strokeOpacity,
     align: (raw.strokeAlign?.toLowerCase() as 'inside' | 'outside' | 'center') || 'inside',
   };
 }
@@ -313,12 +328,17 @@ export function transformNode(raw: any, parentBounds?: BoundingBox): FigmaNode {
       }
     : undefined;
 
+  // Figma sets absoluteRenderBounds to null when a node renders nothing
+  // This is the definitive signal that a node is invisible (considering all factors)
+  const hasRenderBounds = raw.absoluteRenderBounds !== null;
+
   const node: FigmaNode = {
     id: raw.id,
     name: raw.name,
     type: raw.type,
     boundingBox,
     visible: raw.visible !== false,
+    hasRenderBounds,
     opacity: raw.opacity,
   };
 
