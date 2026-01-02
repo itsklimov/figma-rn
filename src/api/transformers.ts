@@ -107,12 +107,15 @@ export function transformEffects(raw: any): Effect[] {
   const effects: Effect[] = [];
 
   for (const effect of raw.effects) {
+    // Skip hidden effects
     if (effect.visible === false) {
       continue;
     }
 
     if (effect.type === 'DROP_SHADOW' || effect.type === 'INNER_SHADOW') {
       if (!effect.color) continue;
+      // Skip fully transparent shadows (alpha = 0)
+      if (effect.color.a === 0) continue;
 
       const shadowEffect: ShadowEffect = {
         type: effect.type === 'DROP_SHADOW' ? 'drop-shadow' : 'inner-shadow',
@@ -158,6 +161,8 @@ export function transformFills(raw: any): Fill[] {
     }
 
     if (fill.type === 'SOLID' && fill.color) {
+      // Skip fully transparent solid fills (alpha = 0)
+      if (fill.color.a === 0) continue;
       fills.push({
         type: 'solid',
         color: transformColor(fill.color),
@@ -203,14 +208,24 @@ export function transformStroke(raw: any): Stroke | null {
   if (stroke.visible === false) {
     return null;
   }
+  // Skip fully transparent strokes
+  const strokeOpacity = stroke.opacity ?? 1;
+  if (strokeOpacity === 0) {
+    return null;
+  }
+  // Skip zero-weight strokes
+  const strokeWeight = raw.strokeWeight ?? 1;
+  if (strokeWeight === 0) {
+    return null;
+  }
   if (stroke.type !== 'SOLID' || !stroke.color) {
     return null;
   }
 
   return {
     color: transformColor(stroke.color),
-    weight: raw.strokeWeight ?? 1,
-    opacity: stroke.opacity ?? 1,
+    weight: strokeWeight,
+    opacity: strokeOpacity,
     align: (raw.strokeAlign?.toLowerCase() as 'inside' | 'outside' | 'center') || 'inside',
   };
 }
@@ -246,30 +261,45 @@ export function transformCornerRadius(raw: any): CornerRadius | null {
 }
 
 /**
- * Transform component property definitions
+ * Transform component properties - handles both:
+ * - componentProperties (on INSTANCE nodes - actual values)
+ * - componentPropertyDefinitions (on COMPONENT nodes - definitions)
  */
 export function transformComponentProperties(raw: any): Record<string, ComponentProperty> | null {
-  if (!raw.componentPropertyDefinitions) {
-    return null;
-  }
-
   const properties: Record<string, ComponentProperty> = {};
 
-  for (const [name, prop] of Object.entries(raw.componentPropertyDefinitions)) {
-    const typedProp = prop as any;
+  const typeMap: Record<string, ComponentProperty['type']> = {
+    'VARIANT': 'VARIANT',
+    'TEXT': 'TEXT',
+    'BOOLEAN': 'BOOLEAN',
+    'INSTANCE_SWAP': 'INSTANCE_SWAP',
+  };
 
-    const typeMap: Record<string, ComponentProperty['type']> = {
-      'VARIANT': 'VARIANT',
-      'TEXT': 'TEXT',
-      'BOOLEAN': 'BOOLEAN',
-      'INSTANCE_SWAP': 'INSTANCE_SWAP',
-    };
+  // Handle instance properties (actual values from component usage)
+  if (raw.componentProperties) {
+    for (const [name, prop] of Object.entries(raw.componentProperties)) {
+      const typedProp = prop as any;
+      properties[name] = {
+        type: typeMap[typedProp.type] || 'TEXT',
+        value: typedProp.value ?? '',
+        options: typedProp.variantOptions,
+      };
+    }
+  }
 
-    properties[name] = {
-      type: typeMap[typedProp.type] || 'TEXT',
-      value: typedProp.defaultValue ?? '',
-      options: typedProp.variantOptions,
-    };
+  // Handle component property definitions (for component nodes)
+  if (raw.componentPropertyDefinitions) {
+    for (const [name, prop] of Object.entries(raw.componentPropertyDefinitions)) {
+      const typedProp = prop as any;
+      // Don't overwrite instance values with definitions
+      if (!properties[name]) {
+        properties[name] = {
+          type: typeMap[typedProp.type] || 'TEXT',
+          value: typedProp.defaultValue ?? '',
+          options: typedProp.variantOptions,
+        };
+      }
+    }
   }
 
   return Object.keys(properties).length > 0 ? properties : null;
@@ -313,12 +343,17 @@ export function transformNode(raw: any, parentBounds?: BoundingBox): FigmaNode {
       }
     : undefined;
 
+  // Figma sets absoluteRenderBounds to null when a node renders nothing
+  // This is the definitive signal that a node is invisible (considering all factors)
+  const hasRenderBounds = raw.absoluteRenderBounds !== null;
+
   const node: FigmaNode = {
     id: raw.id,
     name: raw.name,
     type: raw.type,
     boundingBox,
     visible: raw.visible !== false,
+    hasRenderBounds,
     opacity: raw.opacity,
   };
 

@@ -6,7 +6,7 @@
 
 import { writeFile, mkdir } from 'fs/promises';
 import { join, dirname } from 'path';
-import type { IRNode } from '../core/types.js';
+import type { IRNode, ComponentIR } from '../core/types.js';
 import type { FigmaClient } from '../api/client.js';
 import { sanitizeFilename } from '../core/generation/utils.js';
 
@@ -29,6 +29,64 @@ interface AssetNode {
   name: string;
   ref: string; // imageRef or iconRef
   category: 'icon' | 'image';
+}
+
+/**
+ * Build a composite asset filename from component name and all meaningful properties
+ * Pattern: {componentName}-{prop1}-{prop2}-{propN}
+ *
+ * Examples:
+ *   {Property 1: "card", Property 2: "mir"} → "ic-card-mir"
+ *   {Selected: "Yes", State: "Default"} → "radiobutton-yes"
+ *   {Name: "gift-card 1"} → "icons-gift-card-1"
+ */
+function buildAssetFilename(comp: ComponentIR): string {
+  const parts: string[] = [];
+
+  // 1. Base name from component name
+  parts.push(sanitizeFilename(comp.componentName));
+
+  // 2. Add ALL meaningful properties (sorted for consistency)
+  if (comp.componentProps) {
+    const propEntries = Object.entries(comp.componentProps).sort();
+
+    for (const [key, value] of propEntries) {
+      const lowerKey = key.toLowerCase();
+      const lowerValue = String(value).toLowerCase();
+
+      // Skip size/dimension props
+      if (lowerKey.includes('size') || lowerKey.includes('width') || lowerKey.includes('height')) {
+        continue;
+      }
+
+      // Handle generic property names (Property 1, Property 2)
+      if (/^property\s*\d+$/i.test(key)) {
+        // Skip boolean-like values (Yes/No are state flags, not semantic names)
+        if (lowerValue === 'yes' || lowerValue === 'no' || lowerValue === 'true' || lowerValue === 'false') {
+          continue;
+        }
+        // Use the value
+        parts.push(sanitizeFilename(value));
+        continue;
+      }
+
+      // Handle named properties
+      if (lowerValue === 'yes' || lowerValue === 'true') {
+        // Boolean "yes" → use the key name (e.g., Selected: "Yes" → "selected")
+        parts.push(sanitizeFilename(key));
+      } else if (lowerValue === 'no' || lowerValue === 'false') {
+        // Boolean "no" → skip (default state)
+        continue;
+      } else {
+        // String value → use the value
+        parts.push(sanitizeFilename(value));
+      }
+    }
+  }
+
+  // If only component name, return as-is
+  // If we have additional parts, join with dashes
+  return parts.join('-');
 }
 
 /**
@@ -65,6 +123,20 @@ function extractAssetNodes(node: IRNode, assets: AssetNode[]): void {
         ref: iconRef,
         category: 'icon',
       });
+    }
+  } else if (node.semanticType === 'Component') {
+    // Check for exportable component (contains vector content)
+    const comp = node as ComponentIR;
+    if (comp.isExportableAsset) {
+      const assetName = buildAssetFilename(comp);
+      assets.push({
+        nodeId: node.id,  // Export parent component to include ALL vector children
+        name: assetName,
+        ref: node.id,
+        category: 'icon',
+      });
+      // Don't recurse into exportable components - export as single unit
+      return;
     }
   }
 
