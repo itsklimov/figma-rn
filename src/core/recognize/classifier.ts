@@ -74,6 +74,94 @@ function hasVectorContent(node: LayoutNode): boolean {
 }
 
 /**
+ * Check if a node or its children contain text content
+ */
+function hasTextContent(node: LayoutNode): boolean {
+  if (node.type === 'TEXT' && node.text && node.text.trim().length > 0) {
+    return true;
+  }
+  if (node.children && node.children.length > 0) {
+    return node.children.some(child => hasTextContent(child));
+  }
+  return false;
+}
+
+/**
+ * Count leaf nodes that are vectors
+ */
+function countVectorLeaves(node: LayoutNode): number {
+  if (!node.children || node.children.length === 0) {
+    // Leaf node
+    return VECTOR_TYPES.has(node.type) ? 1 : 0;
+  }
+  return node.children.reduce((sum, child) => sum + countVectorLeaves(child), 0);
+}
+
+/**
+ * Count total leaf nodes
+ */
+function countTotalLeaves(node: LayoutNode): number {
+  if (!node.children || node.children.length === 0) {
+    return 1;
+  }
+  return node.children.reduce((sum, child) => sum + countTotalLeaves(child), 0);
+}
+
+/**
+ * Determine if a component should be exported as an asset (icon/logo)
+ * Uses size, text content, and composition heuristics to avoid false positives
+ */
+function shouldExportAsAsset(node: LayoutNode): boolean {
+  // Must have vector content
+  if (!hasVectorContent(node)) {
+    return false;
+  }
+
+  const { width, height } = node.boundingBox;
+  const maxDim = Math.max(width, height);
+
+  // Size heuristic: icons/logos are typically small to medium (< 80px)
+  // This prevents exporting entire cards/screens with embedded icons
+  if (maxDim > 80) {
+    return false;
+  }
+
+  // Text heuristic: Pure icons don't contain meaningful text
+  // Exception: Short text (< 4 chars) is OK (e.g., "+" button, "AR" logo)
+  if (hasTextContent(node)) {
+    // Count text length
+    function getTextLength(n: LayoutNode): number {
+      let total = 0;
+      if (n.type === 'TEXT' && n.text) {
+        total += n.text.trim().length;
+      }
+      if (n.children) {
+        for (const child of n.children) {
+          total += getTextLength(child);
+        }
+      }
+      return total;
+    }
+    const textLen = getTextLength(node);
+    if (textLen > 3) {
+      return false; // Too much text, not an icon
+    }
+  }
+
+  // Composition heuristic: Should be mostly vector content
+  // At least 70% of leaf nodes should be vectors
+  const vectorLeaves = countVectorLeaves(node);
+  const totalLeaves = countTotalLeaves(node);
+  const vectorRatio = totalLeaves > 0 ? vectorLeaves / totalLeaves : 0;
+
+  if (vectorRatio < 0.7) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
  * Check if a node is a text element
  */
 export function isText(node: LayoutNode): boolean {
@@ -466,8 +554,9 @@ export function toIRNode(node: LayoutNode): IRNode {
       // Extract Figma component properties (variant props like Name, Size)
       const componentProps = extractComponentProps(node);
 
-      // Check if this component contains vector content (exportable as SVG)
-      const isExportableAsset = hasVectorContent(node);
+      // Check if this component should be exported as an asset
+      // Uses heuristics: size, text content, vector composition
+      const isExportableAsset = shouldExportAsAsset(node);
 
       return {
         ...baseProps,
