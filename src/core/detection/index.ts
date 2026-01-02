@@ -12,7 +12,6 @@ import type { IRNode, StylesBundle } from '../types.js';
 import type { DetectionResult } from './types.js';
 import { detectLists } from './list-detector.js';
 import { detectRepetitions } from './repetition-detector.js';
-import { detectSemanticState, type SemanticState, type StateDetectionResult } from './state-detector.js';
 
 // Re-export types
 export type { ListHint, ComponentHint, DetectionResult } from './types.js';
@@ -28,6 +27,14 @@ export {
   type SafeAreaDetectionResult,
   type OSChromeElement,
 } from './safe-area-detector.js';
+
+// Modal overlay detection
+export {
+  detectModalOverlay,
+  extractModalContent,
+  type ModalOverlayResult,
+  type ModalType,
+} from './modal-overlay-detector.js';
 
 /**
  * Run all detectors on an IR tree
