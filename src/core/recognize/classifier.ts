@@ -27,6 +27,53 @@ const ICON_MIN_SIZE = 8;
 const ICON_MAX_SIZE = 48;
 
 /**
+ * Vector node types that indicate vector-based content
+ */
+const VECTOR_TYPES = new Set([
+  'VECTOR',
+  'BOOLEAN_OPERATION',
+  'STAR',
+  'ELLIPSE',
+  'REGULAR_POLYGON',
+  'LINE',
+]);
+
+/**
+ * Extract component property values as simple strings
+ * Converts { Name: { type: 'VARIANT', value: 'gift-card' } } to { Name: 'gift-card' }
+ */
+function extractComponentProps(node: LayoutNode): Record<string, string> | undefined {
+  const rawProps = (node as any).componentProperties;
+  if (!rawProps || typeof rawProps !== 'object') return undefined;
+
+  const props: Record<string, string> = {};
+  for (const [key, val] of Object.entries(rawProps)) {
+    if (val && typeof val === 'object' && 'value' in (val as any)) {
+      props[key] = String((val as any).value);
+    }
+  }
+  return Object.keys(props).length > 0 ? props : undefined;
+}
+
+/**
+ * Check if a node or its children contain vector content (icons, logos)
+ * Recursively searches for VECTOR and related node types
+ */
+function hasVectorContent(node: LayoutNode): boolean {
+  // Direct vector type
+  if (VECTOR_TYPES.has(node.type)) {
+    return true;
+  }
+
+  // Check children recursively
+  if (node.children && node.children.length > 0) {
+    return node.children.some(child => hasVectorContent(child));
+  }
+
+  return false;
+}
+
+/**
  * Check if a node is a text element
  */
 export function isText(node: LayoutNode): boolean {
@@ -416,6 +463,12 @@ export function toIRNode(node: LayoutNode): IRNode {
       const tempNode = { ...baseProps, semanticType: 'Component', children } as IRNode;
       const { props } = extractProps(tempNode);
 
+      // Extract Figma component properties (variant props like Name, Size)
+      const componentProps = extractComponentProps(node);
+
+      // Check if this component contains vector content (exportable as SVG)
+      const isExportableAsset = hasVectorContent(node);
+
       return {
         ...baseProps,
         semanticType: 'Component',
@@ -424,6 +477,8 @@ export function toIRNode(node: LayoutNode): IRNode {
         props,
         layout: node.layout,
         children,
+        componentProps,
+        isExportableAsset,
       } as ComponentIR;
     }
 

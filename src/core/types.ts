@@ -85,6 +85,10 @@ export interface NormalizedNode {
   // Scrolling
   overflowDirection?: 'NONE' | 'HORIZONTAL_SCROLLING' | 'VERTICAL_SCROLLING' | 'BOTH_SCROLLING';
   scrollBehavior?: string;
+
+  // Component instance metadata (for INSTANCE nodes)
+  componentId?: string;
+  componentProperties?: Record<string, { type: string; value: string | boolean }>;
 }
 
 // ============================================================================
@@ -225,6 +229,10 @@ export interface ComponentIR extends IRNodeBase {
   props?: Record<string, { type: 'string' | 'image'; value: string; defaultValue: string }>;
   layout: LayoutMeta;
   children: IRNode[]; // Components can have children (overrides)
+  /** Figma component properties (variant props like Name, Size) */
+  componentProps?: Record<string, string>;
+  /** True if this component should be exported as an asset (e.g., icon with vector children) */
+  isExportableAsset?: boolean;
 }
 
 /**

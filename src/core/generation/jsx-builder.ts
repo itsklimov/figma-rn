@@ -3,7 +3,7 @@
  * Includes accessibility props for production-ready components
  */
 
-import type { IRNode, IconIR, ImageIR, StylesBundle, ExtractedStyle, RepeaterIR, ButtonIR } from '../types.js';
+import type { IRNode, IconIR, ImageIR, StylesBundle, ExtractedStyle, RepeaterIR, ButtonIR, ComponentIR } from '../types.js';
 import type { TokenMappings } from '../mapping/token-matcher.js';
 import { toValidIdentifier, escapeJSXText } from './utils.js';
 import { mapColor } from './styles-builder.js';
@@ -499,8 +499,19 @@ ${spaces}</TouchableOpacity>`;
     }
 
     case 'Component': {
-      const componentName = (node as any).componentName;
-      const comp = node as any;
+      const comp = node as ComponentIR;
+
+      // Check if this component was exported as an asset (icon/logo)
+      if (comp.isExportableAsset && imagePathMap?.has(node.id)) {
+        const assetPath = imagePathMap.get(node.id)!;
+        const isSvg = assetPath.toLowerCase().endsWith('.svg');
+        const imgComponent = isSvg ? 'SvgIcon' : 'Image';
+        result = `${spaces}<${imgComponent} source={require('${assetPath}')} style={styles.${styleName}} />`;
+        break;
+      }
+
+      // Normal component rendering
+      const componentName = comp.componentName;
       const compProps = comp.props || {};
       const propEntries = Object.keys(compProps);
 

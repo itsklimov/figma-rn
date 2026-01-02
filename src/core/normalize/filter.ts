@@ -196,6 +196,10 @@ function toNormalizedNode(node: FigmaNode): NormalizedNode {
   if (node.styles) (normalizedNode as any).styles = node.styles;
   if (node.scrollBehavior) (normalizedNode as any).scrollBehavior = node.scrollBehavior;
 
+  // Copy Component instance metadata (for INSTANCE nodes)
+  if (node.componentId) normalizedNode.componentId = node.componentId;
+  if (node.componentProperties) normalizedNode.componentProperties = node.componentProperties;
+
   // Copy text properties
   if (node.text) {
     normalizedNode.text = node.text;

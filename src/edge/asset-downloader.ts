@@ -6,7 +6,7 @@
 
 import { writeFile, mkdir } from 'fs/promises';
 import { join, dirname } from 'path';
-import type { IRNode } from '../core/types.js';
+import type { IRNode, ComponentIR } from '../core/types.js';
 import type { FigmaClient } from '../api/client.js';
 import { sanitizeFilename } from '../core/generation/utils.js';
 
@@ -29,6 +29,24 @@ interface AssetNode {
   name: string;
   ref: string; // imageRef or iconRef
   category: 'icon' | 'image';
+}
+
+/**
+ * Get semantic name for a component from its properties
+ * Uses Name, Property 1, or falls back to component name
+ */
+function getComponentAssetName(comp: ComponentIR): string {
+  const props = comp.componentProps;
+  if (props) {
+    // Prefer 'Name' property (common for icon libraries)
+    if (props.Name) return props.Name;
+    // Fallback to Property 1 (variant selector)
+    if (props['Property 1']) return props['Property 1'];
+    // Try Property 2 for card type components (like 'visa', 'mastercard')
+    if (props['Property 2']) return props['Property 2'];
+  }
+  // Final fallback to component name
+  return comp.componentName;
 }
 
 /**
@@ -65,6 +83,20 @@ function extractAssetNodes(node: IRNode, assets: AssetNode[]): void {
         ref: iconRef,
         category: 'icon',
       });
+    }
+  } else if (node.semanticType === 'Component') {
+    // Check for exportable component (contains vector content)
+    const comp = node as ComponentIR;
+    if (comp.isExportableAsset) {
+      const assetName = getComponentAssetName(comp);
+      assets.push({
+        nodeId: node.id,
+        name: assetName,
+        ref: node.id, // Use nodeId as ref for vector components
+        category: 'icon',
+      });
+      // Don't recurse into exportable components - export as single unit
+      return;
     }
   }
 
