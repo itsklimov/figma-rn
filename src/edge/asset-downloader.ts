@@ -32,45 +32,61 @@ interface AssetNode {
 }
 
 /**
- * Get semantic name for a component from its properties
- * Prioritizes meaningful semantic properties over generic names
+ * Build a composite asset filename from component name and all meaningful properties
+ * Pattern: {componentName}-{prop1}-{prop2}-{propN}
+ *
+ * Examples:
+ *   {Property 1: "card", Property 2: "mir"} → "ic-card-mir"
+ *   {Selected: "Yes", State: "Default"} → "radiobutton-yes"
+ *   {Name: "gift-card 1"} → "icons-gift-card-1"
  */
-function getComponentAssetName(comp: ComponentIR): string {
-  const props = comp.componentProps;
-  if (!props) return comp.componentName;
+function buildAssetFilename(comp: ComponentIR): string {
+  const parts: string[] = [];
 
-  // 1. Check for explicit name/icon properties (case-insensitive)
-  for (const [key, value] of Object.entries(props)) {
-    const lowerKey = key.toLowerCase();
-    if (lowerKey === 'name' || lowerKey === 'icon' || lowerKey === 'type') {
-      return value;
+  // 1. Base name from component name
+  parts.push(sanitizeFilename(comp.componentName));
+
+  // 2. Add ALL meaningful properties (sorted for consistency)
+  if (comp.componentProps) {
+    const propEntries = Object.entries(comp.componentProps).sort();
+
+    for (const [key, value] of propEntries) {
+      const lowerKey = key.toLowerCase();
+      const lowerValue = String(value).toLowerCase();
+
+      // Skip size/dimension props
+      if (lowerKey.includes('size') || lowerKey.includes('width') || lowerKey.includes('height')) {
+        continue;
+      }
+
+      // Handle generic property names (Property 1, Property 2)
+      if (/^property\s*\d+$/i.test(key)) {
+        // Skip boolean-like values (Yes/No are state flags, not semantic names)
+        if (lowerValue === 'yes' || lowerValue === 'no' || lowerValue === 'true' || lowerValue === 'false') {
+          continue;
+        }
+        // Use the value
+        parts.push(sanitizeFilename(value));
+        continue;
+      }
+
+      // Handle named properties
+      if (lowerValue === 'yes' || lowerValue === 'true') {
+        // Boolean "yes" → use the key name (e.g., Selected: "Yes" → "selected")
+        parts.push(sanitizeFilename(key));
+      } else if (lowerValue === 'no' || lowerValue === 'false') {
+        // Boolean "no" → skip (default state)
+        continue;
+      } else {
+        // String value → use the value
+        parts.push(sanitizeFilename(value));
+      }
     }
   }
 
-  // 2. Find first meaningful property (skip size/state/boolean props)
-  for (const [key, value] of Object.entries(props)) {
-    const lowerKey = key.toLowerCase();
-    const lowerValue = String(value).toLowerCase();
-
-    // Skip size properties
-    if (lowerKey.includes('size') || lowerKey.includes('width') || lowerKey.includes('height')) {
-      continue;
-    }
-    // Skip state/boolean properties
-    if (lowerValue === 'true' || lowerValue === 'false' || lowerValue === 'yes' || lowerValue === 'no') {
-      continue;
-    }
-    // Skip generic property names (Property 1, Property 2)
-    if (/^property\s*\d+$/i.test(key)) {
-      // But use the value if it's meaningful
-      return value;
-    }
-    // Found a meaningful property
-    return value;
-  }
-
-  // Final fallback to component name
-  return comp.componentName;
+  // If only component name, return as-is
+  // If we have additional parts, join with dashes
+  return parts.join('-');
 }
 
 /**
@@ -112,11 +128,11 @@ function extractAssetNodes(node: IRNode, assets: AssetNode[]): void {
     // Check for exportable component (contains vector content)
     const comp = node as ComponentIR;
     if (comp.isExportableAsset) {
-      const assetName = getComponentAssetName(comp);
+      const assetName = buildAssetFilename(comp);
       assets.push({
-        nodeId: node.id,
+        nodeId: node.id,  // Export parent component to include ALL vector children
         name: assetName,
-        ref: node.id, // Use nodeId as ref for vector components
+        ref: node.id,
         category: 'icon',
       });
       // Don't recurse into exportable components - export as single unit
