@@ -333,7 +333,7 @@ export function transformStyles(raw: any): any {
 /**
  * Main recursive transformer for Figma nodes
  */
-export function transformNode(raw: any, parentBounds?: BoundingBox): FigmaNode {
+export function transformNode(raw: any, _parentBounds?: BoundingBox): FigmaNode {
   const boundingBox: BoundingBox | undefined = raw.absoluteBoundingBox
     ? {
         x: raw.absoluteBoundingBox.x,

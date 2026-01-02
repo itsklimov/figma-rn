@@ -5,7 +5,6 @@
 import type { IRNode, ContainerIR, CardIR, TextIR, ButtonIR, StylesBundle } from '../types.js';
 import type { ComponentHint } from './types.js';
 import type { TokenMappings } from '../mapping/token-matcher.js';
-import { getStyleVariations } from '../utils/diffing.js';
 import { mapColor } from '../generation/styles-builder.js';
 
 /** Minimum occurrences to extract a component */
@@ -86,7 +85,6 @@ export function extractVariableProps(
     case 'Card':
     case 'Component': {
       // Collect props from children recursively
-      const container = node as ContainerIR | CardIR;
       if ('children' in node && (node as any).children) {
         (node as any).children.forEach((child: IRNode, index: number) => {
           const childProps = extractVariableProps(child, stylesBundle, mappings);
@@ -219,7 +217,7 @@ export function detectRepetitions(
 
   const hints: ComponentHint[] = [];
 
-  for (const [_fingerprint, nodes] of nodesByFingerprint) {
+  for (const [, nodes] of nodesByFingerprint) {
     // Need minimum occurrences
     if (nodes.length < MIN_OCCURRENCES) continue;
 

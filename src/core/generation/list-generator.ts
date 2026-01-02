@@ -36,17 +36,15 @@ function inferPropsFromNode(node: IRNode): Record<string, string> {
     id: 'string',
   };
 
-  function extractProps(n: IRNode, prefix = ''): void {
+  function extractProps(n: IRNode): void {
     switch (n.semanticType) {
       case 'Text': {
-        const textNode = n as TextIR;
         // Always use the node's own name for uniqueness
         const propName = toValidIdentifier(n.name);
         props[propName] = 'string';
         break;
       }
       case 'Button': {
-        const buttonNode = n as ButtonIR;
         // Always use the node's own name for uniqueness
         const propName = toValidIdentifier(n.name);
         props[propName] = 'string';
@@ -56,7 +54,7 @@ function inferPropsFromNode(node: IRNode): Record<string, string> {
       case 'Card': {
         const container = n as ContainerIR | CardIR;
         for (const child of container.children) {
-          extractProps(child, ''); // Don't pass prefix to avoid name collisions
+          extractProps(child);
         }
         break;
       }
@@ -87,7 +85,6 @@ function generateRenderItem(
   indent: number
 ): string {
   const spaces = '  '.repeat(indent);
-  const itemStyleName = toValidIdentifier(itemNode.name);
 
   // Simple renderItem that references the item component
   return `${spaces}const renderItem = ({ item }: { item: ${hint.itemType} }) => (
@@ -322,7 +319,7 @@ function findNodeById(node: IRNode, id: string, visited: Set<string> = new Set()
 function buildTextToPropMap(node: IRNode, prefix = ''): Map<string, string> {
   const map = new Map<string, string>();
 
-  function traverse(n: IRNode, p: string): void {
+  function traverse(n: IRNode, _p: string): void {
     switch (n.semanticType) {
       case 'Text': {
         const textNode = n as TextIR;

@@ -187,7 +187,7 @@ function findSemanticFallback(
 
   // Search for theme paths containing these patterns
   for (const pattern of patterns) {
-    for (const [_, themePath] of themeColors) {
+    for (const [, themePath] of themeColors) {
       const pathLower = themePath.toLowerCase();
       if (pathLower.includes(pattern.toLowerCase())) {
         return themePath;

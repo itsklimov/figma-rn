@@ -10,11 +10,6 @@ import type { NormalizedNode, LayoutType } from '../types.js';
 const ALIGNMENT_THRESHOLD = 2;
 
 /**
- * Threshold for considering gaps consistent
- */
-const GAP_VARIANCE_THRESHOLD = 4;
-
-/**
  * Check if children are arranged horizontally (row layout)
  * Children are considered in a row if:
  * - They have similar Y positions (aligned top or center)

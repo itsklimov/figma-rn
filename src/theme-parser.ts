@@ -1,4 +1,4 @@
-import { Project, SourceFile, SyntaxKind, Node, ObjectLiteralExpression, PropertyAssignment } from 'ts-morph';
+import { Project, SourceFile, SyntaxKind, Node, ObjectLiteralExpression } from 'ts-morph';
 import { existsSync } from 'fs';
 import { resolve, join, basename } from 'path';
 import { pathComplexity, normalizeHex } from './core/utils/path-utils.js';
@@ -124,11 +124,8 @@ export async function parseThemeFile(
 
       // Resolve to the object literal
       const targetNode = resolveValueNode(node);
-      const targetKind = targetNode?.getKindName?.() || 'unknown';
 
       if (!Node.isObjectLiteralExpression(targetNode)) {
-        // Debug: log skipped nodes
-        // console.log(`  [skip] ${originalName || 'unnamed'} resolved to ${targetKind}`);
         continue;
       }
 
@@ -235,7 +232,6 @@ function findThemeNodes(sourceFile: SourceFile): Node[] {
   const seen = new Set<string>();
 
   for (const node of nodes) {
-    const nodeName = Node.isVariableDeclaration(node) ? node.getName() : 'unknown';
     const resolved = resolveNodeToTarget(node);
     if (resolved) {
       // Use resolved node's position as unique key
@@ -244,7 +240,6 @@ function findThemeNodes(sourceFile: SourceFile): Node[] {
         // Push original node (not resolved) to preserve variable name
         finalNodes.push(node);
         seen.add(key);
-        // console.log(`  [findNodes] ADDED ${nodeName} (key: ${key})`);
       } else {
         // console.log(`  [findNodes] SKIP ${nodeName} (duplicate key: ${key})`);
       }
@@ -469,7 +464,6 @@ function extractTokensRecursive(
     // Handle spread operators (e.g., ...grayColors)
     if (Node.isSpreadAssignment(prop)) {
       const spreadExpr = prop.getExpression();
-      const spreadName = spreadExpr.getText();
       const resolvedSpread = resolveValueNode(spreadExpr);
 
       // If spread resolves to an object literal, inline its properties
@@ -491,7 +485,7 @@ function extractTokensRecursive(
     if (/^\d+$/.test(propName)) {
       // Numeric key - extract parent name for semantic naming
       const pathParts = currentPath.split('.');
-      const parentName = pathParts[pathParts.length - 1]?.replace(/[\[\]']/g, '');
+      const parentName = pathParts[pathParts.length - 1]?.replace(/[[\]']/g, '');
       // Support both singular and plural forms (margins/spacing, radius/radii)
       if (parentName && ['gray', 'accent', 'spacing', 'margins', 'radii', 'radius'].includes(parentName.toLowerCase())) {
         semanticPropName = `${parentName}${propName}`; // gray10, accent60, margins16

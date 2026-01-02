@@ -254,7 +254,6 @@ export interface GenerationResult {
 
 const FIGMA_DIR = '.figma';
 const MANIFEST_FILE = 'manifest.json';
-const THEME_FILE = 'theme.json';
 const CONFIG_FILE = 'config.json';
 const META_FILE = 'meta.json';
 const ASSETS_DIR = 'assets';
@@ -394,7 +393,7 @@ function migrateManifest(manifest: any): Manifest {
     for (const category of categories) {
       const entries = manifest[category] || {};
 
-      for (const [url, entry] of Object.entries(entries)) {
+      for (const [, entry] of Object.entries(entries)) {
         const oldEntry = entry as any;
 
         // Convert path → folder
