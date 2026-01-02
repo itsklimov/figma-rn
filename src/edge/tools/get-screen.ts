@@ -415,20 +415,21 @@ export function formatGetScreenResponse(result: GetScreenResult): any[] {
   // 1. What's Generated (Inventory)
   textResponse += `## 📦 What's Generated\n\n`;
   if (writeResult?.success) {
-    textResponse += `| File | Temporary Path (in \`.figma/\`) |\n`;
-    textResponse += `|------|-------------------------------|\n`;
-    textResponse += `| **Main Component** | \`${writeResult.indexPath}\` |\n`;
-    
-    for (const path of writeResult.extractedPaths) {
-      textResponse += `| Extracted Part | \`${path}\` |\n`;
+    const root = writeResult.projectRoot;
+    textResponse += `| File | Absolute Path |\n`;
+    textResponse += `|------|---------------|\n`;
+    textResponse += `| **Main Component** | \`${join(root, writeResult.indexPath)}\` |\n`;
+
+    for (const extractedPath of writeResult.extractedPaths) {
+      textResponse += `| Extracted Part | \`${join(root, extractedPath)}\` |\n`;
     }
-    
+
     if (writeResult.tokensPath) {
-      textResponse += `| Tokens | \`${writeResult.tokensPath}\` |\n`;
+      textResponse += `| Tokens | \`${join(root, writeResult.tokensPath)}\` |\n`;
     }
-    
+
     if (writeResult.assetsCount > 0) {
-      textResponse += `| Assets | ${writeResult.assetsCount} files in \`.figma/${writeResult.folder}/assets/\` |\n`;
+      textResponse += `| Assets | ${writeResult.assetsCount} files in \`${join(root, writeResult.folder, 'assets')}\` |\n`;
     }
     textResponse += `\n`;
   }
@@ -491,7 +492,7 @@ export function formatGetScreenResponse(result: GetScreenResult): any[] {
   if (multiFileResult.extractedComponents.length > 0) {
     textResponse += `Extracted parts: ${multiFileResult.extractedComponents.length} files\n`;
   }
-  textResponse += `\n**Integration Step**: Move these files from \`.figma/\` to your codebase and update the imports. I have used your theme tokens where possible.\n\n`;
+  textResponse += `\n**Integration Step**: Move these files from the paths above to your codebase and update the imports. I have used your theme tokens where possible.\n\n`;
   
   content.push({ type: 'text', text: textResponse });
 
