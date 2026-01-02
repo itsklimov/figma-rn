@@ -14,7 +14,6 @@ import type {
   IconIR,
   ComponentIR,
   RepeaterIR,
-  LayoutMeta,
 } from '../types.js';
 
 import { extractProps } from '../generation/prop-extractor.js';
@@ -108,6 +107,22 @@ function countTotalLeaves(node: LayoutNode): number {
 }
 
 /**
+ * Count total text length in a node tree
+ */
+function getTextLength(node: LayoutNode): number {
+  let total = 0;
+  if (node.type === 'TEXT' && node.text) {
+    total += node.text.trim().length;
+  }
+  if (node.children) {
+    for (const child of node.children) {
+      total += getTextLength(child);
+    }
+  }
+  return total;
+}
+
+/**
  * Determine if a component should be exported as an asset (icon/logo)
  * Uses size, text content, and composition heuristics to avoid false positives
  */
@@ -129,19 +144,6 @@ function shouldExportAsAsset(node: LayoutNode): boolean {
   // Text heuristic: Pure icons don't contain meaningful text
   // Exception: Short text (< 4 chars) is OK (e.g., "+" button, "AR" logo)
   if (hasTextContent(node)) {
-    // Count text length
-    function getTextLength(n: LayoutNode): number {
-      let total = 0;
-      if (n.type === 'TEXT' && n.text) {
-        total += n.text.trim().length;
-      }
-      if (n.children) {
-        for (const child of n.children) {
-          total += getTextLength(child);
-        }
-      }
-      return total;
-    }
     const textLen = getTextLength(node);
     if (textLen > 3) {
       return false; // Too much text, not an icon
