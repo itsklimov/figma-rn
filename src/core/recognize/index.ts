@@ -12,4 +12,8 @@ export {
   classifyNode,
   toIRNode,
   recognizeSemantics,
+  setAssetDetectionConfig,
+  getAssetDetectionConfig,
 } from './classifier.js';
+
+export type { AssetDetectionConfig } from './classifier.js';

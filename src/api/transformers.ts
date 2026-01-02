@@ -408,6 +408,15 @@ export function transformNode(raw: any, _parentBounds?: BoundingBox): FigmaNode 
     node.componentProperties = componentProperties;
   }
 
+  // Export settings (designer's intent for asset export)
+  if (raw.exportSettings && raw.exportSettings.length > 0) {
+    node.exportSettings = raw.exportSettings.map(s => ({
+      format: s.format,
+      suffix: s.suffix,
+      constraint: s.constraint,
+    }));
+  }
+
 
 
   // Layout sizing constraints

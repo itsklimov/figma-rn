@@ -26,6 +26,12 @@ const ICON_MIN_SIZE = 8;
 const ICON_MAX_SIZE = 48;
 
 /**
+ * Default maximum size for exportable assets (icons/logos)
+ * Can be overridden via AssetDetectionConfig
+ */
+const DEFAULT_ASSET_MAX_SIZE = 80;
+
+/**
  * Vector node types that indicate vector-based content
  */
 const VECTOR_TYPES = new Set([
@@ -36,6 +42,65 @@ const VECTOR_TYPES = new Set([
   'REGULAR_POLYGON',
   'LINE',
 ]);
+
+/**
+ * Common icon library naming patterns
+ * Used to detect icons based on component/instance names
+ */
+const ICON_NAME_PATTERNS = [
+  /^icons?[/\-_\s]/i,      // "icon/", "icons-", "Icon_", "icon "
+  /^ic[/\-_\s]/i,          // "ic/", "ic-", "ic_"
+  /^fi[/\-_]/i,            // "fi-" (Figma icons, Feather icons)
+  /[/\-_]icons?$/i,        // ends with "/icon", "-icons"
+  /^phosphor[/\-_]/i,      // Phosphor icons
+  /^feather[/\-_]/i,       // Feather icons
+  /^heroicons?[/\-_]/i,    // Heroicons
+  /^lucide[/\-_]/i,        // Lucide icons
+  /^material[/\-_]icon/i,  // Material icons
+];
+
+/**
+ * Asset detection configuration
+ */
+export interface AssetDetectionConfig {
+  /** Maximum size for exportable assets (default: 80) */
+  maxAssetSize?: number;
+  /** Whether to respect Figma's exportSettings (default: true) */
+  useExportSettings?: boolean;
+  /** Additional icon name patterns to match */
+  iconNamePatterns?: string[];
+  /** Force export for nodes matching these name patterns */
+  forceExportPatterns?: string[];
+}
+
+/**
+ * Module-level asset detection config (set via setAssetDetectionConfig)
+ */
+let currentAssetConfig: AssetDetectionConfig = {};
+
+/**
+ * Configure asset detection settings for the classifier
+ * Call this before classification to apply project-specific settings
+ */
+export function setAssetDetectionConfig(config: AssetDetectionConfig): void {
+  currentAssetConfig = { ...config };
+}
+
+/**
+ * Get current asset detection config
+ */
+export function getAssetDetectionConfig(): AssetDetectionConfig {
+  return { ...currentAssetConfig };
+}
+
+/**
+ * Check if a node name matches icon library patterns
+ */
+function isFromIconLibrary(node: LayoutNode, extraPatterns: RegExp[] = []): boolean {
+  const name = node.name;
+  const allPatterns = [...ICON_NAME_PATTERNS, ...extraPatterns];
+  return allPatterns.some(pattern => pattern.test(name));
+}
 
 /**
  * Extract component property values as simple strings
@@ -124,9 +189,53 @@ function getTextLength(node: LayoutNode): number {
 
 /**
  * Determine if a component should be exported as an asset (icon/logo)
- * Uses size, text content, and composition heuristics to avoid false positives
+ *
+ * Detection priority:
+ * 1. Designer's explicit exportSettings (highest priority - native Figma intent)
+ * 2. Icon library naming patterns (e.g., "icon/", "fi-", "phosphor/")
+ * 3. Structural heuristics (size, vector composition, text content)
+ *
+ * @param node - The node to check
+ * @param config - Optional configuration for detection thresholds
  */
-function shouldExportAsAsset(node: LayoutNode): boolean {
+function shouldExportAsAsset(node: LayoutNode, config: AssetDetectionConfig = {}): boolean {
+  const {
+    maxAssetSize = DEFAULT_ASSET_MAX_SIZE,
+    useExportSettings = true,
+    iconNamePatterns = [],
+    forceExportPatterns = [],
+  } = config;
+
+  // Convert string patterns to RegExp
+  const extraIconPatterns = iconNamePatterns.map(p => new RegExp(p, 'i'));
+  const forcePatterns = forceExportPatterns.map(p => new RegExp(p, 'i'));
+
+  // Priority 1: Designer's explicit export settings (native Figma intent)
+  if (useExportSettings && node.exportSettings && node.exportSettings.length > 0) {
+    return true;
+  }
+
+  // Priority 2: Force export patterns (user-configured)
+  if (forcePatterns.some(pattern => pattern.test(node.name))) {
+    return hasVectorContent(node); // Still need vector content
+  }
+
+  // Priority 3: Icon library naming patterns
+  if (isFromIconLibrary(node, extraIconPatterns)) {
+    // For known icon libraries, be more permissive with size
+    // but still require vector content
+    if (hasVectorContent(node)) {
+      const { width, height } = node.boundingBox;
+      const maxDim = Math.max(width, height);
+      // Allow up to 2x the normal max size for named icon components
+      if (maxDim <= maxAssetSize * 2) {
+        return true;
+      }
+    }
+  }
+
+  // Priority 4: Structural heuristics (fallback)
+
   // Must have vector content
   if (!hasVectorContent(node)) {
     return false;
@@ -135,9 +244,9 @@ function shouldExportAsAsset(node: LayoutNode): boolean {
   const { width, height } = node.boundingBox;
   const maxDim = Math.max(width, height);
 
-  // Size heuristic: icons/logos are typically small to medium (< 80px)
+  // Size heuristic: icons/logos are typically small to medium
   // This prevents exporting entire cards/screens with embedded icons
-  if (maxDim > 80) {
+  if (maxDim > maxAssetSize) {
     return false;
   }
 
@@ -192,6 +301,12 @@ export function isImage(node: LayoutNode): boolean {
     return true;
   }
 
+  // FRAME/GROUP containing only vectors (illustrations, logos)
+  // Uses heuristics to avoid treating vectorized text as images
+  if (isVectorIllustration(node)) {
+    return true;
+  }
+
   return false;
 }
 
@@ -210,6 +325,52 @@ function isVectorOnlyContainer(node: LayoutNode): boolean {
       child.type === 'ELLIPSE' ||
       child.type === 'REGULAR_POLYGON'
   );
+}
+
+/**
+ * Count total vector leaf nodes in a container (recursive)
+ */
+function countVectorChildrenDeep(node: LayoutNode): number {
+  if (VECTOR_TYPES.has(node.type)) {
+    return 1;
+  }
+  if (!node.children?.length) {
+    return 0;
+  }
+  return node.children.reduce((sum, child) => sum + countVectorChildrenDeep(child), 0);
+}
+
+/**
+ * Check if a FRAME/GROUP is a vector illustration (icon, logo, etc.)
+ * Uses heuristics to avoid false positives with vectorized text:
+ * - Name patterns for icons/illustrations
+ * - Vector count threshold (text has many glyphs, icons are simpler)
+ * - Text content detection in name
+ */
+function isVectorIllustration(node: LayoutNode): boolean {
+  // Must be a vector-only container
+  if (!isVectorOnlyContainer(node)) {
+    return false;
+  }
+
+  const name = node.name;
+
+  // Check if name looks like text content (Cyrillic sentences, currency, multiple spaces)
+  // These patterns indicate the vectors might be converted text, not icons
+  const looksLikeTextContent = /[\u0400-\u04FF]{4,}|^\d+\s*[₽$€£¥]|.+\s{2,}.+/.test(name);
+  if (looksLikeTextContent) {
+    return false;
+  }
+
+  // Check for explicit icon/illustration naming patterns
+  const isIconName = /icon|logo|illustration|image|asset|fi-|ic[^a-z]|img/i.test(name);
+  if (isIconName) {
+    return true;
+  }
+
+  // Heuristic: Icons typically have few vectors (≤7), vectorized text has many (one per glyph)
+  const vectorCount = countVectorChildrenDeep(node);
+  return vectorCount <= 7;
 }
 
 /**
@@ -557,8 +718,8 @@ export function toIRNode(node: LayoutNode): IRNode {
       const componentProps = extractComponentProps(node);
 
       // Check if this component should be exported as an asset
-      // Uses heuristics: size, text content, vector composition
-      const isExportableAsset = shouldExportAsAsset(node);
+      // Uses exportSettings, icon patterns, and structural heuristics
+      const isExportableAsset = shouldExportAsAsset(node, currentAssetConfig);
 
       return {
         ...baseProps,

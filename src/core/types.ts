@@ -89,6 +89,9 @@ export interface NormalizedNode {
   // Component instance metadata (for INSTANCE nodes)
   componentId?: string;
   componentProperties?: Record<string, { type: string; value: string | boolean }>;
+
+  // Export settings from Figma (designer's intent for export)
+  exportSettings?: Array<{ format: string; suffix?: string; constraint?: { type: string; value: number } }>;
 }
 
 // ============================================================================
@@ -373,6 +376,17 @@ export interface PipelineOptions {
   iconMaxSize?: number;
   /** Project tokens to map against */
   projectTokens?: DesignTokens;
+  /** Asset detection configuration */
+  assetDetection?: {
+    /** Maximum size for exportable assets (default: 80) */
+    maxAssetSize?: number;
+    /** Whether to respect Figma's exportSettings (default: true) */
+    useExportSettings?: boolean;
+    /** Additional icon name patterns (regex strings) */
+    iconNamePatterns?: string[];
+    /** Force export patterns (regex strings) */
+    forceExportPatterns?: string[];
+  };
 }
 
 /**

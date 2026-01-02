@@ -213,9 +213,21 @@ export interface FigmaConfig {
   
   // Framework detection
   framework: 'expo' | 'react-native' | 'ignite';
-  
+
   // Style pattern detection
   stylePattern: 'useTheme' | 'StyleSheet' | 'unistyles';
+
+  // Asset detection configuration (icons, images, logos)
+  assetDetection?: {
+    /** Maximum size for exportable assets in pixels (default: 80) */
+    maxAssetSize?: number;
+    /** Whether to respect Figma's exportSettings (default: true) */
+    useExportSettings?: boolean;
+    /** Additional icon name patterns to match (regex strings) */
+    iconNamePatterns?: string[];
+    /** Force export for nodes matching these name patterns (regex strings) */
+    forceExportPatterns?: string[];
+  };
 }
 
 /**

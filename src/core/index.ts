@@ -80,7 +80,11 @@ export {
   classifyNode,
   toIRNode,
   recognizeSemantics,
+  setAssetDetectionConfig,
+  getAssetDetectionConfig,
 } from './recognize/index.js';
+
+export type { AssetDetectionConfig } from './recognize/index.js';
 
 // Styles module
 export {
