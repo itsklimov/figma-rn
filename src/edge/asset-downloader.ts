@@ -97,12 +97,24 @@ function extractAssetNodes(node: IRNode, assets: AssetNode[]): void {
   if (node.semanticType === 'Image') {
     const imageRef = (node as any).imageRef;
     if (imageRef) {
+      // Standard image with IMAGE fill
       assets.push({
         nodeId: node.id,
         name: node.name,
         ref: imageRef,
         category: 'image',
       });
+    } else if (node.children && node.children.length > 0) {
+      // Vector illustration (FRAME/GROUP with vector children, no imageRef)
+      // Export the whole node as SVG
+      assets.push({
+        nodeId: node.id,
+        name: node.name,
+        ref: node.id,
+        category: 'icon', // Export as SVG
+      });
+      // Don't recurse - export as single unit
+      return;
     }
   } else if (node.semanticType === 'Icon') {
     const iconRef = (node as any).iconRef;

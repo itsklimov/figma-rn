@@ -22,7 +22,7 @@ import type {
 import { normalizeTree, type FilterOptions } from './normalize/index.js';
 import { addLayoutInfo } from './layout/index.js';
 import { mapConstraints } from './layout/constraint-mapper.js';
-import { recognizeSemantics } from './recognize/index.js';
+import { recognizeSemantics, setAssetDetectionConfig } from './recognize/index.js';
 import { extractStyleFromProps, extractTokens, createEmptyStylesBundle } from './styles/index.js';
 import { detectSafeArea, type SafeAreaDetectionResult } from './detection/index.js';
 import { detectModalOverlay, extractModalContent, type ModalOverlayResult } from './detection/index.js';
@@ -384,6 +384,10 @@ export function transformToScreenIR(
   const withLayout = addLayout(normalized);
 
   // Stage 3: Recognize
+  // Configure asset detection before classification
+  if (options?.assetDetection) {
+    setAssetDetectionConfig(options.assetDetection);
+  }
   const ir = recognize(withLayout);
 
   // Stage 4: Extract Styles
