@@ -5,7 +5,7 @@
 
 import type { IRNode, IconIR, ImageIR, StylesBundle, ExtractedStyle, RepeaterIR, ButtonIR, ComponentIR } from '../types.js';
 import type { TokenMappings } from '../mapping/token-matcher.js';
-import { toValidIdentifier, escapeJSXText } from './utils.js';
+import { escapeJSXText } from './utils.js';
 import { mapColor } from './styles-builder.js';
 
 /** Minimum touch target size for comfortable interaction */

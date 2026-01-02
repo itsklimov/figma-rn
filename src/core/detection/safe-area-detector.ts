@@ -257,22 +257,24 @@ function calculateInsets(
 
   for (const element of chromeElements) {
     switch (element.type) {
-      case 'status-bar':
+      case 'status-bar': {
         // Top inset is the height of the status bar
         const statusBarBottom = element.boundingBox.y + element.boundingBox.height - rootBounds.y;
         insets.top = Math.max(insets.top, statusBarBottom);
         break;
+      }
 
       case 'home-indicator':
-      case 'navigation-bar':
+      case 'navigation-bar': {
         // Bottom inset is the height of the home indicator area
         const rootBottom = rootBounds.y + rootBounds.height;
         const indicatorTop = element.boundingBox.y;
         const bottomInset = rootBottom - indicatorTop;
         insets.bottom = Math.max(insets.bottom, bottomInset);
         break;
+      }
 
-      case 'safe-area':
+      case 'safe-area': {
         // Safe area elements might define all insets
         // Calculate based on position relative to root
         const safeTop = element.boundingBox.y - rootBounds.y;
@@ -286,6 +288,7 @@ function calculateInsets(
         if (safeLeft > 0) insets.left = Math.max(insets.left, safeLeft);
         if (safeRight > 0) insets.right = Math.max(insets.right, safeRight);
         break;
+      }
     }
   }
 

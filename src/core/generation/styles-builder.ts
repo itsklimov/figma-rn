@@ -4,7 +4,7 @@
 
 import type { StylesBundle, ExtractedStyle, LayoutMeta, IRNode } from '../types.js';
 import type { TokenMappings } from '../mapping/token-matcher.js';
-import { toValidIdentifier, formatInteger, formatSmart, formatFloat } from './utils.js';
+import { formatInteger, formatSmart, formatFloat } from './utils.js';
 import { normalizeHex } from '../utils/path-utils.js';
 
 /**

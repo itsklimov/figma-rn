@@ -26,32 +26,6 @@ export function createEmptyMappings(): TokenMappings {
 }
 
 /**
- * Match a single value to project tokens
- * Returns theme path if matched, original value as string otherwise
- */
-function matchValue(
-  value: string | number,
-  projectTokens: Map<string | number, string> | undefined
-): string {
-  if (!projectTokens) {
-    return String(value);
-  }
-
-  // Try exact match first
-  const exactMatch = projectTokens.get(value);
-  if (exactMatch) {
-    return exactMatch;
-  }
-
-  // For numbers, try exact match only
-  if (typeof value === 'number') {
-    return String(value);
-  }
-
-  return String(value);
-}
-
-/**
  * Match a spacing value to project spacing with percentage-based tolerance
  *
  * Key principles:
@@ -279,7 +253,7 @@ export function matchTokens(
   // Match typography (by serialized key comparison with wildcard support)
   mappings.typography = {};
   if (extracted.typography) {
-    for (const [_, value] of Object.entries(extracted.typography)) {
+    for (const [, value] of Object.entries(extracted.typography)) {
       // 1. Normalize Figma values
       // Normalize non-standard font weights (590→600, 510→500, etc.) to nearest 100
       const rawWeight = value.fontWeight || 400;
@@ -387,7 +361,7 @@ export function matchTokens(
           // Skip wildcard entries (they're for lookup, not iteration)
           if (keyStr.startsWith('*-')) continue;
           
-          const [pFamily, pSize, pWeight, pLH] = keyStr.split('-');
+          const [, pSize, pWeight, pLH] = keyStr.split('-');
           const pSizeNum = parseInt(pSize);
           const pWeightNum = parseInt(pWeight);
           const pLHNum = parseInt(pLH);
@@ -421,7 +395,7 @@ export function matchTokens(
 
   // Match shadows (exact match only, by deterministic key)
   mappings.shadows = {};
-  for (const [_, value] of Object.entries(extracted.shadows)) {
+  for (const [, value] of Object.entries(extracted.shadows)) {
     // Use same deterministic key format as theme-extractor
     const shadowKey = `${value.offsetX ?? 0},${value.offsetY ?? 0},${value.blur ?? 0},${value.spread ?? 0}`;
     const match = project.shadows?.get(shadowKey);

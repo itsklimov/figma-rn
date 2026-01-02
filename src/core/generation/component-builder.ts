@@ -3,15 +3,14 @@
  * Supports both single-file and multi-file output with detection hints
  */
 
-import type { ScreenIR, DesignTokens, IRNode, ComponentIR, StylesBundle, RepeaterIR, TextIR, ImageIR } from '../types.js';
+import type { ScreenIR, IRNode, ComponentIR, StylesBundle, RepeaterIR } from '../types.js';
 import type { TokenMappings } from '../mapping/token-matcher.js';
-import type { DetectionResult, ComponentHint, ListHint } from '../detection/types.js';
+import type { DetectionResult, ComponentHint } from '../detection/types.js';
 import { buildImports, type ImportConfig } from './imports-builder.js';
 import { buildJSX } from './jsx-builder.js';
 import { buildStyles } from './styles-builder.js';
-import { generateFlatList, generateItemComponent } from './list-generator.js';
+import { generateItemComponent } from './list-generator.js';
 import { generateTokensIfNeeded } from './tokens-generator.js';
-import { toValidIdentifier } from './utils.js';
 import { extractProps } from './prop-extractor.js';
 import { mergePropsVariations, extractVariableProps } from '../detection/repetition-detector.js';
 import { detectSemanticState } from '../detection/state-detector.js';
@@ -186,7 +185,6 @@ export function generateComponent(
 
   // 2.6 Process Repeaters (Update tree and collect parts)
   const repeaters = collectRepeaters(screen.root);
-  const usedRepeaterNames = new Set<string>();
   for (const repeater of repeaters) {
     const { dataConstant, itemComponent, typeDefinition, itemComponentName } = generateRepeaterParts(repeater, screen.stylesBundle, mappings, options, listExtras.generatedComponentNames);
     listExtras.data.push(dataConstant);
@@ -526,7 +524,6 @@ function generateRepeaterParts(
   // 3. Build data array based on semantic state or raw variations
   let dataItems: Record<string, any>[];
   let semanticPropName: string | undefined;
-  let stateStyles: Record<string, any> | undefined;
   
   // Build text props mapping from template for dynamic component generation
   // Maps prop name -> { path: child path, isPrimary: boolean }
@@ -536,7 +533,7 @@ function generateRepeaterParts(
   if (stateResult.hasSemanticState && stateResult.state) {
     // Semantic state detected! Generate data with state flags, not style values
     semanticPropName = stateResult.state.propName;
-    stateStyles = stateResult.state.stateStyles;
+    // Note: stateStyles available at stateResult.state.stateStyles if needed for future use
 
     // First pass: analyze template to build text props mapping
     const templateRawValues = extractVariableProps(template, stylesBundle, mappings);
@@ -696,7 +693,6 @@ function generateSubComponent(
 
   // Generate props interface
   let propsInterface = '';
-  let propsType = '';
   let propsDestructure = '';
   
   // Check if we have semantic state (e.g., isSelected pattern)
@@ -786,8 +782,7 @@ ${jsx}
     
     const interfaceName = `${component.componentName}Props`;
     propsInterface = `interface ${interfaceName} {\n${propLines.join('\n')}\n}\n\n`;
-    propsType = interfaceName;
-    
+
     // Destructured props for the signature
     const destructureParts = Object.entries(extractedProps).map(([name, config]: [string, any]) => {
       if (config.type === 'image') {
@@ -973,7 +968,6 @@ function generateExtractedComponent(
     ? `interface ${componentName}Props {\n${propLines.join('\n')}\n}\n\n`
     : '';
 
-  const propsParam = propLines.length > 0 ? `props: ${componentName}Props` : '';
   const propsDestructure = propLines.length > 0 ? `{ ${Object.keys(extractedProps).join(', ')} }: ${componentName}Props` : '';
 
   // Build imports from template node
