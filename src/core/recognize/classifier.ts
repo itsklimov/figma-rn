@@ -14,7 +14,6 @@ import type {
   IconIR,
   ComponentIR,
   RepeaterIR,
-  LayoutMeta,
 } from '../types.js';
 
 import { extractProps } from '../generation/prop-extractor.js';
@@ -25,6 +24,144 @@ import { toValidIdentifier, toPascalCase } from '../generation/utils.js';
  */
 const ICON_MIN_SIZE = 8;
 const ICON_MAX_SIZE = 48;
+
+/**
+ * Vector node types that indicate vector-based content
+ */
+const VECTOR_TYPES = new Set([
+  'VECTOR',
+  'BOOLEAN_OPERATION',
+  'STAR',
+  'ELLIPSE',
+  'REGULAR_POLYGON',
+  'LINE',
+]);
+
+/**
+ * Extract component property values as simple strings
+ * Converts { Name: { type: 'VARIANT', value: 'gift-card' } } to { Name: 'gift-card' }
+ */
+function extractComponentProps(node: LayoutNode): Record<string, string> | undefined {
+  const rawProps = (node as any).componentProperties;
+  if (!rawProps || typeof rawProps !== 'object') return undefined;
+
+  const props: Record<string, string> = {};
+  for (const [key, val] of Object.entries(rawProps)) {
+    if (val && typeof val === 'object' && 'value' in (val as any)) {
+      props[key] = String((val as any).value);
+    }
+  }
+  return Object.keys(props).length > 0 ? props : undefined;
+}
+
+/**
+ * Check if a node or its children contain vector content (icons, logos)
+ * Recursively searches for VECTOR and related node types
+ */
+function hasVectorContent(node: LayoutNode): boolean {
+  // Direct vector type
+  if (VECTOR_TYPES.has(node.type)) {
+    return true;
+  }
+
+  // Check children recursively
+  if (node.children && node.children.length > 0) {
+    return node.children.some(child => hasVectorContent(child));
+  }
+
+  return false;
+}
+
+/**
+ * Check if a node or its children contain text content
+ */
+function hasTextContent(node: LayoutNode): boolean {
+  if (node.type === 'TEXT' && node.text && node.text.trim().length > 0) {
+    return true;
+  }
+  if (node.children && node.children.length > 0) {
+    return node.children.some(child => hasTextContent(child));
+  }
+  return false;
+}
+
+/**
+ * Count leaf nodes that are vectors
+ */
+function countVectorLeaves(node: LayoutNode): number {
+  if (!node.children || node.children.length === 0) {
+    // Leaf node
+    return VECTOR_TYPES.has(node.type) ? 1 : 0;
+  }
+  return node.children.reduce((sum, child) => sum + countVectorLeaves(child), 0);
+}
+
+/**
+ * Count total leaf nodes
+ */
+function countTotalLeaves(node: LayoutNode): number {
+  if (!node.children || node.children.length === 0) {
+    return 1;
+  }
+  return node.children.reduce((sum, child) => sum + countTotalLeaves(child), 0);
+}
+
+/**
+ * Count total text length in a node tree
+ */
+function getTextLength(node: LayoutNode): number {
+  let total = 0;
+  if (node.type === 'TEXT' && node.text) {
+    total += node.text.trim().length;
+  }
+  if (node.children) {
+    for (const child of node.children) {
+      total += getTextLength(child);
+    }
+  }
+  return total;
+}
+
+/**
+ * Determine if a component should be exported as an asset (icon/logo)
+ * Uses size, text content, and composition heuristics to avoid false positives
+ */
+function shouldExportAsAsset(node: LayoutNode): boolean {
+  // Must have vector content
+  if (!hasVectorContent(node)) {
+    return false;
+  }
+
+  const { width, height } = node.boundingBox;
+  const maxDim = Math.max(width, height);
+
+  // Size heuristic: icons/logos are typically small to medium (< 80px)
+  // This prevents exporting entire cards/screens with embedded icons
+  if (maxDim > 80) {
+    return false;
+  }
+
+  // Text heuristic: Pure icons don't contain meaningful text
+  // Exception: Short text (< 4 chars) is OK (e.g., "+" button, "AR" logo)
+  if (hasTextContent(node)) {
+    const textLen = getTextLength(node);
+    if (textLen > 3) {
+      return false; // Too much text, not an icon
+    }
+  }
+
+  // Composition heuristic: Should be mostly vector content
+  // At least 70% of leaf nodes should be vectors
+  const vectorLeaves = countVectorLeaves(node);
+  const totalLeaves = countTotalLeaves(node);
+  const vectorRatio = totalLeaves > 0 ? vectorLeaves / totalLeaves : 0;
+
+  if (vectorRatio < 0.7) {
+    return false;
+  }
+
+  return true;
+}
 
 /**
  * Check if a node is a text element
@@ -416,6 +553,13 @@ export function toIRNode(node: LayoutNode): IRNode {
       const tempNode = { ...baseProps, semanticType: 'Component', children } as IRNode;
       const { props } = extractProps(tempNode);
 
+      // Extract Figma component properties (variant props like Name, Size)
+      const componentProps = extractComponentProps(node);
+
+      // Check if this component should be exported as an asset
+      // Uses heuristics: size, text content, vector composition
+      const isExportableAsset = shouldExportAsAsset(node);
+
       return {
         ...baseProps,
         semanticType: 'Component',
@@ -424,6 +568,8 @@ export function toIRNode(node: LayoutNode): IRNode {
         props,
         layout: node.layout,
         children,
+        componentProps,
+        isExportableAsset,
       } as ComponentIR;
     }
 
