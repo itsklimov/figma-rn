@@ -261,30 +261,45 @@ export function transformCornerRadius(raw: any): CornerRadius | null {
 }
 
 /**
- * Transform component property definitions
+ * Transform component properties - handles both:
+ * - componentProperties (on INSTANCE nodes - actual values)
+ * - componentPropertyDefinitions (on COMPONENT nodes - definitions)
  */
 export function transformComponentProperties(raw: any): Record<string, ComponentProperty> | null {
-  if (!raw.componentPropertyDefinitions) {
-    return null;
-  }
-
   const properties: Record<string, ComponentProperty> = {};
 
-  for (const [name, prop] of Object.entries(raw.componentPropertyDefinitions)) {
-    const typedProp = prop as any;
+  const typeMap: Record<string, ComponentProperty['type']> = {
+    'VARIANT': 'VARIANT',
+    'TEXT': 'TEXT',
+    'BOOLEAN': 'BOOLEAN',
+    'INSTANCE_SWAP': 'INSTANCE_SWAP',
+  };
 
-    const typeMap: Record<string, ComponentProperty['type']> = {
-      'VARIANT': 'VARIANT',
-      'TEXT': 'TEXT',
-      'BOOLEAN': 'BOOLEAN',
-      'INSTANCE_SWAP': 'INSTANCE_SWAP',
-    };
+  // Handle instance properties (actual values from component usage)
+  if (raw.componentProperties) {
+    for (const [name, prop] of Object.entries(raw.componentProperties)) {
+      const typedProp = prop as any;
+      properties[name] = {
+        type: typeMap[typedProp.type] || 'TEXT',
+        value: typedProp.value ?? '',
+        options: typedProp.variantOptions,
+      };
+    }
+  }
 
-    properties[name] = {
-      type: typeMap[typedProp.type] || 'TEXT',
-      value: typedProp.defaultValue ?? '',
-      options: typedProp.variantOptions,
-    };
+  // Handle component property definitions (for component nodes)
+  if (raw.componentPropertyDefinitions) {
+    for (const [name, prop] of Object.entries(raw.componentPropertyDefinitions)) {
+      const typedProp = prop as any;
+      // Don't overwrite instance values with definitions
+      if (!properties[name]) {
+        properties[name] = {
+          type: typeMap[typedProp.type] || 'TEXT',
+          value: typedProp.defaultValue ?? '',
+          options: typedProp.variantOptions,
+        };
+      }
+    }
   }
 
   return Object.keys(properties).length > 0 ? properties : null;

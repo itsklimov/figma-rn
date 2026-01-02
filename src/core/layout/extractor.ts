@@ -350,5 +350,9 @@ export function addLayoutInfo(node: NormalizedNode, parentLayoutType?: LayoutTyp
   if ((node as any).styles) (layoutNode as any).styles = (node as any).styles;
   if (node.scrollBehavior) (layoutNode as any).scrollBehavior = node.scrollBehavior;
 
+  // Copy Component instance metadata (for INSTANCE nodes)
+  if (node.componentId) (layoutNode as any).componentId = node.componentId;
+  if (node.componentProperties) (layoutNode as any).componentProperties = node.componentProperties;
+
   return layoutNode;
 }
