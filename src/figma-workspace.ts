@@ -1242,17 +1242,17 @@ export function getEntriesByCategory(
 /**
  * Format result for LLM
  */
-export function formatResultForLLM(result: GenerationResult): string {
-  // Use {PROJECT_ROOT} marker to make it clear paths are relative to project root
-  const projectRoot = '{PROJECT_ROOT}';
+export function formatResultForLLM(result: GenerationResult, projectRoot?: string): string {
+  // Use absolute path if provided, otherwise fall back to cwd
+  const root = projectRoot ?? process.cwd();
 
   let response = `## ${result.wasReplaced ? '🔄 Replaced' : '✅ Generated'} ${result.name}\n\n`;
 
   response += `| Property | Value |\n`;
   response += `|----------|-------|\n`;
   response += `| **Type** | ${result.category} |\n`;
-  response += `| **Folder** | \`${projectRoot}/${result.folder}\` |\n`;
-  response += `| **Code** | \`${projectRoot}/${result.indexPath}\` |\n`;
+  response += `| **Folder** | \`${join(root, result.folder)}\` |\n`;
+  response += `| **Code** | \`${join(root, result.indexPath)}\` |\n`;
   response += `| **Exports** | ${result.exports.map(e => `\`${e}\``).join(', ')} |\n`;
 
   if (result.dependencies.length > 0) {
@@ -1260,7 +1260,7 @@ export function formatResultForLLM(result: GenerationResult): string {
   }
 
   if (result.screenshotPath) {
-    response += `| **Screenshot** | \`${projectRoot}/${result.screenshotPath}\` |\n`;
+    response += `| **Screenshot** | \`${join(root, result.screenshotPath)}\` |\n`;
   }
 
   if (result.assets.length > 0) {

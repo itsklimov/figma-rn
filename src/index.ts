@@ -511,7 +511,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         let response = `# 🎯 Generated: ${screenName}\n\n`;
 
         // Main info
-        response += formatResultForLLM(genResult);
+        response += formatResultForLLM(genResult, root);
 
         // Generation details
         response += `\n## Generation Details\n\n`;
