@@ -33,18 +33,42 @@ interface AssetNode {
 
 /**
  * Get semantic name for a component from its properties
- * Uses Name, Property 1, or falls back to component name
+ * Prioritizes meaningful semantic properties over generic names
  */
 function getComponentAssetName(comp: ComponentIR): string {
   const props = comp.componentProps;
-  if (props) {
-    // Prefer 'Name' property (common for icon libraries)
-    if (props.Name) return props.Name;
-    // Fallback to Property 1 (variant selector)
-    if (props['Property 1']) return props['Property 1'];
-    // Try Property 2 for card type components (like 'visa', 'mastercard')
-    if (props['Property 2']) return props['Property 2'];
+  if (!props) return comp.componentName;
+
+  // 1. Check for explicit name/icon properties (case-insensitive)
+  for (const [key, value] of Object.entries(props)) {
+    const lowerKey = key.toLowerCase();
+    if (lowerKey === 'name' || lowerKey === 'icon' || lowerKey === 'type') {
+      return value;
+    }
   }
+
+  // 2. Find first meaningful property (skip size/state/boolean props)
+  for (const [key, value] of Object.entries(props)) {
+    const lowerKey = key.toLowerCase();
+    const lowerValue = String(value).toLowerCase();
+
+    // Skip size properties
+    if (lowerKey.includes('size') || lowerKey.includes('width') || lowerKey.includes('height')) {
+      continue;
+    }
+    // Skip state/boolean properties
+    if (lowerValue === 'true' || lowerValue === 'false' || lowerValue === 'yes' || lowerValue === 'no') {
+      continue;
+    }
+    // Skip generic property names (Property 1, Property 2)
+    if (/^property\s*\d+$/i.test(key)) {
+      // But use the value if it's meaningful
+      return value;
+    }
+    // Found a meaningful property
+    return value;
+  }
+
   // Final fallback to component name
   return comp.componentName;
 }
