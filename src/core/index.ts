@@ -98,3 +98,22 @@ export {
   collectStylesFromIR,
   createEmptyStylesBundle,
 } from './styles/index.js';
+
+// Contracts module
+export {
+  resolveProjectProfile,
+  validateGeneratedCodeContracts,
+  toContractProfileSummary,
+} from './contracts/index.js';
+
+export type {
+  ResolveProjectProfileOptions,
+  ContractValidationResult,
+  ProfileMode,
+  RequestedSvgMode,
+  ResolvedSvgMode,
+  ContractDiagnostic,
+  ResolvedProjectProfile,
+  ContractProfileSummary,
+  UnresolvedAssetRef,
+} from './contracts/index.js';

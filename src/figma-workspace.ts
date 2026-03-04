@@ -137,6 +137,32 @@ export interface ElementMeta {
     /** Confidence */
     confidence: number;
   }>;
+  /** Contract diagnostics emitted during generation */
+  diagnostics?: Array<{
+    level: 'info' | 'warning' | 'error';
+    code: string;
+    message: string;
+    location?: string;
+  }>;
+  /** Unresolved asset references */
+  unresolvedAssets?: Array<{
+    ref: string;
+    nodeId: string;
+    semanticType: string;
+    location?: string;
+  }>;
+  /** Snapshot of resolved project profile */
+  profileSnapshot?: {
+    importPrefix: string;
+    stylePattern: 'useTheme' | 'StyleSheet' | 'unistyles';
+    themeImportPath?: string;
+    scaleImport?: { name: string; path: string };
+    safeAreaAvailable: boolean;
+    svgMode: 'component' | 'runtime' | 'raster';
+    svgIconProviderPath?: string;
+    relativeAssetImportsOnly: boolean;
+    strictContracts: boolean;
+  };
 }
 
 /**
@@ -1126,6 +1152,9 @@ export async function registerGeneration(
     interactions?: ElementMeta['interactions'];
     componentGroups?: ElementMeta['componentGroups'];
     previousName?: string;
+    diagnostics?: ElementMeta['diagnostics'];
+    unresolvedAssets?: ElementMeta['unresolvedAssets'];
+    profileSnapshot?: ElementMeta['profileSnapshot'];
   } = {}
 ): Promise<GenerationResult> {
   // Get manifest
@@ -1192,6 +1221,9 @@ export async function registerGeneration(
     tokensExtracted: 0,
     interactions: options.interactions,
     componentGroups: options.componentGroups,
+    diagnostics: options.diagnostics,
+    unresolvedAssets: options.unresolvedAssets,
+    profileSnapshot: options.profileSnapshot,
   };
 
   await saveElementMeta(elementFolder, meta);

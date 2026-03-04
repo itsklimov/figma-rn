@@ -14,6 +14,11 @@ import { join } from 'path';
 import type { MultiFileResult } from '../core/generation/index.js';
 import type { DownloadedAsset } from './asset-downloader.js';
 import type { ManifestCategory } from '../figma-workspace.js';
+import type {
+  ContractDiagnostic,
+  ContractProfileSummary,
+  UnresolvedAssetRef,
+} from '../core/contracts/index.js';
 import {
   registerGeneration,
   saveScreenshot,
@@ -42,6 +47,12 @@ export interface WriteOptions {
   figmaName?: string;
   /** Previous name (if renamed) for cleanup */
   previousName?: string;
+  /** Contract diagnostics */
+  diagnostics?: ContractDiagnostic[];
+  /** Unresolved assets report */
+  unresolvedAssets?: UnresolvedAssetRef[];
+  /** Resolved contract profile snapshot */
+  profileSnapshot?: ContractProfileSummary;
 }
 
 /**
@@ -111,6 +122,9 @@ export async function writeGeneratedFiles(options: WriteOptions): Promise<WriteR
     screenshot,
     figmaName,
     previousName,
+    diagnostics,
+    unresolvedAssets,
+    profileSnapshot,
   } = options;
 
   try {
@@ -140,6 +154,9 @@ export async function writeGeneratedFiles(options: WriteOptions): Promise<WriteR
         screenshotPath: screenshot ? 'screenshot.png' : undefined,
         figmaName,
         previousName,
+        diagnostics,
+        unresolvedAssets,
+        profileSnapshot,
         // Note: tokensExtracted is computed inside registerGeneration from tokens
         // We don't have access to the DesignTokens object here, so we omit it
       }
