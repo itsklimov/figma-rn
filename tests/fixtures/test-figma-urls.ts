@@ -17,8 +17,10 @@ const __dirname = dirname(__filename);
 config({ path: resolve(__dirname, '../../.env') });
 
 // Base URL for test file
-export const TEST_FILE_KEY = 'wQQDVitfu2TuNuAXWOXRB1';
-export const TEST_FILE_NAME = 'MARAFET--Copy-';
+const DEFAULT_TEST_FILE_KEY = 'TESTFILEKEY1234567890AB';
+const DEFAULT_TEST_FILE_NAME = 'E2E-Design-File';
+export const TEST_FILE_KEY = process.env.FIGMA_E2E_FILE_KEY || DEFAULT_TEST_FILE_KEY;
+export const TEST_FILE_NAME = process.env.FIGMA_E2E_FILE_NAME || DEFAULT_TEST_FILE_NAME;
 export const MAIN_SCREEN_NODE_ID = '7621-71846';
 export const BASE_URL = `https://www.figma.com/design/${TEST_FILE_KEY}/${TEST_FILE_NAME}`;
 
@@ -63,7 +65,7 @@ export interface LiveE2ECase {
 export const LIVE_E2E_CASES: LiveE2ECase[] = [
   {
     id: 'screen-main',
-    figmaUrl: 'https://www.figma.com/design/wQQDVitfu2TuNuAXWOXRB1/MARAFET--Copy-?node-id=7621-71846&m=dev',
+    figmaUrl: createFigmaUrl('7621-71846'),
     expectedResolvedName: 'GlavnayaKlient',
     category: 'screens',
     minAssets: 8,
@@ -72,7 +74,7 @@ export const LIVE_E2E_CASES: LiveE2ECase[] = [
   },
   {
     id: 'screen-1669-21091',
-    figmaUrl: 'https://www.figma.com/design/wQQDVitfu2TuNuAXWOXRB1/MARAFET--Copy-?node-id=1669-21091&t=W6vSngzerMKFYrF6-4',
+    figmaUrl: createFigmaUrl('1669-21091'),
     expectedResolvedName: 'Session',
     category: 'screens',
     minAssets: 10,
@@ -81,7 +83,7 @@ export const LIVE_E2E_CASES: LiveE2ECase[] = [
   },
   {
     id: 'screen-2453-67667',
-    figmaUrl: 'https://www.figma.com/design/wQQDVitfu2TuNuAXWOXRB1/MARAFET--Copy-?node-id=2453-67667&m=dev',
+    figmaUrl: createFigmaUrl('2453-67667'),
     expectedResolvedName: 'Notifications',
     category: 'screens',
     minAssets: 1,
@@ -90,7 +92,7 @@ export const LIVE_E2E_CASES: LiveE2ECase[] = [
   },
   {
     id: 'screen-868-33060',
-    figmaUrl: 'https://www.figma.com/design/wQQDVitfu2TuNuAXWOXRB1/MARAFET--Copy-?node-id=868-33060&m=dev',
+    figmaUrl: createFigmaUrl('868-33060'),
     expectedResolvedName: 'HomeWithoutVisit',
     category: 'screens',
     minAssets: 8,
@@ -99,7 +101,7 @@ export const LIVE_E2E_CASES: LiveE2ECase[] = [
   },
   {
     id: 'component-868-33071',
-    figmaUrl: 'https://www.figma.com/design/wQQDVitfu2TuNuAXWOXRB1/MARAFET--Copy-?node-id=868-33071&t=W6vSngzerMKFYrF6-4',
+    figmaUrl: createFigmaUrl('868-33071'),
     expectedResolvedName: 'CardMaster',
     category: 'components',
     minAssets: 4,
@@ -108,7 +110,7 @@ export const LIVE_E2E_CASES: LiveE2ECase[] = [
   },
   {
     id: 'modal-866-30573',
-    figmaUrl: 'https://www.figma.com/design/wQQDVitfu2TuNuAXWOXRB1/MARAFET--Copy-?node-id=866-30573&m=dev',
+    figmaUrl: createFigmaUrl('866-30573'),
     expectedResolvedName: 'SummarySheetLocation',
     category: 'modals',
     minAssets: 2,
@@ -164,6 +166,16 @@ export function requireFigmaToken(): string {
     );
   }
   return token;
+}
+
+export function requireLiveE2EConfig(): void {
+  if (!process.env.FIGMA_E2E_FILE_KEY) {
+    throw new Error(
+      'FIGMA_E2E_FILE_KEY not found.\n' +
+      'Set it in .env to run live E2E:\n' +
+      'FIGMA_E2E_FILE_KEY=your_figma_file_key'
+    );
+  }
 }
 
 /**

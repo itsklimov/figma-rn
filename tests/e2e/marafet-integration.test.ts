@@ -2,21 +2,31 @@ import { describe, it, expect } from 'vitest';
 import { existsSync } from 'fs';
 import { loadAllProjectTokens, refreshFigmaConfig } from '../../src/figma-workspace';
 
-describe('Marafet Integration', () => {
-  const MARAFET_ROOT = '/Users/its/Documents/Dev/code/marafet/marafet-frontend';
+describe('Project Integration', () => {
+  const INTEGRATION_PROJECT_ROOT = process.env.FIGMA_INTEGRATION_PROJECT_ROOT;
 
-  it('should correctly load and merge tokens from the real Marafet project', async () => {
-    // Skip if Marafet project doesn't exist on this machine
-    if (!existsSync(MARAFET_ROOT)) {
-      console.log('Skipping: Marafet project not found at', MARAFET_ROOT);
+  it('should correctly load and merge tokens from the target project', async () => {
+    // Optional integration test: only runs when a project root is provided.
+    if (!INTEGRATION_PROJECT_ROOT) {
+      console.log(
+        'Skipping: set FIGMA_INTEGRATION_PROJECT_ROOT to run project integration test'
+      );
+      return;
+    }
+
+    if (!existsSync(INTEGRATION_PROJECT_ROOT)) {
+      console.log(
+        'Skipping: integration project not found at',
+        INTEGRATION_PROJECT_ROOT
+      );
       return;
     }
 
     // 1. Refresh config to ensure we have the latest paths
-    await refreshFigmaConfig(MARAFET_ROOT);
+    await refreshFigmaConfig(INTEGRATION_PROJECT_ROOT);
 
     // 2. Load the tokens
-    const tokens = await loadAllProjectTokens(MARAFET_ROOT);
+    const tokens = await loadAllProjectTokens(INTEGRATION_PROJECT_ROOT);
 
     expect(tokens).toBeDefined();
 
@@ -37,6 +47,8 @@ describe('Marafet Integration', () => {
     expect(colorsCount).toBeGreaterThan(0);
     expect(spacingCount).toBeGreaterThan(0);
 
-    console.log(`Successfully merged ${colorsCount} colors, ${typographyCount} typography, ${spacingCount} spacing, ${shadowsCount} shadows, and ${radiiCount} radii tokens from Marafet.`);
+    console.log(
+      `Successfully merged ${colorsCount} colors, ${typographyCount} typography, ${spacingCount} spacing, ${shadowsCount} shadows, and ${radiiCount} radii tokens from integration project.`
+    );
   });
 });
