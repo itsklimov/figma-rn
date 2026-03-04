@@ -21,14 +21,30 @@ export interface DownloadedAsset {
 
 export interface AssetDownloadResult {
   assets: DownloadedAsset[];
-  pathMap: Map<string, string>; // imageRef → relativePath
+  pathMap: Map<string, string>; // multi-key map: ref/node/style keys → relativePath
 }
 
 interface AssetNode {
   nodeId: string;
   name: string;
   ref: string; // imageRef or iconRef
+  styleRef?: string;
   category: 'icon' | 'image';
+}
+
+function registerAssetPathMappings(pathMap: Map<string, string>, node: AssetNode, relativePath: string): void {
+  const keys = [
+    node.ref,
+    `ref:${node.ref}`,
+    node.nodeId,
+    `node:${node.nodeId}`,
+    node.styleRef,
+    node.styleRef ? `style:${node.styleRef}` : undefined,
+  ].filter((value): value is string => !!value);
+
+  for (const key of keys) {
+    pathMap.set(key, relativePath);
+  }
 }
 
 function makeUniqueFilename(baseName: string, ext: 'svg' | 'png', used: Set<string>): string {
@@ -115,6 +131,7 @@ function extractAssetNodes(node: IRNode, assets: AssetNode[]): void {
         nodeId: node.id,
         name: node.name,
         ref: imageRef,
+        styleRef: node.styleRef,
         category: 'image',
       });
     } else if (node.children && node.children.length > 0) {
@@ -124,6 +141,7 @@ function extractAssetNodes(node: IRNode, assets: AssetNode[]): void {
         nodeId: node.id,
         name: node.name,
         ref: node.id,
+        styleRef: node.styleRef,
         category: 'icon', // Export as SVG
       });
       // Don't recurse - export as single unit
@@ -136,6 +154,7 @@ function extractAssetNodes(node: IRNode, assets: AssetNode[]): void {
         nodeId: node.id,
         name: node.name,
         ref: iconRef,
+        styleRef: node.styleRef,
         category: 'icon',
       });
     }
@@ -146,6 +165,7 @@ function extractAssetNodes(node: IRNode, assets: AssetNode[]): void {
         nodeId: node.id,
         name: node.name,
         ref: iconRef,
+        styleRef: node.styleRef,
         category: 'icon',
       });
     }
@@ -158,6 +178,7 @@ function extractAssetNodes(node: IRNode, assets: AssetNode[]): void {
         nodeId: node.id,  // Export parent component to include ALL vector children
         name: assetName,
         ref: node.id,
+        styleRef: node.styleRef,
         category: 'icon',
       });
       // Don't recurse into exportable components - export as single unit
@@ -235,6 +256,12 @@ export async function downloadAssets(
 
   // 2. Deduplicate by ref - multiple component instances may share the same imageRef/iconRef
   const uniqueAssets = deduplicateAssetNodes(assetNodes);
+  const aliasesByRef = new Map<string, AssetNode[]>();
+  for (const node of assetNodes) {
+    const aliases = aliasesByRef.get(node.ref) || [];
+    aliases.push(node);
+    aliasesByRef.set(node.ref, aliases);
+  }
 
   console.error(`Extracted ${assetNodes.length} asset nodes, deduplicated to ${uniqueAssets.length} unique assets`);
 
@@ -291,7 +318,10 @@ export async function downloadAssets(
           };
 
           downloadedAssets.push(asset);
-          pathMap.set(node.ref, relativePath);
+          const aliases = aliasesByRef.get(node.ref) || [node];
+          for (const alias of aliases) {
+            registerAssetPathMappings(pathMap, alias, relativePath);
+          }
         } catch (error) {
           console.error(`Failed to download icon ${node.name}:`, error);
         }
@@ -345,7 +375,10 @@ export async function downloadAssets(
           };
 
           downloadedAssets.push(asset);
-          pathMap.set(node.ref, relativePath);
+          const aliases = aliasesByRef.get(node.ref) || [node];
+          for (const alias of aliases) {
+            registerAssetPathMappings(pathMap, alias, relativePath);
+          }
         } catch (error) {
           console.error(`Failed to download image ${node.name}:`, error);
         }

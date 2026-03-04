@@ -41,6 +41,8 @@ interface CaseReport {
   assetRequires: number;
   unresolvedAssetRequires: number;
   todoCount: number;
+  todoImageSourceCount: number;
+  emptyUriCount: number;
   placeholderCount: number;
   compileSuccess: boolean;
 }
@@ -231,7 +233,10 @@ if (!RUN_LIVE_FIGMA_E2E) {
               const assetsOnDisk = await countFilesRecursive(assetsPath);
               const assetsInMeta = meta.assets.length;
               const todoCount = (code.match(/TODO:/g) || []).length;
+              const todoImageSourceCount = (code.match(/TODO:\s*Add image source/g) || []).length;
+              const emptyUriCount = (code.match(/uri:\s*''/g) || []).length;
               const placeholderCount = (code.match(/via\.placeholder\.com/g) || []).length;
+              const isP0StrictCase = testCase.id === 'screen-main' || testCase.id === 'screen-1669-21091';
 
               const requirePaths = collectRequirePaths(code);
               const assetRequires = requirePaths.filter((requirePath) =>
@@ -250,12 +255,20 @@ if (!RUN_LIVE_FIGMA_E2E) {
 
               expect(assetsOnDisk).toBe(assetsInMeta);
               expect(assetsOnDisk).toBeGreaterThanOrEqual(testCase.minAssets);
-              expect(todoCount).toBeLessThanOrEqual(testCase.maxTodos);
-              expect(placeholderCount).toBeLessThanOrEqual(testCase.maxPlaceholders);
+              if (isP0StrictCase) {
+                expect(todoImageSourceCount).toBe(0);
+                expect(emptyUriCount).toBe(0);
+                expect(placeholderCount).toBe(0);
+              } else {
+                expect(todoCount).toBeLessThanOrEqual(testCase.maxTodos);
+                expect(placeholderCount).toBeLessThanOrEqual(testCase.maxPlaceholders);
+              }
               expect(nonRelativeAssetRequires).toEqual([]);
               expect(unresolvedAssetRequires).toEqual([]);
 
-              const compileResult = compileTypeScript(code, `${resolvedEntry.name}.tsx`);
+              const compileResult = compileTypeScript(code, `${resolvedEntry.name}.tsx`, {
+                mode: isP0StrictCase ? 'strict' : 'permissive',
+              });
               const ignorableDiagnosticCodes = new Set([2322, 2591, 2614]);
               const relevantCompileErrors = compileResult.errors.filter(
                 (error) => !error.code || !ignorableDiagnosticCodes.has(error.code)
@@ -281,6 +294,8 @@ if (!RUN_LIVE_FIGMA_E2E) {
                 assetRequires: assetRequires.length,
                 unresolvedAssetRequires: unresolvedAssetRequires.length,
                 todoCount,
+                todoImageSourceCount,
+                emptyUriCount,
                 placeholderCount,
                 compileSuccess: relevantCompileErrors.length === 0,
               });
@@ -299,6 +314,8 @@ if (!RUN_LIVE_FIGMA_E2E) {
                 assetRequires: 0,
                 unresolvedAssetRequires: 0,
                 todoCount: 0,
+                todoImageSourceCount: 0,
+                emptyUriCount: 0,
                 placeholderCount: 0,
                 compileSuccess: false,
               });

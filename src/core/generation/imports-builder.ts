@@ -4,6 +4,7 @@
  */
 
 import type { IRNode, StylesBundle } from '../types.js';
+import type { ContractDiagnostic } from '../contracts/types.js';
 
 /**
  * Configuration for import generation
@@ -23,6 +24,12 @@ export interface ImportConfig {
   scaleFunction?: string;
   /** Scaling function path */
   scaleFunctionPath?: string;
+  /** Whether to include theme import in generated file */
+  includeThemeImport?: boolean;
+  /** Explicit SvgIcon provider path (contract-driven, optional) */
+  svgIconImportPath?: string;
+  /** Optional diagnostics collector */
+  diagnostics?: ContractDiagnostic[];
 }
 
 /**
@@ -105,6 +112,7 @@ function collectGradientUsage(
  * Generate theme/hook import based on config
  */
 function generateThemeImport(config: ImportConfig): string | null {
+  if (config.includeThemeImport === false) return null;
   if (!config.hasProjectTheme) return null;
   
   const imports: string[] = [];
@@ -126,10 +134,12 @@ function generateThemeImport(config: ImportConfig): string | null {
 
   // 3. Scaling function import
   if (config.scaleFunction && config.scaleFunctionPath) {
-    const cleanPath = config.scaleFunctionPath
-      .replace(/^(.*\/)?(src|app)\//, '')  // Remove everything up to and including /src/ or /app/, or just src/ if at start
-      .replace(/\.(ts|tsx|js|jsx)$/, '');
-    imports.push(`import { ${config.scaleFunction} } from '${config.importPrefix}/${cleanPath}';`);
+    const providedPath = config.scaleFunctionPath.replace(/\.(ts|tsx|js|jsx)$/, '');
+    const isAliased = providedPath.startsWith(`${config.importPrefix}/`) || providedPath.startsWith('@');
+    const cleanPath = isAliased
+      ? providedPath
+      : `${config.importPrefix}/${providedPath.replace(/^(.*\/)?(src|app)\//, '')}`;
+    imports.push(`import { ${config.scaleFunction} } from '${cleanPath}';`);
   }
   
   return imports.join('\n');
@@ -145,11 +155,18 @@ export function buildImports(
   config?: ImportConfig
 ): string {
   const rnComponents = new Set<string>(['StyleSheet']);
+  let needsSvgIcon = false;
 
   collectComponents(root, rnComponents);
 
   // Add extra imports (like ImageSourcePropType)
-  extraImports.forEach(i => rnComponents.add(i));
+  extraImports.forEach((i) => {
+    if (i === 'SvgIcon') {
+      needsSvgIcon = true;
+      return;
+    }
+    rnComponents.add(i);
+  });
 
   // For Unistyles, StyleSheet comes from react-native-unistyles
   const isUnistyles = config?.stylePattern === 'unistyles';
@@ -193,15 +210,16 @@ export function buildImports(
     }
   }
 
-  // Add SvgIcon if needed (checking extraImports or manually here)
-  if (rnComponents.has('SvgIcon')) {
-    // SvgIcon is likely a custom component in the project
-    // We remove it from RN imports and add it as a separate import
-    rnComponents.delete('SvgIcon');
-    const sortedRN = Array.from(rnComponents).sort();
-    lines[1] = `import { ${sortedRN.join(', ')} } from 'react-native';`;
-    const prefix = config?.importPrefix || '@app';
-    lines.push(`import { SvgIcon } from '${prefix}/components';`);
+  if (needsSvgIcon) {
+    if (config?.svgIconImportPath) {
+      lines.push(`import { SvgIcon } from '${config.svgIconImportPath}';`);
+    } else if (config?.diagnostics) {
+      config.diagnostics.push({
+        level: 'warning',
+        code: 'SVG_ICON_IMPORT_SKIPPED',
+        message: 'SvgIcon usage detected but no contract provider path was resolved.',
+      });
+    }
   }
 
   return lines.join('\n');

@@ -17,6 +17,13 @@ import {
   generateComponent, 
   type MultiFileResult 
 } from '../../core/generation/index.js';
+import {
+  resolveProjectProfile,
+  validateGeneratedCodeContracts,
+  type ContractDiagnostic,
+  type ContractProfileSummary,
+  type UnresolvedAssetRef,
+} from '../../core/contracts/index.js';
 import type { ScreenIR } from '../../core/types.js';
 import { downloadAssets } from '../asset-downloader.js';
 import { resolveComponentName } from '../name-resolver.js';
@@ -116,6 +123,25 @@ Returns:
         type: 'string',
         description: 'Responsive scaling function name (e.g., "scale") (default: from figma.config.json)',
       },
+      strictContracts: {
+        type: 'boolean',
+        description: 'Enable strict contract validation (default: true)',
+      },
+      assetFailurePolicy: {
+        type: 'string',
+        description: 'How unresolved assets are handled (default: fallback)',
+        enum: ['fallback', 'error'],
+      },
+      svgMode: {
+        type: 'string',
+        description: 'SVG handling mode (default: auto)',
+        enum: ['auto', 'component', 'runtime', 'raster'],
+      },
+      profileMode: {
+        type: 'string',
+        description: 'Project profile mode (default: auto)',
+        enum: ['auto', 'portable'],
+      },
     },
     required: ['figmaUrl'],
   },
@@ -133,6 +159,10 @@ export interface GetScreenArgs {
   category?: string;
   suppressTodos?: boolean;
   scaleFunction?: string;
+  strictContracts?: boolean;
+  assetFailurePolicy?: 'fallback' | 'error';
+  svgMode?: 'auto' | 'component' | 'runtime' | 'raster';
+  profileMode?: 'auto' | 'portable';
 }
 
 /**
@@ -146,6 +176,9 @@ export interface GetScreenResult {
   screenshot?: Buffer;
   resolvedName?: string;
   previousName?: string;
+  diagnostics?: ContractDiagnostic[];
+  contractProfileSummary?: ContractProfileSummary;
+  unresolvedAssets?: UnresolvedAssetRef[];
   error?: string;
 }
 
@@ -189,6 +222,10 @@ export async function executeGetScreen(
 ): Promise<GetScreenResult> {
   const { figmaUrl, componentName, themeFilePath } = args;
   const projectRoot = args.projectRoot ? resolve(args.projectRoot) : process.cwd();
+  const strictContracts = args.strictContracts ?? true;
+  const assetFailurePolicy = args.assetFailurePolicy || 'fallback';
+  const svgMode = args.svgMode || 'auto';
+  const profileMode = args.profileMode || 'auto';
 
   // STEP 0: Always refresh config first - this is the foundation for everything else
   // The config contains theme file paths needed for token matching
@@ -324,6 +361,19 @@ export async function executeGetScreen(
       themeImportPath = `${config.importPrefix}/${relativePath}`;
     }
     
+    const contractProfile = await resolveProjectProfile(projectRoot, {
+      strictContracts,
+      profileMode,
+      svgMode,
+      config: {
+        importPrefix: config.importPrefix,
+        stylePattern: config.stylePattern,
+        themeImportPath,
+        scaleFunctionName: args.scaleFunction || config.utils?.scaleFunctionName,
+        scaleFunctionPath: config.utils?.scale,
+      },
+    });
+
     // 12. Generate monolithic output with imagePathMap
     const generationResult = generateComponent(screenIR, tokenMappings, {
       componentName: resolved.name,
@@ -334,11 +384,32 @@ export async function executeGetScreen(
       suppressTodos: args.suppressTodos,
       scaleFunction: args.scaleFunction || config.utils?.scaleFunctionName,
       scaleFunctionPath: config.utils?.scale,
-      // New: Pass config for import generation
-      stylePattern: config.stylePattern,
+      stylePattern: contractProfile.stylePattern,
       useThemeHookPath: config.hooks?.useTheme,
-      importPrefix: config.importPrefix,
+      importPrefix: contractProfile.importPrefix,
+      strictContracts,
+      assetFailurePolicy,
+      contractProfile,
     });
+
+    const diagnostics: ContractDiagnostic[] = [
+      ...contractProfile.diagnostics,
+      ...generationResult.diagnostics,
+    ];
+    const unresolvedAssets = generationResult.unresolvedAssets;
+
+    const validation = validateGeneratedCodeContracts(generationResult.code, contractProfile);
+    diagnostics.push(...validation.diagnostics);
+
+    if (strictContracts && validation.hasBlockingErrors) {
+      return {
+        success: false,
+        error: `Strict contract validation failed with ${validation.diagnostics.length} error(s).`,
+        diagnostics,
+        unresolvedAssets,
+        contractProfileSummary: generationResult.contractProfileSummary,
+      };
+    }
 
     const multiFileResult: MultiFileResult = {
       mainComponent: {
@@ -349,6 +420,9 @@ export async function executeGetScreen(
       extractedComponents: [],
       tokens: null,
       unmappedTokens: generationResult.unmappedTokens,
+      diagnostics,
+      unresolvedAssets,
+      contractProfileSummary: generationResult.contractProfileSummary,
     };
 
     // 13. Write files
@@ -364,6 +438,9 @@ export async function executeGetScreen(
         screenshot: screenshotBuffer,
         figmaName: screenIR.name,
         previousName: resolved.previousName,
+        diagnostics,
+        unresolvedAssets,
+        profileSnapshot: generationResult.contractProfileSummary,
       });
     } catch (error) {
       console.error('Failed to write files:', error);
@@ -379,6 +456,9 @@ export async function executeGetScreen(
       screenshot: screenshotBuffer,
       resolvedName: resolved.name,
       previousName: resolved.previousName,
+      diagnostics,
+      unresolvedAssets,
+      contractProfileSummary: generationResult.contractProfileSummary,
     };
   } catch (error) {
     return {
@@ -393,10 +473,27 @@ export async function executeGetScreen(
  */
 export function formatGetScreenResponse(result: GetScreenResult): any[] {
   if (!result.success) {
-    return [{ type: 'text', text: `# ❌ Error\n\n${result.error}` }];
+    const diagnosticsText =
+      result.diagnostics && result.diagnostics.length > 0
+        ? `\n\nDiagnostics:\n${result.diagnostics
+            .slice(0, 20)
+            .map((d) => `- [${d.level}] ${d.code}: ${d.message}`)
+            .join('\n')}`
+        : '';
+    return [{ type: 'text', text: `# ❌ Error\n\n${result.error}${diagnosticsText}` }];
   }
 
-  const { screenIR, multiFileResult, writeResult, screenshot, previousName, resolvedName } = result;
+  const {
+    screenIR,
+    multiFileResult,
+    writeResult,
+    screenshot,
+    previousName,
+    resolvedName,
+    diagnostics,
+    unresolvedAssets,
+    contractProfileSummary,
+  } = result;
   if (!screenIR || !multiFileResult) {
     return [{ type: 'text', text: '# ❌ Error\n\nNo result generated' }];
   }
@@ -413,6 +510,10 @@ export function formatGetScreenResponse(result: GetScreenResult): any[] {
 
   textResponse += `**Resolved component name:** \`${effectiveComponentName}\`\n`;
   textResponse += `**Figma node name:** \`${screenIR.name}\`\n\n`;
+
+  if (contractProfileSummary) {
+    textResponse += `**Contract profile:** style=${contractProfileSummary.stylePattern}, svg=${contractProfileSummary.svgMode}, strict=${contractProfileSummary.strictContracts}\n\n`;
+  }
 
   // 1. What's Generated (Inventory)
   textResponse += `## 📦 What's Generated\n\n`;
@@ -468,6 +569,24 @@ export function formatGetScreenResponse(result: GetScreenResult): any[] {
     textResponse += `- **Tokens**: Some styles did not match project tokens and were exported as hardcoded values (see unmapped tokens below).\n`;
   } else {
     textResponse += `- **Tokens**: Successfully mapped all styles to project theme tokens! ✅\n`;
+  }
+
+  if (diagnostics && diagnostics.length > 0) {
+    textResponse += `### Diagnostics\n\n`;
+    const critical = diagnostics.filter((d) => d.level === 'error');
+    textResponse += `Total: ${diagnostics.length} (${critical.length} errors)\n\n`;
+    for (const d of diagnostics.slice(0, 20)) {
+      textResponse += `- [${d.level}] \`${d.code}\`: ${d.message}${d.location ? ` (${d.location})` : ''}\n`;
+    }
+    textResponse += `\n`;
+  }
+
+  if (unresolvedAssets && unresolvedAssets.length > 0) {
+    textResponse += `### Unresolved Assets\n\n`;
+    for (const asset of unresolvedAssets.slice(0, 20)) {
+      textResponse += `- \`${asset.semanticType}\` ref=\`${asset.ref}\` node=\`${asset.nodeId}\`${asset.location ? ` (${asset.location})` : ''}\n`;
+    }
+    textResponse += `\n`;
   }
   
   if (detection === 'List') {
