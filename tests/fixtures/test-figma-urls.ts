@@ -17,8 +17,9 @@ const __dirname = dirname(__filename);
 config({ path: resolve(__dirname, '../../.env') });
 
 // Base URL for test file
-export const TEST_FILE_KEY = 'BlgBBt56cEbSVY2xiSXqkp';
-export const TEST_FILE_NAME = 'MARAFET-dev2';
+export const TEST_FILE_KEY = 'wQQDVitfu2TuNuAXWOXRB1';
+export const TEST_FILE_NAME = 'MARAFET--Copy-';
+export const MAIN_SCREEN_NODE_ID = '7621-71846';
 export const BASE_URL = `https://www.figma.com/design/${TEST_FILE_KEY}/${TEST_FILE_NAME}`;
 
 /**
@@ -33,7 +34,7 @@ export function createFigmaUrl(nodeId: string): string {
  */
 export const TEST_URLS = {
   // Main test screen
-  mainScreen: createFigmaUrl('2804-44718'),
+  mainScreen: createFigmaUrl(MAIN_SCREEN_NODE_ID),
 
   // Alternative nodes for testing different patterns
   // TODO: Add after exploring Figma file structure
@@ -43,6 +44,78 @@ export const TEST_URLS = {
   // bottomSheet: createFigmaUrl('xxx-xxx'),
   // smallComponent: createFigmaUrl('xxx-xxx'),
 };
+
+export interface LiveE2ECase {
+  id: string;
+  figmaUrl: string;
+  componentName?: string;
+  expectedResolvedName: string;
+  category: 'screens' | 'modals' | 'sheets' | 'components' | 'icons';
+  minAssets: number;
+  maxTodos: number;
+  maxPlaceholders: number;
+}
+
+/**
+ * Curated live E2E matrix used for end-to-end quality validation.
+ * These URLs are expected to be stable enough for repeatable checks.
+ */
+export const LIVE_E2E_CASES: LiveE2ECase[] = [
+  {
+    id: 'screen-main',
+    figmaUrl: 'https://www.figma.com/design/wQQDVitfu2TuNuAXWOXRB1/MARAFET--Copy-?node-id=7621-71846&m=dev',
+    expectedResolvedName: 'GlavnayaKlient',
+    category: 'screens',
+    minAssets: 8,
+    maxTodos: 8,
+    maxPlaceholders: 10,
+  },
+  {
+    id: 'screen-1669-21091',
+    figmaUrl: 'https://www.figma.com/design/wQQDVitfu2TuNuAXWOXRB1/MARAFET--Copy-?node-id=1669-21091&t=W6vSngzerMKFYrF6-4',
+    expectedResolvedName: 'Session',
+    category: 'screens',
+    minAssets: 10,
+    maxTodos: 20,
+    maxPlaceholders: 35,
+  },
+  {
+    id: 'screen-2453-67667',
+    figmaUrl: 'https://www.figma.com/design/wQQDVitfu2TuNuAXWOXRB1/MARAFET--Copy-?node-id=2453-67667&m=dev',
+    expectedResolvedName: 'Notifications',
+    category: 'screens',
+    minAssets: 1,
+    maxTodos: 6,
+    maxPlaceholders: 2,
+  },
+  {
+    id: 'screen-868-33060',
+    figmaUrl: 'https://www.figma.com/design/wQQDVitfu2TuNuAXWOXRB1/MARAFET--Copy-?node-id=868-33060&m=dev',
+    expectedResolvedName: 'HomeWithoutVisit',
+    category: 'screens',
+    minAssets: 8,
+    maxTodos: 8,
+    maxPlaceholders: 12,
+  },
+  {
+    id: 'component-868-33071',
+    figmaUrl: 'https://www.figma.com/design/wQQDVitfu2TuNuAXWOXRB1/MARAFET--Copy-?node-id=868-33071&t=W6vSngzerMKFYrF6-4',
+    expectedResolvedName: 'CardMaster',
+    category: 'components',
+    minAssets: 4,
+    maxTodos: 8,
+    maxPlaceholders: 8,
+  },
+  {
+    id: 'modal-866-30573',
+    figmaUrl: 'https://www.figma.com/design/wQQDVitfu2TuNuAXWOXRB1/MARAFET--Copy-?node-id=866-30573&m=dev',
+    expectedResolvedName: 'SummarySheetLocation',
+    category: 'modals',
+    minAssets: 2,
+    maxTodos: 6,
+    maxPlaceholders: 2,
+  },
+];
 
 /**
  * Invalid URLs for error tests

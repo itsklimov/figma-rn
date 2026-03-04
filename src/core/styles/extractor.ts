@@ -32,6 +32,59 @@ function resolveEffectiveColor(color: { hex: string; rgba: { r: number; g: numbe
 }
 
 /**
+ * Validate and normalize a gradient point.
+ */
+function toFinitePoint(
+  point: { x: number; y: number } | undefined
+): { x: number; y: number } | undefined {
+  if (!point) return undefined;
+  if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) return undefined;
+  return { x: point.x, y: point.y };
+}
+
+/**
+ * Build start/end points for a linear gradient from Figma handles.
+ */
+function extractLinearPoints(
+  handles: Array<{ x: number; y: number }> | undefined
+): { start?: { x: number; y: number }; end?: { x: number; y: number } } {
+  if (!handles || handles.length < 2) return {};
+
+  return {
+    start: toFinitePoint(handles[0]),
+    end: toFinitePoint(handles[1]),
+  };
+}
+
+/**
+ * Build center/radius for a radial gradient from Figma handles.
+ */
+function extractRadialGeometry(
+  handles: Array<{ x: number; y: number }> | undefined
+): { center?: { x: number; y: number }; radius?: { x: number; y: number } } {
+  if (!handles || handles.length < 3) return {};
+
+  const center = toFinitePoint(handles[0]);
+  const xHandle = toFinitePoint(handles[1]);
+  const yHandle = toFinitePoint(handles[2]);
+
+  if (!center || !xHandle || !yHandle) return {};
+
+  const radiusX = Math.hypot(xHandle.x - center.x, xHandle.y - center.y);
+  const radiusY = Math.hypot(yHandle.x - center.x, yHandle.y - center.y);
+
+  if (!Number.isFinite(radiusX) || !Number.isFinite(radiusY)) return {};
+
+  return {
+    center,
+    radius: {
+      x: radiusX,
+      y: radiusY,
+    },
+  };
+}
+
+/**
  * Extract background style from fills
  */
 export function fillsToBackground(
@@ -52,12 +105,23 @@ export function fillsToBackground(
   }
 
   if (fill.type === 'gradient') {
+    const linearPoints =
+      fill.gradient.type === 'linear'
+        ? extractLinearPoints(fill.gradient.handles)
+        : {};
+    const radialGeometry =
+      fill.gradient.type === 'radial'
+        ? extractRadialGeometry(fill.gradient.handles)
+        : {};
+
     return {
       backgroundGradient: {
         type: fill.gradient.type,
         colors: fill.gradient.stops.map(stop => resolveEffectiveColor(stop.color, fill.opacity)),
         positions: fill.gradient.stops.map(stop => stop.position),
         angle: fill.gradient.angle,
+        ...linearPoints,
+        ...radialGeometry,
       },
     };
   }

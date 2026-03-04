@@ -280,6 +280,10 @@ export interface ExtractedStyle {
     colors: string[];
     positions: number[];
     angle?: number;
+    start?: { x: number; y: number };
+    end?: { x: number; y: number };
+    center?: { x: number; y: number };
+    radius?: { x: number; y: number };
   };
 
   // Border

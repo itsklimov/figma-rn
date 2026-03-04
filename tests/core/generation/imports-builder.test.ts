@@ -188,6 +188,37 @@ describe('buildImports', () => {
     expect(result).toContain("from 'react-native'");
   });
 
+  it('should include react-native-svg imports for radial gradients', () => {
+    const container: ContainerIR = {
+      id: '1:1',
+      name: 'container',
+      semanticType: 'Container',
+      boundingBox: baseBoundingBox,
+      styleRef: 'container',
+      layout: baseLayout,
+      children: [],
+    };
+
+    const stylesBundle: any = {
+      styles: {
+        container: {
+          id: 'container',
+          backgroundGradient: {
+            type: 'radial',
+            colors: ['#FFFFFF', '#000000'],
+            positions: [0, 1],
+            center: { x: 0.5, y: 0.5 },
+            radius: { x: 0.5, y: 0.5 },
+          },
+        },
+      },
+    };
+
+    const result = buildImports(container, [], stylesBundle);
+    expect(result).toContain("from 'react-native-svg'");
+    expect(result).toContain('SvgRadialGradient');
+  });
+
   describe('Unistyles support', () => {
     it('should import StyleSheet from react-native-unistyles when using unistyles pattern', () => {
       const container: ContainerIR = {

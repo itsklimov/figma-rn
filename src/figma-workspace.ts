@@ -741,7 +741,7 @@ export async function loadAllProjectTokens(projectRoot: string): Promise<any> {
 
   const { extractProjectTokens, mergeProjectTokens } = await import('./core/mapping/theme-extractor.js');
   
-  console.log(`📦 Loading tokens from ${config.tokenFiles.length} file(s)...`);
+  console.error(`📦 Loading tokens from ${config.tokenFiles.length} file(s)...`);
   
   const tokenSets = await Promise.all(
     config.tokenFiles.map(async (file) => {
@@ -1143,8 +1143,15 @@ export async function registerGeneration(
     delete manifest[existing.category][nodeId];
   }
 
-  // Handle cleanup if renamed
-  if (options.previousName && options.previousName !== name) {
+  // Handle cleanup if renamed.
+  // Important: avoid deleting assets when the rename differs only by case
+  // on case-insensitive filesystems (e.g., default macOS).
+  const isCaseOnlyRename =
+    !!options.previousName &&
+    options.previousName !== name &&
+    options.previousName.toLowerCase() === name.toLowerCase();
+
+  if (options.previousName && options.previousName !== name && !isCaseOnlyRename) {
     const oldFolder = join(projectRoot, FIGMA_DIR, CATEGORY_FOLDERS[category], options.previousName);
     try {
       console.error(`🗑️ Cleaning up old component folder: ${oldFolder}`);

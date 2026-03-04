@@ -137,6 +137,7 @@ export async function writeGeneratedFiles(options: WriteOptions): Promise<WriteR
       multiFileResult.mainComponent.content,
       {
         assets: assetInfos,
+        screenshotPath: screenshot ? 'screenshot.png' : undefined,
         figmaName,
         previousName,
         // Note: tokensExtracted is computed inside registerGeneration from tokens

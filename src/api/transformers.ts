@@ -20,6 +20,47 @@ import type {
 } from './types.js';
 
 /**
+ * Normalize raw Figma gradient handles into numeric points.
+ */
+function transformGradientHandles(rawHandles: any): Array<{ x: number; y: number }> | undefined {
+  if (!Array.isArray(rawHandles)) return undefined;
+
+  const handles = rawHandles
+    .map((handle: any) => ({
+      x: Number(handle?.x),
+      y: Number(handle?.y),
+    }))
+    .filter(
+      (handle: { x: number; y: number }) =>
+        Number.isFinite(handle.x) && Number.isFinite(handle.y)
+    );
+
+  return handles.length > 0 ? handles : undefined;
+}
+
+/**
+ * Compute a linear gradient angle from handle positions.
+ * Convention kept for backward compatibility:
+ * - 0° = top -> bottom
+ * - 90° = left -> right
+ */
+function computeLinearAngle(handles?: Array<{ x: number; y: number }>): number | undefined {
+  if (!handles || handles.length < 2) return undefined;
+
+  const start = handles[0];
+  const end = handles[1];
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+
+  if (!Number.isFinite(dx) || !Number.isFinite(dy) || (dx === 0 && dy === 0)) {
+    return undefined;
+  }
+
+  const angle = (Math.atan2(dx, dy) * 180) / Math.PI;
+  return Number.isFinite(angle) ? angle : undefined;
+}
+
+/**
  * Convert RGBA (0-1 range) to hex string + rgba object
  * Output is always uppercase (#RRGGBB or #RRGGBBAA)
  */
@@ -170,6 +211,7 @@ export function transformFills(raw: any): Fill[] {
       });
     } else if (fill.type === 'GRADIENT_LINEAR' || fill.type === 'GRADIENT_RADIAL') {
       if (!fill.gradientStops) continue;
+      const handles = transformGradientHandles(fill.gradientHandlePositions);
 
       fills.push({
         type: 'gradient',
@@ -179,6 +221,8 @@ export function transformFills(raw: any): Fill[] {
             position: stop.position,
             color: transformColor(stop.color),
           })),
+          handles,
+          angle: fill.type === 'GRADIENT_LINEAR' ? computeLinearAngle(handles) : undefined,
         },
         opacity,
       });

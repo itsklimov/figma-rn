@@ -28,7 +28,7 @@ import {
   getOrCreateFigmaConfig,
   type ManifestCategory,
 } from '../../figma-workspace.js';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { mkdir } from 'fs/promises';
 
 /**
@@ -97,7 +97,11 @@ Returns:
       },
       outputDir: {
         type: 'string',
-        description: 'Output directory for generated files (default: "components")',
+        description: 'Deprecated path hint for legacy clients. Files are persisted in projectRoot/.figma/',
+      },
+      projectRoot: {
+        type: 'string',
+        description: 'Project root for .figma workspace (default: current working directory)',
       },
       category: {
         type: 'string',
@@ -125,6 +129,7 @@ export interface GetScreenArgs {
   componentName?: string;
   themeFilePath?: string;
   outputDir?: string;
+  projectRoot?: string;
   category?: string;
   suppressTodos?: boolean;
   scaleFunction?: string;
@@ -139,6 +144,7 @@ export interface GetScreenResult {
   multiFileResult?: MultiFileResult;
   writeResult?: WriteResult;
   screenshot?: Buffer;
+  resolvedName?: string;
   previousName?: string;
   error?: string;
 }
@@ -181,8 +187,8 @@ export async function executeGetScreen(
   args: GetScreenArgs,
   figmaToken: string
 ): Promise<GetScreenResult> {
-  const { figmaUrl, componentName, themeFilePath, outputDir } = args;
-  const projectRoot = process.cwd();
+  const { figmaUrl, componentName, themeFilePath } = args;
+  const projectRoot = args.projectRoot ? resolve(args.projectRoot) : process.cwd();
 
   // STEP 0: Always refresh config first - this is the foundation for everything else
   // The config contains theme file paths needed for token matching
@@ -302,7 +308,7 @@ export async function executeGetScreen(
       // Continue without screenshot
     }
 
-    // 11.5 Load config to get theme import path and assets prefix
+    // 11.5 Load config to derive theme import path
     const config = await getOrCreateFigmaConfig(projectRoot);
     
     // Derive theme import path from config (leverages existing project scanning)
@@ -318,25 +324,13 @@ export async function executeGetScreen(
       themeImportPath = `${config.importPrefix}/${relativePath}`;
     }
     
-    // Get assets import prefix from config
-    const assetsPrefix = config.importPrefix || '@assets';
-    
-    // Transform asset paths to use config prefix instead of relative ./assets/
-    const transformedPathMap = new Map<string, string>();
-    for (const [key, value] of assetResult.pathMap) {
-      // Replace './assets/' with '@assets/' (or config prefix)
-      const transformedPath = value.replace(/^\.\/assets\//, `${assetsPrefix}/`);
-      transformedPathMap.set(key, transformedPath);
-    }
-
     // 12. Generate monolithic output with imagePathMap
     const generationResult = generateComponent(screenIR, tokenMappings, {
       componentName: resolved.name,
       detectionResult,
       hasProjectTheme,
-      imagePathMap: transformedPathMap,
+      imagePathMap: assetResult.pathMap,
       themeImportPath,
-      assetsPrefix,
       suppressTodos: args.suppressTodos,
       scaleFunction: args.scaleFunction || config.utils?.scaleFunctionName,
       scaleFunctionPath: config.utils?.scale,
@@ -348,7 +342,8 @@ export async function executeGetScreen(
 
     const multiFileResult: MultiFileResult = {
       mainComponent: {
-        path: `${outputDir || 'components'}/${resolved.name}.tsx`,
+        // All persisted files are written into .figma workspace via writeGeneratedFiles()
+        path: `.figma/${category}/${resolved.name}/index.tsx`,
         content: generationResult.code,
       },
       extractedComponents: [],
@@ -382,6 +377,7 @@ export async function executeGetScreen(
       multiFileResult,
       writeResult,
       screenshot: screenshotBuffer,
+      resolvedName: resolved.name,
       previousName: resolved.previousName,
     };
   } catch (error) {
@@ -400,17 +396,23 @@ export function formatGetScreenResponse(result: GetScreenResult): any[] {
     return [{ type: 'text', text: `# ❌ Error\n\n${result.error}` }];
   }
 
-  const { screenIR, multiFileResult, writeResult, screenshot, previousName } = result;
+  const { screenIR, multiFileResult, writeResult, screenshot, previousName, resolvedName } = result;
   if (!screenIR || !multiFileResult) {
     return [{ type: 'text', text: '# ❌ Error\n\nNo result generated' }];
   }
 
-  const content: any[] = [];
-  let textResponse = `# ✅ Generated: ${screenIR.name}\n\n`;
+  const folderNameFromWriteResult = writeResult?.folder.split('/').pop();
+  const effectiveComponentName = resolvedName || folderNameFromWriteResult || screenIR.name;
 
-  if (previousName && previousName !== screenIR.name) {
-    textResponse = `# 🔄 Replaced ${previousName} with ${screenIR.name}\n\n`;
+  const content: any[] = [];
+  let textResponse = `# ✅ Generated: ${effectiveComponentName}\n\n`;
+
+  if (previousName && previousName !== effectiveComponentName) {
+    textResponse = `# 🔄 Replaced ${previousName} with ${effectiveComponentName}\n\n`;
   }
+
+  textResponse += `**Resolved component name:** \`${effectiveComponentName}\`\n`;
+  textResponse += `**Figma node name:** \`${screenIR.name}\`\n\n`;
 
   // 1. What's Generated (Inventory)
   textResponse += `## 📦 What's Generated\n\n`;
@@ -437,7 +439,7 @@ export function formatGetScreenResponse(result: GetScreenResult): any[] {
   // 2. Smart Integration Instructions
   textResponse += `## 🚀 Smart Integration Instructions\n\n`;
   textResponse += `I have generated the base architectural parts for you. **Your goal is to perform a perfect one-shot integration** into the project:\n\n`;
-  textResponse += `1. **Analyze Content Type**: Evaluate if \`${screenIR.name}\` is a top-level screen, a reusable component, or a specific element like a Modal or BottomSheet.\n`;
+  textResponse += `1. **Analyze Content Type**: Evaluate if \`${effectiveComponentName}\` is a top-level screen, a reusable component, or a specific element like a Modal or BottomSheet.\n`;
   textResponse += `2. **Relocate**: Check the project's existing directory structure (e.g., \`src/screens\`, \`src/components\`) and move the generated files from \`.figma/\` to their proper permanent locations.\n`;
   textResponse += `3. **Rename**: Rename directories and files if necessary to match the project's naming conventions and React Native best practices.\n`;
   textResponse += `4. **Process Assets**: Relocate the icons and images from the temporary \`assets/\` folder to your project's shared asset directory (e.g., \`src/assets\`) and update the import paths in the code.\n\n`;

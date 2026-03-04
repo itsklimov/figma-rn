@@ -94,6 +94,7 @@ declare module 'react-native' {
   export const FlatList: any;
   export const TextInput: any;
   export const StyleSheet: { create: <T>(styles: T) => T };
+  export type ImageSourcePropType = any;
   export type ViewStyle = any;
   export type TextStyle = any;
   export type ImageStyle = any;
@@ -138,6 +139,37 @@ declare module 'zod' {
   export function boolean(): any;
   export type infer<T> = any;
 }
+
+declare module 'expo-linear-gradient' {
+  export const LinearGradient: any;
+}
+
+declare module 'react-native-safe-area-context' {
+  export const SafeAreaView: any;
+}
+
+declare module '@app/*' {
+  export const theme: any;
+  export const scale: any;
+  export const SvgIcon: any;
+  const value: any;
+  export default value;
+  export = value;
+}
+
+declare module '@/*' {
+  const value: any;
+  export default value;
+  export = value;
+}
+
+declare module '~/*' {
+  const value: any;
+  export default value;
+  export = value;
+}
+
+declare function require(path: string): any;
 `
   );
 
