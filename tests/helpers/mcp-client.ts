@@ -65,6 +65,7 @@ export interface GetScreenParams {
   componentName?: string;
   themeFilePath?: string;
   outputDir?: string;
+  projectRoot?: string;
   category?: string;
 }
 
@@ -77,6 +78,7 @@ export class MCPClient {
   }>();
   private buffer = '';
   private serverReady = false;
+  private readonly requestTimeoutMs = Number(process.env.MCP_REQUEST_TIMEOUT_MS || 120000);
 
   /**
    * Starts MCP server and waits for readiness
@@ -203,13 +205,13 @@ export class MCPClient {
         }
       });
 
-      // 60 second timeout (API calls can be slow)
+      // Figma API responses can be slow for large nodes; keep timeout configurable.
       setTimeout(() => {
         if (this.pendingRequests.has(id)) {
           this.pendingRequests.delete(id);
           reject(new Error(`Request timeout: ${method}`));
         }
-      }, 60000);
+      }, this.requestTimeoutMs);
     });
   }
 

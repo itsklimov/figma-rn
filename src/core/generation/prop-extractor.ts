@@ -1,4 +1,4 @@
-import { IRNode, RepeaterIR, TextIR, ImageIR, StylesBundle, SemanticType } from '../types.js';
+import { IRNode, StylesBundle, SemanticType } from '../types.js';
 import { toValidIdentifier } from './utils.js';
 import { detectContentPattern } from './semantic-naming.js';
 import { isMeaningfulPropName } from '../extraction/text-props-extractor.js';

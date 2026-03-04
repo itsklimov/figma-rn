@@ -5,7 +5,7 @@
 
 import type { IRNode, IconIR, ImageIR, StylesBundle, ExtractedStyle, RepeaterIR, ButtonIR, ComponentIR } from '../types.js';
 import type { TokenMappings } from '../mapping/token-matcher.js';
-import { toValidIdentifier, escapeJSXText } from './utils.js';
+import { escapeJSXText } from './utils.js';
 import { mapColor } from './styles-builder.js';
 
 /** Minimum touch target size for comfortable interaction */
@@ -114,26 +114,53 @@ function isKeyboardElement(node: IRNode): { isKeyboard: boolean; reason?: string
 }
 
 /**
- * Generate LinearGradient props from ExtractedStyle.backgroundGradient
+ * Format gradient coordinate to a stable decimal string.
  */
-function buildGradientProps(
+function formatGradientCoord(value: number): string {
+  if (!Number.isFinite(value)) return '0.50';
+  return value.toFixed(2);
+}
+
+/**
+ * Clamp a normalized ratio to [0, 1].
+ */
+function clampRatio(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  if (value < 0) return 0;
+  if (value > 1) return 1;
+  return value;
+}
+
+/**
+ * Build gradient color expressions with optional token mapping.
+ */
+function buildGradientColors(
+  colors: string[],
+  mappings?: TokenMappings
+): string[] {
+  return mappings
+    ? colors.map(hex => mapColor(hex, mappings).value)
+    : colors.map(hex => `'${hex}'`);
+}
+
+/**
+ * Generate LinearGradient props from ExtractedStyle.backgroundGradient.
+ */
+function buildLinearGradientProps(
   gradient: NonNullable<ExtractedStyle['backgroundGradient']>, 
   spaces: string,
   mappings?: TokenMappings
 ): string {
   const { colors, positions, angle } = gradient;
-  
-  // Map colors to tokens if mappings provided
-  const mappedColors = mappings 
-    ? colors.map(hex => mapColor(hex, mappings).value)
-    : colors.map(hex => `'${hex}'`);
-  
-  // Convert angle to start/end points (simplified linear gradient)
+  const mappedColors = buildGradientColors(colors, mappings);
+
+  // Prefer explicit start/end reconstructed from Figma handles.
   // Default: vertical top-to-bottom
-  let start = { x: 0.5, y: 0 };
-  let end = { x: 0.5, y: 1 };
-  
-  if (angle !== undefined) {
+  let start = gradient.start ?? { x: 0.5, y: 0 };
+  let end = gradient.end ?? { x: 0.5, y: 1 };
+
+  // Fallback to angle only when explicit points are unavailable.
+  if ((!gradient.start || !gradient.end) && angle !== undefined) {
     // Convert angle to start/end (0 = top-to-bottom, 90 = left-to-right)
     const rad = (angle * Math.PI) / 180;
     start = { x: 0.5 - Math.sin(rad) * 0.5, y: 0.5 - Math.cos(rad) * 0.5 };
@@ -142,8 +169,49 @@ function buildGradientProps(
 
   return `${spaces}  colors={[${mappedColors.join(', ')}]}
 ${spaces}  locations={${JSON.stringify(positions)}}
-${spaces}  start={{ x: ${start.x.toFixed(2)}, y: ${start.y.toFixed(2)} }}
-${spaces}  end={{ x: ${end.x.toFixed(2)}, y: ${end.y.toFixed(2)} }}`;
+${spaces}  start={{ x: ${formatGradientCoord(start.x)}, y: ${formatGradientCoord(start.y)} }}
+${spaces}  end={{ x: ${formatGradientCoord(end.x)}, y: ${formatGradientCoord(end.y)} }}`;
+}
+
+/**
+ * Build radial gradient SVG overlay for React Native.
+ */
+function buildRadialGradientOverlay(
+  gradient: NonNullable<ExtractedStyle['backgroundGradient']>,
+  spaces: string,
+  gradientId: string,
+  mappings?: TokenMappings
+): string {
+  const mappedColors = buildGradientColors(gradient.colors, mappings);
+  const stopPositions =
+    gradient.positions && gradient.positions.length === gradient.colors.length
+      ? gradient.positions
+      : gradient.colors.map((_, idx, arr) => (arr.length <= 1 ? 0 : idx / (arr.length - 1)));
+
+  const center = gradient.center ?? { x: 0.5, y: 0.5 };
+  const radius = gradient.radius ?? { x: 0.5, y: 0.5 };
+
+  const stops = mappedColors
+    .map((colorExpr, index) => {
+      const offset = `${(clampRatio(stopPositions[index] ?? 0) * 100).toFixed(2)}%`;
+      return `${spaces}      <Stop offset="${offset}" stopColor={${colorExpr}} />`;
+    })
+    .join('\n');
+
+  return `${spaces}  <Svg pointerEvents="none" style={StyleSheet.absoluteFillObject}>
+${spaces}    <Defs>
+${spaces}      <SvgRadialGradient
+${spaces}        id="${gradientId}"
+${spaces}        cx="${(center.x * 100).toFixed(2)}%"
+${spaces}        cy="${(center.y * 100).toFixed(2)}%"
+${spaces}        rx="${(radius.x * 100).toFixed(2)}%"
+${spaces}        ry="${(radius.y * 100).toFixed(2)}%"
+${spaces}      >
+${stops}
+${spaces}      </SvgRadialGradient>
+${spaces}    </Defs>
+${spaces}    <Rect x="0" y="0" width="100%" height="100%" fill="url(#${gradientId})" />
+${spaces}  </Svg>`;
 }
 
 /**
@@ -181,15 +249,24 @@ export function buildJSX(
   jsxOverrides?: Map<string, string>,
   stylesBundle?: StylesBundle,
   mappings?: TokenMappings,
-  options?: BuildJSXOptions
+  options?: BuildJSXOptions,
+  _visitedPath?: Set<string>
 ): string {
+  const spaces = '  '.repeat(indent);
+  const visitedPath = _visitedPath ?? new Set<string>();
+
+  // Guard against accidental cyclic references in malformed IR trees.
+  if (visitedPath.has(node.id)) {
+    return `${spaces}{/* TODO: Cyclic node reference skipped: ${node.name} (${node.id}) */}`;
+  }
+  visitedPath.add(node.id);
+
+  try {
   // Check for overrides (e.g. valid FlatList for a container)
   if (jsxOverrides?.has(node.id)) {
-    const spaces = '  '.repeat(indent);
     return `${spaces}${jsxOverrides.get(node.id)!}`;
   }
 
-  const spaces = '  '.repeat(indent);
   const styleName = deriveStyleName(node);
   
   // Check if this node has a gradient background
@@ -232,9 +309,43 @@ export function buildJSX(
 
       // Handle gradient wrapping for containers
       if (hasGradient && style?.backgroundGradient) {
-        const gradientProps = buildGradientProps(style.backgroundGradient, spaces, mappings);
         const styleAttr = getStyleAttribute(node, styleName);
+        const gradient = style.backgroundGradient;
 
+        if (gradient.type === 'radial') {
+          const gradientId = `grad_${node.id.replace(/[^a-zA-Z0-9]/g, '_')}`;
+          const overlay = buildRadialGradientOverlay(gradient, spaces, gradientId, mappings);
+
+          if (children.length === 0) {
+            result = `${keyboardWarning}${spaces}<View ${styleAttr}>
+${overlay}
+${spaces}</View>`;
+            break;
+          }
+
+          const childrenJSX = children
+            .map((child) =>
+              buildJSX(
+                child,
+                indent + 1,
+                imagePathMap,
+                jsxOverrides,
+                stylesBundle,
+                mappings,
+                childOptions,
+                visitedPath
+              )
+            )
+            .join('\n');
+
+          result = `${keyboardWarning}${spaces}<View ${styleAttr}>
+${overlay}
+${childrenJSX}
+${spaces}</View>`;
+          break;
+        }
+
+        const gradientProps = buildLinearGradientProps(gradient, spaces, mappings);
         if (children.length === 0) {
           result = `${keyboardWarning}${spaces}<LinearGradient
 ${gradientProps}
@@ -243,7 +354,18 @@ ${spaces}/>`;
           break;
         }
         const childrenJSX = children
-          .map((child) => buildJSX(child, indent + 1, imagePathMap, jsxOverrides, stylesBundle, mappings, childOptions))
+          .map((child) =>
+            buildJSX(
+              child,
+              indent + 1,
+              imagePathMap,
+              jsxOverrides,
+              stylesBundle,
+              mappings,
+              childOptions,
+              visitedPath
+            )
+          )
           .join('\n');
         result = `${keyboardWarning}${spaces}<LinearGradient
 ${gradientProps}
@@ -268,7 +390,18 @@ ${spaces}/>`;
           break;
         }
         const pressableChildrenJSX = children
-          .map((child) => buildJSX(child, indent + 1, imagePathMap, jsxOverrides, stylesBundle, mappings, childOptions))
+          .map((child) =>
+            buildJSX(
+              child,
+              indent + 1,
+              imagePathMap,
+              jsxOverrides,
+              stylesBundle,
+              mappings,
+              childOptions,
+              visitedPath
+            )
+          )
           .join('\n');
         result = `${keyboardWarning}${spaces}<Pressable
 ${spaces}  ${pressableStyleAttr}${rootPropsStr}
@@ -286,7 +419,18 @@ ${spaces}</Pressable>`;
         break;
       }
       const viewChildrenJSX = children
-        .map((child) => buildJSX(child, indent + 1, imagePathMap, jsxOverrides, stylesBundle, mappings, childOptions))
+        .map((child) =>
+          buildJSX(
+            child,
+            indent + 1,
+            imagePathMap,
+            jsxOverrides,
+            stylesBundle,
+            mappings,
+            childOptions,
+            visitedPath
+          )
+        )
         .join('\n');
       result = `${keyboardWarning}${spaces}<View ${viewStyleAttr}>
 ${viewChildrenJSX}
@@ -307,11 +451,94 @@ ${spaces}</View>`;
 
     case 'Image': {
       const imgNode = node as ImageIR;
+      const imageGradient = style?.backgroundGradient;
+
+      // Gradient-only image-like layers (no imageRef) should render as gradient views.
+      if (imageGradient && !imgNode.imageRef && !imgNode.propName) {
+        const imgStyleAttr = getStyleAttribute(node, styleName);
+        const children = imgNode.children || [];
+
+        if (imageGradient.type === 'radial') {
+          const gradientId = `grad_${node.id.replace(/[^a-zA-Z0-9]/g, '_')}`;
+          const overlay = buildRadialGradientOverlay(imageGradient, spaces, gradientId, mappings);
+
+          if (children.length === 0) {
+            result = `${spaces}<View ${imgStyleAttr}>
+${overlay}
+${spaces}</View>`;
+            break;
+          }
+
+          const childrenJSX = children
+            .map((child) =>
+              buildJSX(
+                child,
+                indent + 1,
+                imagePathMap,
+                jsxOverrides,
+                stylesBundle,
+                mappings,
+                childOptions,
+                visitedPath
+              )
+            )
+            .join('\n');
+
+          result = `${spaces}<View ${imgStyleAttr}>
+${overlay}
+${childrenJSX}
+${spaces}</View>`;
+          break;
+        }
+
+        const gradientProps = buildLinearGradientProps(imageGradient, spaces, mappings);
+        if (children.length === 0) {
+          result = `${spaces}<LinearGradient
+${gradientProps}
+${spaces}  ${imgStyleAttr}
+${spaces}/>`;
+          break;
+        }
+
+        const childrenJSX = children
+          .map((child) =>
+            buildJSX(
+              child,
+              indent + 1,
+              imagePathMap,
+              jsxOverrides,
+              stylesBundle,
+              mappings,
+              childOptions,
+              visitedPath
+            )
+          )
+          .join('\n');
+
+        result = `${spaces}<LinearGradient
+${gradientProps}
+${spaces}  ${imgStyleAttr}
+${spaces}>
+${childrenJSX}
+${spaces}</LinearGradient>`;
+        break;
+      }
 
       // NEW: If image has children (overlays), render as View container
       if (imgNode.children && imgNode.children.length > 0) {
         const imgChildrenJSX = imgNode.children
-          .map((child) => buildJSX(child, indent + 1, imagePathMap, jsxOverrides, stylesBundle, mappings, childOptions))
+          .map((child) =>
+            buildJSX(
+              child,
+              indent + 1,
+              imagePathMap,
+              jsxOverrides,
+              stylesBundle,
+              mappings,
+              childOptions,
+              visitedPath
+            )
+          )
           .join('\n');
         const imgStyleAttr = getStyleAttribute(node, styleName);
 
@@ -364,7 +591,18 @@ ${spaces}/>`;
       // NEW: If button has custom children, render them instead of default reconstruction
       if (btn.children && btn.children.length > 0) {
         const btnChildrenJSX = btn.children
-          .map((child) => buildJSX(child, indent + 1, imagePathMap, jsxOverrides, stylesBundle, mappings, childOptions))
+          .map((child) =>
+            buildJSX(
+              child,
+              indent + 1,
+              imagePathMap,
+              jsxOverrides,
+              stylesBundle,
+              mappings,
+              childOptions,
+              visitedPath
+            )
+          )
           .join('\n');
 
         result = `${spaces}<TouchableOpacity
@@ -452,7 +690,18 @@ ${spaces}</TouchableOpacity>`;
       // For icons with mixed children (not pure vector group): render children
       if (iconNode.children && iconNode.children.length > 0 && !isVectorGroup) {
         const iconChildrenJSX = iconNode.children
-          .map((child) => buildJSX(child, indent + 1, imagePathMap, jsxOverrides, stylesBundle, mappings, childOptions))
+          .map((child) =>
+            buildJSX(
+              child,
+              indent + 1,
+              imagePathMap,
+              jsxOverrides,
+              stylesBundle,
+              mappings,
+              childOptions,
+              visitedPath
+            )
+          )
           .join('\n');
         const iconA11yLabel2 = deriveA11yLabel(node.name);
         const iconA11yProp2 = iconA11yLabel2 ? `\n${spaces}  accessibilityLabel="${iconA11yLabel2}"` : '';
@@ -547,6 +796,9 @@ ${spaces})}`;
   }
 
   return result;
+  } finally {
+    visitedPath.delete(node.id);
+  }
 }
 
 /**
@@ -556,7 +808,12 @@ ${spaces})}`;
 export function collectStyleNames(node: IRNode): string[] {
   const names: string[] = [];
 
-  function collect(n: IRNode): void {
+  function collect(n: IRNode, path: Set<string> = new Set()): void {
+    if (path.has(n.id)) {
+      return;
+    }
+    path.add(n.id);
+
     const styleName = deriveStyleName(n);
     names.push(styleName);
 
@@ -579,9 +836,11 @@ export function collectStyleNames(node: IRNode): string[] {
     // Recurse into children (check at runtime for all types that might have children)
     if ('children' in n && n.children) {
       for (const child of n.children) {
-        collect(child);
+        collect(child, path);
       }
     }
+
+    path.delete(n.id);
   }
 
   collect(node);

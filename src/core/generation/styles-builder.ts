@@ -4,7 +4,7 @@
 
 import type { StylesBundle, ExtractedStyle, LayoutMeta, IRNode } from '../types.js';
 import type { TokenMappings } from '../mapping/token-matcher.js';
-import { toValidIdentifier, formatInteger, formatSmart, formatFloat } from './utils.js';
+import { formatInteger, formatSmart, formatFloat } from './utils.js';
 import { normalizeHex } from '../utils/path-utils.js';
 
 /**
@@ -452,8 +452,12 @@ function buildStyleProps(
 function collectLayouts(
   node: IRNode,
   map: Map<string, LayoutWithContext>,
-  parentType?: 'row' | 'column' | 'stack' | 'absolute'
+  parentType?: 'row' | 'column' | 'stack' | 'absolute',
+  path: Set<string> = new Set()
 ): void {
+  if (path.has(node.id)) return;
+  path.add(node.id);
+
   // Check at runtime for nodes with layout and children (now includes Button/Icon/Image)
   if ('layout' in node && node.layout && 'children' in node && node.children) {
     // Store layout with parent context
@@ -464,9 +468,11 @@ function collectLayouts(
 
     // Recurse with OUR type as parent
     for (const child of node.children) {
-      collectLayouts(child, map, node.layout.type);
+      collectLayouts(child, map, node.layout.type, path);
     }
   }
+
+  path.delete(node.id);
 }
 
 /**

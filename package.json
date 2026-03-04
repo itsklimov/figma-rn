@@ -54,6 +54,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:live": "RUN_FIGMA_E2E=1 vitest run tests/e2e/generate-screen.test.ts",
+    "test:live:debug": "RUN_FIGMA_E2E=1 RUN_FIGMA_DEBUG=1 vitest run tests/e2e/get-screen-debug.test.ts",
     "lint": "eslint 'src/**/*.{ts,tsx}'"
   },
   "dependencies": {

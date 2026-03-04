@@ -50,6 +50,8 @@ export interface WriteOptions {
 export interface WriteResult {
   /** Success status */
   success: boolean;
+  /** Absolute path to project root */
+  projectRoot: string;
   /** Folder path (relative to project root) */
   folder: string;
   /** Main component path */
@@ -135,6 +137,7 @@ export async function writeGeneratedFiles(options: WriteOptions): Promise<WriteR
       multiFileResult.mainComponent.content,
       {
         assets: assetInfos,
+        screenshotPath: screenshot ? 'screenshot.png' : undefined,
         figmaName,
         previousName,
         // Note: tokensExtracted is computed inside registerGeneration from tokens
@@ -174,6 +177,7 @@ export async function writeGeneratedFiles(options: WriteOptions): Promise<WriteR
 
     return {
       success: true,
+      projectRoot,
       folder: generationResult.folder,
       indexPath: generationResult.indexPath,
       extractedPaths,
@@ -185,6 +189,7 @@ export async function writeGeneratedFiles(options: WriteOptions): Promise<WriteR
   } catch (error) {
     return {
       success: false,
+      projectRoot,
       folder: '',
       indexPath: '',
       extractedPaths: [],

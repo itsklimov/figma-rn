@@ -3,7 +3,7 @@
  * Used when no project theme file exists
  */
 
-import type { DesignTokens, ExtractedStyle } from '../types.js';
+import type { DesignTokens } from '../types.js';
 import { normalizeHex } from '../utils/path-utils.js';
 
 /**
@@ -74,7 +74,7 @@ export function generateTokensFile(tokens: DesignTokens): string {
   if (Object.keys(tokens.colors).length > 0) {
     lines.push('export const colors = {');
     const colorEntries = Object.entries(tokens.colors);
-    colorEntries.forEach(([key, value], index) => {
+    colorEntries.forEach(([_key, value], index) => {
       const name = colorToName(value, index);
       lines.push(`  ${name}: '${value}',`);
     });

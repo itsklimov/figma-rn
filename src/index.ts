@@ -45,19 +45,17 @@ import { autoGenerateColorMappings } from './auto-theme-mapper.js';
 import { getScreenTool, executeGetScreen, formatGetScreenResponse } from './edge/tools/index.js';
 
 const FIGMA_TOKEN = process.env.FIGMA_TOKEN || '';
+let FIGMA_TOKEN_ERROR: string | null = null;
 
 if (!FIGMA_TOKEN) {
-  console.error('Error: FIGMA_TOKEN environment variable is required');
-  console.error('Get your token from: https://www.figma.com/developers/api#access-tokens');
-  process.exit(1);
+  FIGMA_TOKEN_ERROR = 'FIGMA_TOKEN environment variable is required';
+} else if (FIGMA_TOKEN.length < 20 || !/^[a-zA-Z0-9_-]+$/.test(FIGMA_TOKEN)) {
+  FIGMA_TOKEN_ERROR = 'FIGMA_TOKEN appears to be invalid';
 }
 
-// Token format validation
-if (FIGMA_TOKEN.length < 20 || !/^[a-zA-Z0-9_-]+$/.test(FIGMA_TOKEN)) {
-  console.error('Error: FIGMA_TOKEN appears to be invalid');
-  console.error('Expected format: 40+ alphanumeric characters (e.g., figd_xxxx...)');
-  console.error('Get your token from: https://www.figma.com/developers/api#access-tokens');
-  process.exit(1);
+if (FIGMA_TOKEN_ERROR) {
+  console.error(`Warning: ${FIGMA_TOKEN_ERROR}`);
+  console.error('Figma API tools will return errors until token is configured.');
 }
 
 // Create MCP server
@@ -511,7 +509,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         let response = `# 🎯 Generated: ${screenName}\n\n`;
 
         // Main info
-        response += formatResultForLLM(genResult);
+        response += formatResultForLLM(genResult, root);
 
         // Generation details
         response += `\n## Generation Details\n\n`;
@@ -724,19 +722,46 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           componentName,
           themeFilePath,
           outputDir,
-          category
+          projectRoot,
+          category,
+          suppressTodos,
+          scaleFunction,
         } = args as {
           figmaUrl: string;
           componentName?: string;
           themeFilePath?: string;
           outputDir?: string;
+          projectRoot?: string;
           category?: string;
+          suppressTodos?: boolean;
+          scaleFunction?: string;
         };
+
+        if (FIGMA_TOKEN_ERROR) {
+          return {
+            content: [{
+              type: 'text',
+              text:
+                `Error: ${FIGMA_TOKEN_ERROR}\n` +
+                'Set FIGMA_TOKEN in MCP server activation settings and retry.',
+            }],
+            isError: true,
+          };
+        }
 
         console.error(`\n🎯 [GET_SCREEN] Processing ${figmaUrl}...`);
 
         const result = await executeGetScreen(
-          { figmaUrl, componentName, themeFilePath, outputDir, category },
+          {
+            figmaUrl,
+            componentName,
+            themeFilePath,
+            outputDir,
+            projectRoot,
+            category,
+            suppressTodos,
+            scaleFunction,
+          },
           FIGMA_TOKEN
         );
 

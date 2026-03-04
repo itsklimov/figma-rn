@@ -28,13 +28,21 @@ export interface ImportConfig {
 /**
  * Collect RN components needed based on IR tree
  */
-function collectComponents(node: IRNode, set: Set<string>): void {
+function collectComponents(
+  node: IRNode,
+  set: Set<string>,
+  visited: Set<string> = new Set()
+): void {
+  if (visited.has(node.id)) return;
+  visited.add(node.id);
+
+  try {
   switch (node.semanticType) {
     case 'Container':
     case 'Card':
       set.add('View');
       for (const child of node.children) {
-        collectComponents(child, set);
+        collectComponents(child, set, visited);
       }
       break;
     case 'Text':
@@ -52,21 +60,45 @@ function collectComponents(node: IRNode, set: Set<string>): void {
       set.add('Text');
       break;
   }
+  } finally {
+    visited.delete(node.id);
+  }
 }
 
 /**
- * Check if any node in tree has a gradient background
+ * Check gradient usage (linear/radial) in a tree.
  */
-function hasGradients(node: IRNode, stylesBundle?: StylesBundle): boolean {
+function collectGradientUsage(
+  node: IRNode,
+  stylesBundle?: StylesBundle,
+  visited: Set<string> = new Set()
+): { hasLinear: boolean; hasRadial: boolean } {
+  if (visited.has(node.id)) {
+    return { hasLinear: false, hasRadial: false };
+  }
+  visited.add(node.id);
+
+  let hasLinear = false;
+  let hasRadial = false;
+
   if (stylesBundle) {
     const style = stylesBundle.styles[node.styleRef];
-    if (style?.backgroundGradient) return true;
+    if (style?.backgroundGradient) {
+      if (style.backgroundGradient.type === 'radial') hasRadial = true;
+      if (style.backgroundGradient.type === 'linear') hasLinear = true;
+    }
   }
 
   if ('children' in node && node.children) {
-    return node.children.some(child => hasGradients(child, stylesBundle));
+    for (const child of node.children) {
+      const childUsage = collectGradientUsage(child, stylesBundle, visited);
+      if (childUsage.hasLinear) hasLinear = true;
+      if (childUsage.hasRadial) hasRadial = true;
+    }
   }
-  return false;
+
+  visited.delete(node.id);
+  return { hasLinear, hasRadial };
 }
 
 /**
@@ -141,9 +173,15 @@ export function buildImports(
     lines.push(`import { StyleSheet } from 'react-native-unistyles';`);
   }
 
-  // Add LinearGradient if needed
-  if (hasGradients(root, stylesBundle)) {
+  // Add gradient imports only when they are actually used.
+  const gradientUsage = collectGradientUsage(root, stylesBundle);
+  if (gradientUsage.hasLinear) {
     lines.push(`import { LinearGradient } from 'expo-linear-gradient';`);
+  }
+  if (gradientUsage.hasRadial) {
+    lines.push(
+      `import Svg, { Defs, Rect, RadialGradient as SvgRadialGradient, Stop } from 'react-native-svg';`
+    );
   }
 
   // Add theme/hook import based on config
@@ -168,4 +206,3 @@ export function buildImports(
 
   return lines.join('\n');
 }
-

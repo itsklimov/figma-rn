@@ -5,7 +5,7 @@
  * Used for generating typed interfaces and mock data from Figma content.
  */
 
-import type { IRNode, TextIR, ComponentIR } from '../types.js';
+import type { IRNode, TextIR } from '../types.js';
 
 /**
  * Property definition extracted from text nodes

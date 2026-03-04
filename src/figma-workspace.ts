@@ -213,9 +213,21 @@ export interface FigmaConfig {
   
   // Framework detection
   framework: 'expo' | 'react-native' | 'ignite';
-  
+
   // Style pattern detection
   stylePattern: 'useTheme' | 'StyleSheet' | 'unistyles';
+
+  // Asset detection configuration (icons, images, logos)
+  assetDetection?: {
+    /** Maximum size for exportable assets in pixels (default: 80) */
+    maxAssetSize?: number;
+    /** Whether to respect Figma's exportSettings (default: true) */
+    useExportSettings?: boolean;
+    /** Additional icon name patterns to match (regex strings) */
+    iconNamePatterns?: string[];
+    /** Force export for nodes matching these name patterns (regex strings) */
+    forceExportPatterns?: string[];
+  };
 }
 
 /**
@@ -254,7 +266,6 @@ export interface GenerationResult {
 
 const FIGMA_DIR = '.figma';
 const MANIFEST_FILE = 'manifest.json';
-const THEME_FILE = 'theme.json';
 const CONFIG_FILE = 'config.json';
 const META_FILE = 'meta.json';
 const ASSETS_DIR = 'assets';
@@ -394,7 +405,7 @@ function migrateManifest(manifest: any): Manifest {
     for (const category of categories) {
       const entries = manifest[category] || {};
 
-      for (const [url, entry] of Object.entries(entries)) {
+      for (const [, entry] of Object.entries(entries)) {
         const oldEntry = entry as any;
 
         // Convert path → folder
@@ -730,7 +741,7 @@ export async function loadAllProjectTokens(projectRoot: string): Promise<any> {
 
   const { extractProjectTokens, mergeProjectTokens } = await import('./core/mapping/theme-extractor.js');
   
-  console.log(`📦 Loading tokens from ${config.tokenFiles.length} file(s)...`);
+  console.error(`📦 Loading tokens from ${config.tokenFiles.length} file(s)...`);
   
   const tokenSets = await Promise.all(
     config.tokenFiles.map(async (file) => {
@@ -1132,8 +1143,15 @@ export async function registerGeneration(
     delete manifest[existing.category][nodeId];
   }
 
-  // Handle cleanup if renamed
-  if (options.previousName && options.previousName !== name) {
+  // Handle cleanup if renamed.
+  // Important: avoid deleting assets when the rename differs only by case
+  // on case-insensitive filesystems (e.g., default macOS).
+  const isCaseOnlyRename =
+    !!options.previousName &&
+    options.previousName !== name &&
+    options.previousName.toLowerCase() === name.toLowerCase();
+
+  if (options.previousName && options.previousName !== name && !isCaseOnlyRename) {
     const oldFolder = join(projectRoot, FIGMA_DIR, CATEGORY_FOLDERS[category], options.previousName);
     try {
       console.error(`🗑️ Cleaning up old component folder: ${oldFolder}`);
@@ -1243,17 +1261,17 @@ export function getEntriesByCategory(
 /**
  * Format result for LLM
  */
-export function formatResultForLLM(result: GenerationResult): string {
-  // Use {PROJECT_ROOT} marker to make it clear paths are relative to project root
-  const projectRoot = '{PROJECT_ROOT}';
+export function formatResultForLLM(result: GenerationResult, projectRoot?: string): string {
+  // Use absolute path if provided, otherwise fall back to cwd
+  const root = projectRoot ?? process.cwd();
 
   let response = `## ${result.wasReplaced ? '🔄 Replaced' : '✅ Generated'} ${result.name}\n\n`;
 
   response += `| Property | Value |\n`;
   response += `|----------|-------|\n`;
   response += `| **Type** | ${result.category} |\n`;
-  response += `| **Folder** | \`${projectRoot}/${result.folder}\` |\n`;
-  response += `| **Code** | \`${projectRoot}/${result.indexPath}\` |\n`;
+  response += `| **Folder** | \`${join(root, result.folder)}\` |\n`;
+  response += `| **Code** | \`${join(root, result.indexPath)}\` |\n`;
   response += `| **Exports** | ${result.exports.map(e => `\`${e}\``).join(', ')} |\n`;
 
   if (result.dependencies.length > 0) {
@@ -1261,7 +1279,7 @@ export function formatResultForLLM(result: GenerationResult): string {
   }
 
   if (result.screenshotPath) {
-    response += `| **Screenshot** | \`${projectRoot}/${result.screenshotPath}\` |\n`;
+    response += `| **Screenshot** | \`${join(root, result.screenshotPath)}\` |\n`;
   }
 
   if (result.assets.length > 0) {

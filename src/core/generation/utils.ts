@@ -2,6 +2,51 @@
  * Shared utilities for the generation layer
  */
 
+const CYRILLIC_TO_LATIN: Record<string, string> = {
+  а: 'a', А: 'A',
+  б: 'b', Б: 'B',
+  в: 'v', В: 'V',
+  г: 'g', Г: 'G',
+  д: 'd', Д: 'D',
+  е: 'e', Е: 'E',
+  ё: 'yo', Ё: 'Yo',
+  ж: 'zh', Ж: 'Zh',
+  з: 'z', З: 'Z',
+  и: 'i', И: 'I',
+  й: 'y', Й: 'Y',
+  к: 'k', К: 'K',
+  л: 'l', Л: 'L',
+  м: 'm', М: 'M',
+  н: 'n', Н: 'N',
+  о: 'o', О: 'O',
+  п: 'p', П: 'P',
+  р: 'r', Р: 'R',
+  с: 's', С: 'S',
+  т: 't', Т: 'T',
+  у: 'u', У: 'U',
+  ф: 'f', Ф: 'F',
+  х: 'kh', Х: 'Kh',
+  ц: 'ts', Ц: 'Ts',
+  ч: 'ch', Ч: 'Ch',
+  ш: 'sh', Ш: 'Sh',
+  щ: 'shch', Щ: 'Shch',
+  ъ: '', Ъ: '',
+  ы: 'y', Ы: 'Y',
+  ь: '', Ь: '',
+  э: 'e', Э: 'E',
+  ю: 'yu', Ю: 'Yu',
+  я: 'ya', Я: 'Ya',
+};
+
+function transliterateToAscii(input: string): string {
+  return input
+    .split('')
+    .map((char) => CYRILLIC_TO_LATIN[char] ?? char)
+    .join('')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
 /**
  * Convert name to valid JS identifier, preserving camelCase
  *
@@ -12,10 +57,12 @@
  * toValidIdentifier('') // => 'element'
  */
 export function toValidIdentifier(name: string): string {
+  const transliterated = transliterateToAscii(name);
+
   // Split into words, handling spaces AND camelCase transitions
   // e.g. "productCard" -> "product Card" -> ["product", "Card"]
   // e.g. "Product Card" -> "Product Card" -> ["Product", "Card"]
-  const words = name
+  const words = transliterated
     .replace(/([a-z])([A-Z])/g, '$1 $2') // Split camelCase
     .replace(/[^a-zA-Z0-9]/g, ' ')       // Replace special chars with space
     .split(/\s+/)
@@ -68,7 +115,9 @@ export function escapeJSXText(text: string): string {
  * sanitizeFilename('.hidden') // => 'hidden'
  */
 export function sanitizeFilename(name: string): string {
-  return name
+  const transliterated = transliterateToAscii(name);
+
+  return transliterated
     .toLowerCase()
     .replace(/\.\./g, '')      // Remove .. sequences
     .replace(/^\.+/, '')       // Remove leading dots (hidden files)
@@ -87,19 +136,25 @@ export function sanitizeFilename(name: string): string {
  * sanitizeComponentName('123-invalid') // => 'Component123Invalid'
  */
 export function sanitizeComponentName(figmaName: string): string {
-  const cleaned = figmaName
-    .replace(/[^\w\s-]/g, '')
+  const transliterated = transliterateToAscii(figmaName);
+  const cleaned = transliterated
+    .replace(/[^a-zA-Z0-9\s\-_]/g, ' ')
     .trim();
   
   // Split by spaces, hyphens, underscores OR camelCase transitions
   const words = cleaned
     .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .split(/[\s\-_]+/);
+    .split(/[\s\-_]+/)
+    .filter(Boolean);
     
   const pascalCase = words
     .map(word => {
-      if (!word) return '';
-      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+      // Preserve all-caps tokens and numeric-uppercase tokens (e.g., E2E, 868A)
+      if (/^[A-Z0-9]+$/.test(word)) {
+        return word;
+      }
+      // Keep existing inner casing for mixed-case tokens, only uppercase the first char
+      return word.charAt(0).toUpperCase() + word.slice(1);
     })
     .join('');
   if (!/^[a-zA-Z]/.test(pascalCase)) {

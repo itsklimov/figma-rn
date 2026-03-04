@@ -26,6 +26,7 @@ export type {
   ParsedFigmaUrl,
   Color,
   GradientStop,
+  GradientHandle,
   Gradient,
   BoundingBox,
   Padding,

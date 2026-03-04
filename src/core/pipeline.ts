@@ -18,14 +18,14 @@ import type {
   CornerRadius,
   TypographyInfo,
   ButtonIR,
-  SafeAreaInsets,
 } from './types.js';
 import { normalizeTree, type FilterOptions } from './normalize/index.js';
 import { addLayoutInfo } from './layout/index.js';
 import { mapConstraints } from './layout/constraint-mapper.js';
-import { recognizeSemantics } from './recognize/index.js';
+import { recognizeSemantics, setAssetDetectionConfig } from './recognize/index.js';
 import { extractStyleFromProps, extractTokens, createEmptyStylesBundle } from './styles/index.js';
 import { detectSafeArea, type SafeAreaDetectionResult } from './detection/index.js';
+import { detectModalOverlay, extractModalContent, type ModalOverlayResult } from './detection/index.js';
 import { BoundingBox } from '../api/types.js';
 
 /**
@@ -53,8 +53,12 @@ interface NodeVisualProps {
  */
 function buildVisualPropsMap(node: LayoutNode): Map<string, NodeVisualProps> {
   const map = new Map<string, NodeVisualProps>();
+  const path = new Set<string>();
 
   function walk(n: LayoutNode, parentBounds?: BoundingBox, parentLayout?: LayoutType): void {
+    if (path.has(n.id)) return;
+    path.add(n.id);
+
     let absoluteProps = {};
     
     // Apply constraints only if:
@@ -91,6 +95,8 @@ function buildVisualPropsMap(node: LayoutNode): Map<string, NodeVisualProps> {
     for (const child of n.children) {
       walk(child, n.boundingBox, n.layout.type);
     }
+
+    path.delete(n.id);
   }
 
   walk(node);
@@ -106,6 +112,7 @@ function collectStyles(
   propsMap: Map<string, NodeVisualProps>
 ): Record<string, ReturnType<typeof extractStyleFromProps>> {
   const styles: Record<string, ReturnType<typeof extractStyleFromProps>> = {};
+  const path = new Set<string>();
   
   // Track hashes of styles to deduplicate identical content
   // Hash -> styleRef
@@ -157,6 +164,9 @@ function collectStyles(
   }
 
   function walk(n: IRNode): void {
+    if (path.has(n.id)) return;
+    path.add(n.id);
+
     const props = propsMap.get(n.id);
     if (props) {
       registerStyle(n, props);
@@ -188,6 +198,8 @@ function collectStyles(
         walk(child);
       }
     }
+
+    path.delete(n.id);
   }
 
   walk(node);
@@ -197,7 +209,16 @@ function collectStyles(
 import { defaultConventions } from '../api/config.js';
 
 /**
- * Stage 0: Detect Safe Area
+ * Stage 0a: Detect Modal Overlay
+ * Identify if the screen is demonstrating a modal component (bottom sheet, dialog, etc.)
+ * If detected, we'll extract just the modal content for code generation
+ */
+export function detectModalOverlayContent(node: FigmaNode): ModalOverlayResult {
+  return detectModalOverlay(node);
+}
+
+/**
+ * Stage 0b: Detect Safe Area
  * Identify OS chrome elements and calculate safe area insets
  * This runs BEFORE normalization to extract layout info before filtering
  */
@@ -272,7 +293,14 @@ export function extractStyles(
  * Collect gap and padding values from IR tree layout metadata
  * These are separate from ExtractedStyle and need explicit collection
  */
-function collectLayoutSpacing(node: IRNode, spacing: Record<string, number>): void {
+function collectLayoutSpacing(
+  node: IRNode,
+  spacing: Record<string, number>,
+  path: Set<string> = new Set()
+): void {
+  if (path.has(node.id)) return;
+  path.add(node.id);
+
   // Collect from current node's layout
   if ('layout' in node && node.layout) {
     const layout = node.layout as any;
@@ -298,16 +326,19 @@ function collectLayoutSpacing(node: IRNode, spacing: Record<string, number>): vo
   // Recurse into children
   if ('children' in node && node.children) {
     for (const child of node.children) {
-      collectLayoutSpacing(child, spacing);
+      collectLayoutSpacing(child, spacing, path);
     }
   }
+
+  path.delete(node.id);
 }
 
 /**
  * Main pipeline: Transform FigmaNode to ScreenIR
  *
  * Pipeline stages:
- * 0. Detect Safe Area: Identify OS chrome and extract insets BEFORE filtering
+ * 0a. Detect Modal Overlay: Identify modal demonstrations and extract just the modal
+ * 0b. Detect Safe Area: Identify OS chrome and extract insets BEFORE filtering
  * 1. Normalize: Filter hidden nodes, unwrap useless groups
  * 2. Add Layout: Detect row/column/stack, extract padding/gap
  * 3. Recognize: Classify into semantic types (Container, Text, Button, etc.)
@@ -317,18 +348,34 @@ export function transformToScreenIR(
   input: FigmaNode,
   options?: PipelineOptions
 ): ScreenIR {
-  // Stage 0: Detect Safe Area (BEFORE filtering)
+  // Stage 0a: Detect Modal Overlay
+  // If the screen is demonstrating a modal (bottom sheet, dialog, etc.),
+  // extract just the modal content for code generation
+  const modalResult = detectModalOverlayContent(input);
+  let effectiveInput = input;
+  let effectiveName = input.name;
+
+  if (modalResult.hasModalOverlay && modalResult.contentId) {
+    const modalContent = extractModalContent(input, modalResult.contentId);
+    if (modalContent) {
+      effectiveInput = modalContent;
+      effectiveName = modalResult.contentName || modalContent.name;
+      console.error(`📱 Detected ${modalResult.modalType}: extracting "${effectiveName}" for generation`);
+    }
+  }
+
+  // Stage 0b: Detect Safe Area (BEFORE filtering)
   // This extracts layout information from OS chrome elements before we remove them
-  const safeAreaResult = detectSafeAreaInsets(input);
+  const safeAreaResult = detectSafeAreaInsets(effectiveInput);
 
   // Stage 1: Normalize (using safe area excludeIds)
-  const normalized = normalize(input, options, safeAreaResult);
+  const normalized = normalize(effectiveInput, options, safeAreaResult);
 
   if (normalized === null) {
     // Root node was filtered out - return empty screen
     return {
-      id: input.id,
-      name: input.name,
+      id: effectiveInput.id,
+      name: effectiveName,
       root: {
         id: input.id,
         name: input.name,
@@ -358,14 +405,18 @@ export function transformToScreenIR(
   const withLayout = addLayout(normalized);
 
   // Stage 3: Recognize
+  // Configure asset detection before classification
+  if (options?.assetDetection) {
+    setAssetDetectionConfig(options.assetDetection);
+  }
   const ir = recognize(withLayout);
 
   // Stage 4: Extract Styles
   const stylesBundle = extractStyles(ir, withLayout, options);
 
   return {
-    id: input.id,
-    name: input.name,
+    id: effectiveInput.id,
+    name: effectiveName,
     root: ir,
     stylesBundle,
     safeAreaInsets: safeAreaResult.insets,
@@ -377,6 +428,7 @@ export function transformToScreenIR(
  * Export individual stages for debugging/testing
  */
 export const stages = {
+  detectModalOverlayContent,
   detectSafeAreaInsets,
   normalize,
   addLayout,

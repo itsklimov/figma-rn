@@ -3,15 +3,14 @@
  * Supports both single-file and multi-file output with detection hints
  */
 
-import type { ScreenIR, DesignTokens, IRNode, ComponentIR, StylesBundle, RepeaterIR, TextIR, ImageIR } from '../types.js';
+import type { ScreenIR, IRNode, ComponentIR, StylesBundle, RepeaterIR } from '../types.js';
 import type { TokenMappings } from '../mapping/token-matcher.js';
-import type { DetectionResult, ComponentHint, ListHint } from '../detection/types.js';
+import type { DetectionResult, ComponentHint } from '../detection/types.js';
 import { buildImports, type ImportConfig } from './imports-builder.js';
 import { buildJSX } from './jsx-builder.js';
 import { buildStyles } from './styles-builder.js';
-import { generateFlatList, generateItemComponent } from './list-generator.js';
+import { generateItemComponent } from './list-generator.js';
 import { generateTokensIfNeeded } from './tokens-generator.js';
-import { toValidIdentifier } from './utils.js';
 import { extractProps } from './prop-extractor.js';
 import { mergePropsVariations, extractVariableProps } from '../detection/repetition-detector.js';
 import { detectSemanticState } from '../detection/state-detector.js';
@@ -102,6 +101,113 @@ function toPascalCase(str: string): string {
     .replace(/[^a-zA-Z0-9]/g, '');
 }
 
+function escapeStringLiteral(value: string): string {
+  return value
+    .replace(/\\/g, '\\\\')
+    .replace(/\r?\n/g, '\\n')
+    .replace(/"/g, '\\"');
+}
+
+function resolveMainImplementationRoot(root: IRNode, componentName: string): IRNode {
+  if (root.semanticType !== 'Component') {
+    return root;
+  }
+
+  const componentRoot = root as ComponentIR;
+  let implementationRoot: IRNode = {
+    ...componentRoot,
+    semanticType: 'Container',
+  } as IRNode;
+
+  if (componentRoot.children && componentRoot.children.length === 1) {
+    const child = componentRoot.children[0];
+    const shouldUseChildAsRoot =
+      child.name === componentRoot.name ||
+      child.name === componentRoot.componentName ||
+      child.name === componentName ||
+      (child.boundingBox.width === componentRoot.boundingBox.width &&
+        child.boundingBox.height === componentRoot.boundingBox.height);
+
+    if (shouldUseChildAsRoot) {
+      implementationRoot = child;
+    }
+  }
+
+  return implementationRoot;
+}
+
+/**
+ * Build a stable signature for a component implementation shape.
+ * Used to disambiguate components that share the same display name.
+ */
+function getComponentSignature(component: ComponentIR): string {
+  const propKeys = Object.keys(component.props || {}).sort().join('|');
+  const componentId = component.componentId || 'unknown';
+  const childCount = component.children?.length || 0;
+  return `${componentId}::${propKeys}::${childCount}`;
+}
+
+/**
+ * Ensure component names are unique across the tree.
+ * If two components share the same name but different signatures, suffixes are added.
+ */
+function ensureUniqueComponentNames(root: IRNode, reservedNames: Set<string> = new Set()): void {
+  const usedNames = new Set<string>(reservedNames);
+  const signatureByName = new Map<string, string>();
+  const path = new Set<string>();
+
+  function walk(node: IRNode): void {
+    if (path.has(node.id)) return;
+    path.add(node.id);
+
+    if (node.semanticType === 'Component') {
+      const comp = node as ComponentIR;
+      const baseName = comp.componentName || toPascalCase(comp.name) || 'Component';
+      const signature = getComponentSignature(comp);
+      const baseSignature = signatureByName.get(baseName);
+
+      if (!usedNames.has(baseName) && !baseSignature) {
+        comp.componentName = baseName;
+        usedNames.add(baseName);
+        signatureByName.set(baseName, signature);
+      } else if (baseSignature === signature) {
+        comp.componentName = baseName;
+      } else {
+        let suffix = 2;
+        let assigned = false;
+
+        while (!assigned) {
+          const candidate = `${baseName}${suffix}`;
+          const candidateSignature = signatureByName.get(candidate);
+          if (!candidateSignature) {
+            comp.componentName = candidate;
+            signatureByName.set(candidate, signature);
+            usedNames.add(candidate);
+            assigned = true;
+            continue;
+          }
+          if (candidateSignature === signature) {
+            comp.componentName = candidate;
+            assigned = true;
+            continue;
+          }
+          suffix += 1;
+        }
+      }
+    }
+
+    if ('children' in node && node.children) {
+      for (const child of node.children) {
+        walk(child);
+      }
+    }
+
+    path.delete(node.id);
+  }
+
+  walk(root);
+}
+
 /**
  * Assemble complete TSX file from parts
  */
@@ -140,7 +246,9 @@ export function generateComponent(
 ): GenerationResult {
   // 1. Resolve component name and root props
   const componentName = options?.componentName || toPascalCase(screen.name) || 'GeneratedComponent';
-  const { props: rootProps } = extractProps(screen.root, screen.stylesBundle);
+  const renderRoot = resolveMainImplementationRoot(screen.root, componentName);
+  ensureUniqueComponentNames(renderRoot, new Set([componentName]));
+  const { props: rootProps } = extractProps(renderRoot, screen.stylesBundle);
   const rootPropsList = Object.keys(rootProps);
   
   // Generate props interface for the main component
@@ -165,7 +273,7 @@ export function generateComponent(
         // Fallback for missing images - use object to match ImageSourcePropType or valid URI
         return `${name} = { uri: "https://via.placeholder.com/150?text=${name}" }`;
       }
-      const defaultVal = config.defaultValue ? ` = "${config.defaultValue.replace(/"/g, '\\"')}"` : '';
+      const defaultVal = config.defaultValue ? ` = "${escapeStringLiteral(config.defaultValue)}"` : '';
       return `${name}${defaultVal}`;
     });
     rootPropsDestructure = `{ ${destructureParts.join(', ')} }: ${interfaceName}`;
@@ -185,8 +293,7 @@ export function generateComponent(
   };
 
   // 2.6 Process Repeaters (Update tree and collect parts)
-  const repeaters = collectRepeaters(screen.root);
-  const usedRepeaterNames = new Set<string>();
+  const repeaters = collectRepeaters(renderRoot);
   for (const repeater of repeaters) {
     const { dataConstant, itemComponent, typeDefinition, itemComponentName } = generateRepeaterParts(repeater, screen.stylesBundle, mappings, options, listExtras.generatedComponentNames);
     listExtras.data.push(dataConstant);
@@ -196,7 +303,7 @@ export function generateComponent(
   }
 
   // 7. Collect and generate sub-components
-  const components = collectComponents(screen.root);
+  const components = collectComponents(renderRoot, new Set([componentName]));
   let needsImageSourcePropType = false;
   const subComponentsCodeParts: string[] = [];
   
@@ -222,6 +329,20 @@ export function generateComponent(
   
   // Check if any generated code uses Pressable (semantic state components)
   const allSubComponentsCode = [...subComponentsCodeParts, ...listExtras.subComponents].join('\n');
+  const rnTagsToImport: Array<[string, string]> = [
+    ['View', '<View'],
+    ['Text', '<Text'],
+    ['Image', '<Image'],
+    ['TouchableOpacity', '<TouchableOpacity'],
+    ['TextInput', '<TextInput'],
+    ['ScrollView', '<ScrollView'],
+    ['Pressable', '<Pressable'],
+  ];
+  for (const [componentName, tag] of rnTagsToImport) {
+    if (allSubComponentsCode.includes(tag)) {
+      extraRNImports.push(componentName);
+    }
+  }
   if (allSubComponentsCode.includes('<Pressable')) {
     extraRNImports.push('Pressable');
   }
@@ -247,10 +368,10 @@ export function generateComponent(
     scaleFunctionPath: options.scaleFunctionPath,
   } : undefined;
 
-  const imports = buildImports(screen.root, extraRNImports, screen.stylesBundle, importConfig);
+  const imports = buildImports(renderRoot, extraRNImports, screen.stylesBundle, importConfig);
 
   // 4. Build JSX from IR tree (indented for return statement)
-  const jsx = buildJSX(screen.root, 2, options?.imagePathMap, jsxOverrides, screen.stylesBundle, mappings);
+  const jsx = buildJSX(renderRoot, 2, options?.imagePathMap, jsxOverrides, screen.stylesBundle, mappings);
 
   // Fix #8: Extract used style names from ALL generated JSX (main + sub-components) for tree-shaking
   const usedStyles = new Set<string>();
@@ -263,7 +384,7 @@ export function generateComponent(
 
   // 5. Build StyleSheet from StylesBundle with mappings
   const { code: stylesCode, unmapped } = buildStyles(
-    screen.root,
+    renderRoot,
     screen.stylesBundle,
     mappings,
     {
@@ -384,15 +505,19 @@ ${jsx}
 
   // Add safeArea style if SafeAreaView is used
   if (needsSafeArea) {
-    // Insert safeArea style at the beginning of the styles
-    // Support both standard StyleSheet.create({ and Unistyles StyleSheet.create(theme => ({
-    finalStylesCode = finalStylesCode.replace(
-      /const styles = StyleSheet\.create\((?:theme => )?\(\{/,
-      `const styles = StyleSheet.create(${options?.stylePattern === 'unistyles' ? 'theme => ' : ''}({
-  safeArea: {
-    flex: 1,
-  },`
-    );
+    // Insert safeArea style at the beginning of the styles.
+    const safeAreaBlock = `  safeArea: {\n    flex: 1,\n  },`;
+    if (options?.stylePattern === 'unistyles') {
+      finalStylesCode = finalStylesCode.replace(
+        /const styles = StyleSheet\.create\(theme => \(\{/,
+        `const styles = StyleSheet.create(theme => ({\n${safeAreaBlock}`
+      );
+    } else {
+      finalStylesCode = finalStylesCode.replace(
+        /const styles = StyleSheet\.create\(\{/,
+        `const styles = StyleSheet.create({\n${safeAreaBlock}`
+      );
+    }
   }
 
   let code = `${finalImports}
@@ -425,13 +550,17 @@ ${finalStylesCode}
 /**
  * Collect all unique Component nodes from the tree
  */
-function collectComponents(root: IRNode): ComponentIR[] {
+function collectComponents(root: IRNode, reservedNames: Set<string> = new Set()): ComponentIR[] {
   const components = new Map<string, ComponentIR>();
+  const path = new Set<string>();
 
   function walk(node: IRNode) {
+    if (path.has(node.id)) return;
+    path.add(node.id);
+
     if (node.semanticType === 'Component') {
       // Use componentName as key to deduplicate
-      if (!components.has(node.componentName)) {
+      if (!reservedNames.has(node.componentName) && !components.has(node.componentName)) {
         components.set(node.componentName, node as ComponentIR);
       }
       // Components might have children that are also components (nested instances)
@@ -447,6 +576,8 @@ function collectComponents(root: IRNode): ComponentIR[] {
         walk(child);
       }
     }
+
+    path.delete(node.id);
   }
 
   walk(root);
@@ -458,8 +589,12 @@ function collectComponents(root: IRNode): ComponentIR[] {
  */
 function collectRepeaters(root: IRNode): RepeaterIR[] {
   const repeaters: RepeaterIR[] = [];
+  const path = new Set<string>();
 
   function walk(node: IRNode) {
+    if (path.has(node.id)) return;
+    path.add(node.id);
+
     if (node.semanticType === 'Repeater') {
       repeaters.push(node as RepeaterIR);
     }
@@ -469,6 +604,8 @@ function collectRepeaters(root: IRNode): RepeaterIR[] {
         walk(child);
       }
     }
+
+    path.delete(node.id);
   }
 
   walk(root);
@@ -526,7 +663,6 @@ function generateRepeaterParts(
   // 3. Build data array based on semantic state or raw variations
   let dataItems: Record<string, any>[];
   let semanticPropName: string | undefined;
-  let stateStyles: Record<string, any> | undefined;
   
   // Build text props mapping from template for dynamic component generation
   // Maps prop name -> { path: child path, isPrimary: boolean }
@@ -536,7 +672,7 @@ function generateRepeaterParts(
   if (stateResult.hasSemanticState && stateResult.state) {
     // Semantic state detected! Generate data with state flags, not style values
     semanticPropName = stateResult.state.propName;
-    stateStyles = stateResult.state.stateStyles;
+    // Note: stateStyles available at stateResult.state.stateStyles if needed for future use
 
     // First pass: analyze template to build text props mapping
     const templateRawValues = extractVariableProps(template, stylesBundle, mappings);
@@ -696,7 +832,6 @@ function generateSubComponent(
 
   // Generate props interface
   let propsInterface = '';
-  let propsType = '';
   let propsDestructure = '';
   
   // Check if we have semantic state (e.g., isSelected pattern)
@@ -727,6 +862,11 @@ function generateSubComponent(
 
     // Mark text nodes with propName and optional containers with conditionalProp
     for (const [propName, info] of textPropsMap.entries()) {
+      // Skip malformed names to avoid invalid destructuring like "{ , isSelected }"
+      if (!propName || !/^[A-Za-z_]\w*$/.test(propName)) {
+        continue;
+      }
+
       const isOptional = !info.isPrimary;
       const comment = info.isPrimary ? 'Text to display' : `Optional ${propName} text`;
       propLines.push(`  /** ${comment} */\n  ${propName}${isOptional ? '?' : ''}: string;`);
@@ -753,7 +893,8 @@ function generateSubComponent(
     propLines.push(`  /** Called when item is pressed */\n  onPress?: () => void;`);
 
     propsInterface = `interface ${interfaceName} {\n${propLines.join('\n')}\n}\n\n`;
-    propsDestructure = `{ ${propNames.join(', ')}, ${statePropName} = false, onPress }: ${interfaceName}`;
+    const destructureParts = [...propNames, `${statePropName} = false`, 'onPress'];
+    propsDestructure = `{ ${destructureParts.join(', ')} }: ${interfaceName}`;
 
     // Use buildJSX with semantic state options for proper rendering
     // This automatically handles gradients, images, and any other features
@@ -786,8 +927,7 @@ ${jsx}
     
     const interfaceName = `${component.componentName}Props`;
     propsInterface = `interface ${interfaceName} {\n${propLines.join('\n')}\n}\n\n`;
-    propsType = interfaceName;
-    
+
     // Destructured props for the signature
     const destructureParts = Object.entries(extractedProps).map(([name, config]: [string, any]) => {
       if (config.type === 'image') {
@@ -797,7 +937,7 @@ ${jsx}
         }
         return `${name} = { uri: "https://via.placeholder.com/150?text=${name}" }`;
       }
-      const defaultVal = config.defaultValue ? ` = "${config.defaultValue.replace(/"/g, '\\"')}"` : '';
+      const defaultVal = config.defaultValue ? ` = "${escapeStringLiteral(config.defaultValue)}"` : '';
       return `${name}${defaultVal}`;
     });
     propsDestructure = `{ ${destructureParts.join(', ')} }: ${interfaceName}`;
@@ -973,7 +1113,6 @@ function generateExtractedComponent(
     ? `interface ${componentName}Props {\n${propLines.join('\n')}\n}\n\n`
     : '';
 
-  const propsParam = propLines.length > 0 ? `props: ${componentName}Props` : '';
   const propsDestructure = propLines.length > 0 ? `{ ${Object.keys(extractedProps).join(', ')} }: ${componentName}Props` : '';
 
   // Build imports from template node

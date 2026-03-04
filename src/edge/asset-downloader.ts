@@ -31,6 +31,19 @@ interface AssetNode {
   category: 'icon' | 'image';
 }
 
+function makeUniqueFilename(baseName: string, ext: 'svg' | 'png', used: Set<string>): string {
+  let counter = 1;
+  let filename = `${baseName}.${ext}`;
+
+  while (used.has(filename)) {
+    counter += 1;
+    filename = `${baseName}-${counter}.${ext}`;
+  }
+
+  used.add(filename);
+  return filename;
+}
+
 /**
  * Build a composite asset filename from component name and all meaningful properties
  * Pattern: {componentName}-{prop1}-{prop2}-{propN}
@@ -97,12 +110,24 @@ function extractAssetNodes(node: IRNode, assets: AssetNode[]): void {
   if (node.semanticType === 'Image') {
     const imageRef = (node as any).imageRef;
     if (imageRef) {
+      // Standard image with IMAGE fill
       assets.push({
         nodeId: node.id,
         name: node.name,
         ref: imageRef,
         category: 'image',
       });
+    } else if (node.children && node.children.length > 0) {
+      // Vector illustration (FRAME/GROUP with vector children, no imageRef)
+      // Export the whole node as SVG
+      assets.push({
+        nodeId: node.id,
+        name: node.name,
+        ref: node.id,
+        category: 'icon', // Export as SVG
+      });
+      // Don't recurse - export as single unit
+      return;
     }
   } else if (node.semanticType === 'Icon') {
     const iconRef = (node as any).iconRef;
@@ -211,7 +236,7 @@ export async function downloadAssets(
   // 2. Deduplicate by ref - multiple component instances may share the same imageRef/iconRef
   const uniqueAssets = deduplicateAssetNodes(assetNodes);
 
-  console.log(`Extracted ${assetNodes.length} asset nodes, deduplicated to ${uniqueAssets.length} unique assets`);
+  console.error(`Extracted ${assetNodes.length} asset nodes, deduplicated to ${uniqueAssets.length} unique assets`);
 
   // 3. Group nodes by category to optimize API calls
   const iconNodes = uniqueAssets.filter((n) => n.category === 'icon');
@@ -219,6 +244,8 @@ export async function downloadAssets(
 
   const downloadedAssets: DownloadedAsset[] = [];
   const pathMap = new Map<string, string>();
+  const usedIconFilenames = new Set<string>();
+  const usedImageFilenames = new Set<string>();
 
   // 4. Download icons (SVG format)
   if (iconNodes.length > 0) {
@@ -242,13 +269,17 @@ export async function downloadAssets(
         }
 
         try {
-          const filename = `${sanitizeFilename(node.name)}.svg`;
+          const filename = makeUniqueFilename(
+            sanitizeFilename(node.name),
+            'svg',
+            usedIconFilenames
+          );
           const localPath = join(iconDir, filename);
           const relativePath = `./assets/icons/${filename}`;
 
           await downloadAsset(exportResult.url, localPath);
 
-          console.log(`✓ Downloaded icon: ${filename}`);
+          console.error(`✓ Downloaded icon: ${filename}`);
 
           const asset: DownloadedAsset = {
             nodeId: node.nodeId,
@@ -292,13 +323,17 @@ export async function downloadAssets(
         }
 
         try {
-          const filename = `${sanitizeFilename(node.name)}.png`;
+          const filename = makeUniqueFilename(
+            sanitizeFilename(node.name),
+            'png',
+            usedImageFilenames
+          );
           const localPath = join(imageDir, filename);
           const relativePath = `./assets/images/${filename}`;
 
           await downloadAsset(exportResult.url, localPath);
 
-          console.log(`✓ Downloaded image: ${filename}`);
+          console.error(`✓ Downloaded image: ${filename}`);
 
           const asset: DownloadedAsset = {
             nodeId: node.nodeId,
@@ -320,7 +355,7 @@ export async function downloadAssets(
     }
   }
 
-  console.log(`Asset download complete: ${downloadedAssets.length} files downloaded`);
+  console.error(`Asset download complete: ${downloadedAssets.length} files downloaded`);
 
   return {
     assets: downloadedAssets,
