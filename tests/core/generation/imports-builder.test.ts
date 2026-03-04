@@ -219,6 +219,51 @@ describe('buildImports', () => {
     expect(result).toContain('SvgRadialGradient');
   });
 
+  it('should not import theme when includeThemeImport is false', () => {
+    const container: ContainerIR = {
+      id: '1:1',
+      name: 'container',
+      semanticType: 'Container',
+      boundingBox: baseBoundingBox,
+      styleRef: 'style_1',
+      layout: baseLayout,
+      children: [],
+    };
+
+    const result = buildImports(container, [], undefined, {
+      importPrefix: '@app',
+      stylePattern: 'StyleSheet',
+      hasProjectTheme: true,
+      themeImportPath: '@app/styles',
+      includeThemeImport: false,
+    } as any);
+
+    expect(result).not.toContain("import { theme }");
+  });
+
+  it('should import SvgIcon only when explicit provider path is configured', () => {
+    const container: ContainerIR = {
+      id: '1:1',
+      name: 'container',
+      semanticType: 'Container',
+      boundingBox: baseBoundingBox,
+      styleRef: 'style_1',
+      layout: baseLayout,
+      children: [],
+    };
+
+    const withoutProvider = buildImports(container, ['SvgIcon']);
+    expect(withoutProvider).not.toContain('SvgIcon');
+
+    const withProvider = buildImports(container, ['SvgIcon'], undefined, {
+      importPrefix: '@app',
+      stylePattern: 'StyleSheet',
+      hasProjectTheme: false,
+      svgIconImportPath: '@app/components/icons',
+    } as any);
+    expect(withProvider).toContain("import { SvgIcon } from '@app/components/icons';");
+  });
+
   describe('Unistyles support', () => {
     it('should import StyleSheet from react-native-unistyles when using unistyles pattern', () => {
       const container: ContainerIR = {

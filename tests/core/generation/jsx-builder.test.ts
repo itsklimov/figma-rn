@@ -104,7 +104,8 @@ describe('buildJSX', () => {
     };
 
     const result = buildJSX(node, 0);
-    expect(result).toContain('source={{ uri: \'\' } /* TODO: Image ref: abc123unmapped */');
+    expect(result).toContain('MissingAssetFallback');
+    expect(result).not.toContain("uri: ''");
   });
 
   it('should generate placeholder for Image with no ref', () => {
@@ -117,8 +118,8 @@ describe('buildJSX', () => {
     };
 
     const result = buildJSX(node, 0);
-    expect(result).toContain('<Image');
-    expect(result).toContain('style={styles.placeholder}');
+    expect(result).toContain('MissingAssetFallback');
+    expect(result).not.toContain("uri: ''");
   });
 
   it('should generate Button', () => {
@@ -285,6 +286,38 @@ describe('buildJSX', () => {
     const result = buildJSX(node, 0, undefined, undefined, stylesBundle);
     expect(result).toContain('<SvgRadialGradient');
     expect(result).not.toContain('TODO: Add image source');
+    expect(result).not.toContain('MissingAssetFallback');
+  });
+
+  it('should prefer parent image asset mapping before rendering image children', () => {
+    const node: ImageIR = {
+      id: '2:99',
+      name: 'vectorParent',
+      semanticType: 'Image',
+      boundingBox: baseBoundingBox,
+      styleRef: 'vectorParent',
+      children: [
+        {
+          id: '2:100',
+          name: 'Vector',
+          semanticType: 'Icon',
+          boundingBox: { x: 0, y: 0, width: 12, height: 12 },
+          styleRef: 'icon100',
+          iconRef: 'icon100',
+          size: 12,
+        } as IconIR,
+      ],
+    };
+
+    const imagePathMap = new Map<string, string>([
+      ['node:2:99', './assets/icons/vector-parent.png'],
+    ]);
+    const result = buildJSX(node, 0, imagePathMap);
+
+    expect(result).toContain("<Image");
+    expect(result).toContain("source={require('./assets/icons/vector-parent.png')}");
+    expect(result).not.toContain('icon100');
+    expect(result).not.toContain('MissingAssetFallback');
   });
 
   it('should guard against cyclic node references', () => {

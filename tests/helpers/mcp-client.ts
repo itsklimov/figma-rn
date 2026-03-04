@@ -67,6 +67,10 @@ export interface GetScreenParams {
   outputDir?: string;
   projectRoot?: string;
   category?: string;
+  strictContracts?: boolean;
+  assetFailurePolicy?: 'fallback' | 'error';
+  svgMode?: 'auto' | 'component' | 'runtime' | 'raster';
+  profileMode?: 'auto' | 'portable';
 }
 
 export class MCPClient {

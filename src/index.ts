@@ -726,6 +726,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           category,
           suppressTodos,
           scaleFunction,
+          strictContracts,
+          assetFailurePolicy,
+          svgMode,
+          profileMode,
         } = args as {
           figmaUrl: string;
           componentName?: string;
@@ -735,6 +739,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           category?: string;
           suppressTodos?: boolean;
           scaleFunction?: string;
+          strictContracts?: boolean;
+          assetFailurePolicy?: 'fallback' | 'error';
+          svgMode?: 'auto' | 'component' | 'runtime' | 'raster';
+          profileMode?: 'auto' | 'portable';
         };
 
         if (FIGMA_TOKEN_ERROR) {
@@ -761,6 +769,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             category,
             suppressTodos,
             scaleFunction,
+            strictContracts,
+            assetFailurePolicy,
+            svgMode,
+            profileMode,
           },
           FIGMA_TOKEN
         );

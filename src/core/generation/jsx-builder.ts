@@ -5,6 +5,7 @@
 
 import type { IRNode, IconIR, ImageIR, StylesBundle, ExtractedStyle, RepeaterIR, ButtonIR, ComponentIR } from '../types.js';
 import type { TokenMappings } from '../mapping/token-matcher.js';
+import type { ContractDiagnostic, UnresolvedAssetRef } from '../contracts/types.js';
 import { escapeJSXText } from './utils.js';
 import { mapColor } from './styles-builder.js';
 
@@ -228,6 +229,100 @@ export interface BuildJSXOptions {
   rootProps?: string[];
   /** Whether this is the root node (internal use) */
   _isRoot?: boolean;
+  /** Missing asset handling mode */
+  assetFailurePolicy?: 'fallback' | 'error';
+  /** Resolved svg mode */
+  svgMode?: 'component' | 'runtime' | 'raster';
+  /** Whether SvgIcon provider import is available */
+  hasSvgIconProvider?: boolean;
+  /** Diagnostics collector */
+  diagnostics?: ContractDiagnostic[];
+  /** Unresolved asset collector */
+  unresolvedAssets?: UnresolvedAssetRef[];
+}
+
+function resolveAssetPath(
+  imagePathMap: Map<string, string> | undefined,
+  node: IRNode,
+  ref?: string
+): string | undefined {
+  if (!imagePathMap) return undefined;
+
+  const keys = [
+    ref,
+    ref ? `ref:${ref}` : undefined,
+    node.id,
+    `node:${node.id}`,
+    node.styleRef,
+    `style:${node.styleRef}`,
+  ].filter((value): value is string => !!value);
+
+  for (const key of keys) {
+    const found = imagePathMap.get(key);
+    if (found) return found;
+  }
+
+  return undefined;
+}
+
+function collectMissingAsset(
+  node: IRNode,
+  ref: string | undefined,
+  options: BuildJSXOptions | undefined,
+  message: string
+): void {
+  if (!options) return;
+  options.unresolvedAssets?.push({
+    ref: ref || node.styleRef || node.id,
+    nodeId: node.id,
+    semanticType: node.semanticType,
+  });
+  options.diagnostics?.push({
+    level: options.assetFailurePolicy === 'error' ? 'error' : 'warning',
+    code: 'ASSET_UNRESOLVED',
+    message,
+    location: `${node.name} (${node.id})`,
+  });
+}
+
+function buildFallbackStyleAttribute(node: IRNode, styleName: string): string {
+  const fallbackDecoration =
+    `backgroundColor: '#E5E7EB', borderWidth: 1, borderColor: '#9CA3AF', alignItems: 'center', justifyContent: 'center'`;
+
+  if (node.styleProps) {
+    const overrides = Object.entries(node.styleProps)
+      .map(([prop, name]) => `${prop}: ${name}`)
+      .join(', ');
+    return `style={[styles.${styleName}, { ${overrides} }, { ${fallbackDecoration} }]}`;
+  }
+
+  return `style={[styles.${styleName}, { ${fallbackDecoration} }]}`;
+}
+
+function buildMissingAssetFallback(
+  node: IRNode,
+  styleName: string,
+  spaces: string,
+  label: string
+): string {
+  const styleAttr = buildFallbackStyleAttribute(node, styleName);
+  return `${spaces}<View ${styleAttr} accessibilityRole="image" accessibilityLabel="${label}">
+${spaces}  {/* MissingAssetFallback */}
+${spaces}</View>`;
+}
+
+function resolveAssetComponent(
+  path: string,
+  options?: BuildJSXOptions
+): { component: 'Image' | 'SvgIcon' | 'UnsupportedSvg'; isSvg: boolean } {
+  const isSvg = path.toLowerCase().endsWith('.svg');
+  if (!isSvg) return { component: 'Image', isSvg: false };
+
+  if (options?.svgMode === 'component' && options.hasSvgIconProvider) {
+    return { component: 'SvgIcon', isSvg: true };
+  }
+
+  return { component: 'UnsupportedSvg', isSvg: true };
 }
 
 /**
@@ -452,6 +547,7 @@ ${spaces}</View>`;
     case 'Image': {
       const imgNode = node as ImageIR;
       const imageGradient = style?.backgroundGradient;
+      const imageFallbackLabel = deriveA11yLabel(node.name) || `Missing asset: ${node.name}`;
 
       // Gradient-only image-like layers (no imageRef) should render as gradient views.
       if (imageGradient && !imgNode.imageRef && !imgNode.propName) {
@@ -524,6 +620,35 @@ ${spaces}</LinearGradient>`;
         break;
       }
 
+      const resolvedImagePath = resolveAssetPath(imagePathMap, node, imgNode.imageRef);
+
+      // Prefer exported parent asset when available before recursing into image children.
+      if (resolvedImagePath && imgNode.children && imgNode.children.length > 0 && !imgNode.propName) {
+        const asset = resolveAssetComponent(resolvedImagePath, options);
+        const imgStyleAttr = getStyleAttribute(node, styleName);
+        const imgA11yLabel = deriveA11yLabel(node.name);
+        const imgA11yProp = imgA11yLabel ? `\n${spaces}  accessibilityLabel="${imgA11yLabel}"` : '';
+
+        if (asset.component === 'UnsupportedSvg') {
+          collectMissingAsset(
+            node,
+            imgNode.imageRef,
+            options,
+            `SVG asset "${resolvedImagePath}" requires component SVG mode/provider in project profile.`
+          );
+          result = buildMissingAssetFallback(node, styleName, spaces, imageFallbackLabel);
+          break;
+        }
+
+        const componentName = asset.component;
+        result = `${spaces}<${componentName}
+${spaces}  source={require('${resolvedImagePath}')}
+${spaces}  ${imgStyleAttr}
+${spaces}  accessibilityRole="image"${imgA11yProp}
+${spaces}/>`;
+        break;
+      }
+
       // NEW: If image has children (overlays), render as View container
       if (imgNode.children && imgNode.children.length > 0) {
         const imgChildrenJSX = imgNode.children
@@ -551,33 +676,49 @@ ${spaces}</View>`;
       // DEFAULT: Render as simple Image component
       const imgStyleAttr = getStyleAttribute(node, styleName);
       if (imgNode.propName) {
-        result = `${spaces}<Image
-${spaces}  source={${imgNode.propName}}
-${spaces}  ${imgStyleAttr}
-${spaces}  accessibilityRole="image"
-${spaces}/>`;
+        const fallback = buildMissingAssetFallback(node, styleName, `${spaces}  `, imageFallbackLabel);
+        result = `${spaces}{${imgNode.propName} ? (
+${spaces}  <Image
+${spaces}    source={${imgNode.propName}}
+${spaces}    ${imgStyleAttr}
+${spaces}    accessibilityRole="image"
+${spaces}  />
+${spaces}) : (
+${fallback}
+${spaces})}`;
         break;
       }
 
       // Use imageRef if available, with mapping to local path
-      let imgSource: string;
-      let imgIsSvg = false;
-      if (imgNode.imageRef && imagePathMap?.has(imgNode.imageRef)) {
-        const path = imagePathMap.get(imgNode.imageRef)!;
-        imgSource = `require('${path}')`;
-        imgIsSvg = path.toLowerCase().endsWith('.svg');
-      } else if (imgNode.imageRef) {
-        imgSource = `{ uri: '' } /* TODO: Image ref: ${imgNode.imageRef} */`;
-      } else {
-        imgSource = `{ uri: '' } /* TODO: Add image source */`;
+      const imgSourcePath = resolvedImagePath;
+      if (!imgSourcePath && imgNode.imageRef) {
+        collectMissingAsset(node, imgNode.imageRef, options, `Image ref "${imgNode.imageRef}" is unresolved.`);
+      } else if (!imgSourcePath && !imgNode.imageRef) {
+        collectMissingAsset(node, undefined, options, 'Image node has no imageRef and no propName.');
       }
 
-      const imgComponent = imgIsSvg ? 'SvgIcon' : 'Image';
       const imgA11yLabel = deriveA11yLabel(node.name);
       const imgA11yProp = imgA11yLabel ? `\n${spaces}  accessibilityLabel="${imgA11yLabel}"` : '';
 
-      result = `${spaces}<${imgComponent}
-${spaces}  source={${imgSource}}
+      if (!imgSourcePath) {
+        result = buildMissingAssetFallback(node, styleName, spaces, imageFallbackLabel);
+        break;
+      }
+
+      const asset = resolveAssetComponent(imgSourcePath, options);
+      if (asset.component === 'UnsupportedSvg') {
+        collectMissingAsset(
+          node,
+          imgNode.imageRef,
+          options,
+          `SVG asset "${imgSourcePath}" requires component SVG mode/provider in project profile.`
+        );
+        result = buildMissingAssetFallback(node, styleName, spaces, imageFallbackLabel);
+        break;
+      }
+
+      result = `${spaces}<${asset.component}
+${spaces}  source={require('${imgSourcePath}')}
 ${spaces}  ${imgStyleAttr}
 ${spaces}  accessibilityRole="image"${imgA11yProp}
 ${spaces}/>`;
@@ -619,19 +760,26 @@ ${spaces}</TouchableOpacity>`;
       // DEFAULT: Reconstruct from label + iconRef (existing behavior for simple buttons)
       let iconJSX = '';
       if (btn.iconRef && btn.iconStyleRef) {
-        let btnIsSvg = false;
-        let btnIconSource: string;
-        if (imagePathMap?.has(btn.iconRef)) {
-          const path = imagePathMap.get(btn.iconRef)!;
-          btnIconSource = `require('${path}')`;
-          btnIsSvg = path.toLowerCase().endsWith('.svg');
+        const mappedPath = resolveAssetPath(imagePathMap, node, btn.iconRef);
+        if (!mappedPath) {
+          collectMissingAsset(node, btn.iconRef, options, `Button icon ref "${btn.iconRef}" is unresolved.`);
+          iconJSX = `\n${spaces}  <View style={[styles.${btn.iconStyleRef}, { backgroundColor: '#E5E7EB', borderWidth: 1, borderColor: '#9CA3AF' }]} accessibilityRole="image" accessibilityLabel="Missing button icon">{/* MissingAssetFallback */}</View>`;
         } else {
-          btnIconSource = `{ uri: '' } /* TODO: Button icon: ${btn.iconRef} */`;
+          const resolved = resolveAssetComponent(mappedPath, options);
+          if (resolved.component === 'UnsupportedSvg') {
+            collectMissingAsset(
+              node,
+              btn.iconRef,
+              options,
+              `Button icon "${mappedPath}" requires component SVG mode/provider in project profile.`
+            );
+            iconJSX = `\n${spaces}  <View style={[styles.${btn.iconStyleRef}, { backgroundColor: '#E5E7EB', borderWidth: 1, borderColor: '#9CA3AF' }]} accessibilityRole="image" accessibilityLabel="Missing button icon">{/* MissingAssetFallback */}</View>`;
+          } else {
+            const btnComponent = resolved.component;
+            const iconStyleName = btn.iconStyleRef;
+            iconJSX = `\n${spaces}  <${btnComponent} source={require('${mappedPath}')} style={styles.${iconStyleName}} />`;
+          }
         }
-
-        const btnComponent = btnIsSvg ? 'SvgIcon' : 'Image';
-        const iconStyleName = btn.iconStyleRef;
-        iconJSX = `\n${spaces}  <${btnComponent} source={${btnIconSource}} style={styles.${iconStyleName}} />`;
       }
 
       const textStyleName = btn.textStyleRef ? btn.textStyleRef : `${styleName}Text`;
@@ -662,16 +810,7 @@ ${spaces}</TouchableOpacity>`;
 
       // For vector groups: render as single SVG using parent's iconRef
       if (isVectorGroup && iconNode.iconRef) {
-        let iconSource: string;
-        let isSvg = false;
-        if (imagePathMap?.has(iconNode.iconRef)) {
-          const path = imagePathMap.get(iconNode.iconRef)!;
-          iconSource = `require('${path}')`;
-          isSvg = path.toLowerCase().endsWith('.svg');
-        } else {
-          iconSource = `{ uri: '' } /* TODO: Export as single SVG: ${iconNode.iconRef} */`;
-        }
-        const iconComponent = isSvg ? 'SvgIcon' : 'Image';
+        const iconPath = resolveAssetPath(imagePathMap, node, iconNode.iconRef);
         const iconA11yLabel = deriveA11yLabel(node.name);
         const iconA11yProp = iconA11yLabel ? `\n${spaces}  accessibilityLabel="${iconA11yLabel}"` : '';
         const hitSlop = calculateHitSlop(iconNode.size);
@@ -679,10 +818,36 @@ ${spaces}</TouchableOpacity>`;
           ? `\n${spaces}  hitSlop={{ top: ${hitSlop}, bottom: ${hitSlop}, left: ${hitSlop}, right: ${hitSlop} }}`
           : '';
 
+        if (!iconPath) {
+          collectMissingAsset(node, iconNode.iconRef, options, `Icon ref "${iconNode.iconRef}" is unresolved.`);
+          result = `${spaces}<TouchableOpacity
+${spaces}  accessibilityRole="button"${iconA11yProp}${hitSlopProp}
+${spaces}>
+${spaces}  ${buildMissingAssetFallback(node, styleName, spaces + '  ', `Missing asset: ${node.name}`)}
+${spaces}</TouchableOpacity>`;
+          break;
+        }
+
+        const resolved = resolveAssetComponent(iconPath, options);
+        if (resolved.component === 'UnsupportedSvg') {
+          collectMissingAsset(
+            node,
+            iconNode.iconRef,
+            options,
+            `Icon asset "${iconPath}" requires component SVG mode/provider in project profile.`
+          );
+          result = `${spaces}<TouchableOpacity
+${spaces}  accessibilityRole="button"${iconA11yProp}${hitSlopProp}
+${spaces}>
+${spaces}  ${buildMissingAssetFallback(node, styleName, spaces + '  ', `Missing asset: ${node.name}`)}
+${spaces}</TouchableOpacity>`;
+          break;
+        }
+
         result = `${spaces}<TouchableOpacity
 ${spaces}  accessibilityRole="button"${iconA11yProp}${hitSlopProp}
 ${spaces}>
-${spaces}  <${iconComponent} source={${iconSource}} style={styles.${styleName}} />
+${spaces}  <${resolved.component} source={require('${iconPath}')} style={styles.${styleName}} />
 ${spaces}</TouchableOpacity>`;
         break;
       }
@@ -719,30 +884,54 @@ ${spaces}</TouchableOpacity>`;
       }
 
       // DEFAULT: Use iconRef (existing behavior for simple icons)
-      let defaultIconSource: string;
-      let defaultIsSvg = false;
-      if (iconNode.iconRef && imagePathMap?.has(iconNode.iconRef)) {
-        const path = imagePathMap.get(iconNode.iconRef)!;
-        defaultIconSource = `require('${path}')`;
-        defaultIsSvg = path.toLowerCase().endsWith('.svg');
-      } else if (iconNode.iconRef) {
-        defaultIconSource = `{ uri: '' } /* TODO: Icon ref: ${iconNode.iconRef} */`;
-      } else {
-        defaultIconSource = `{ uri: '' } /* TODO: Add icon source */`;
-      }
+      const defaultIconPath = iconNode.iconRef
+        ? resolveAssetPath(imagePathMap, node, iconNode.iconRef)
+        : undefined;
       const defaultHitSlop = calculateHitSlop(iconNode.size);
       const defaultA11yLabel = deriveA11yLabel(node.name);
       const defaultHitSlopProp = defaultHitSlop > 0
         ? `\n${spaces}  hitSlop={{ top: ${defaultHitSlop}, bottom: ${defaultHitSlop}, left: ${defaultHitSlop}, right: ${defaultHitSlop} }}`
         : '';
 
-      const defaultComponent = defaultIsSvg ? 'SvgIcon' : 'Image';
       const defaultA11yProp = defaultA11yLabel ? `\n${spaces}  accessibilityLabel="${defaultA11yLabel}"` : '';
+
+      if (!defaultIconPath) {
+        collectMissingAsset(
+          node,
+          iconNode.iconRef,
+          options,
+          iconNode.iconRef
+            ? `Icon ref "${iconNode.iconRef}" is unresolved.`
+            : 'Icon node has no iconRef.'
+        );
+        result = `${spaces}<TouchableOpacity
+${spaces}  accessibilityRole="button"${defaultA11yProp}${defaultHitSlopProp}
+${spaces}>
+${spaces}  ${buildMissingAssetFallback(node, styleName, spaces + '  ', `Missing asset: ${node.name}`)}
+${spaces}</TouchableOpacity>`;
+        break;
+      }
+
+      const defaultResolved = resolveAssetComponent(defaultIconPath, options);
+      if (defaultResolved.component === 'UnsupportedSvg') {
+        collectMissingAsset(
+          node,
+          iconNode.iconRef,
+          options,
+          `Icon asset "${defaultIconPath}" requires component SVG mode/provider in project profile.`
+        );
+        result = `${spaces}<TouchableOpacity
+${spaces}  accessibilityRole="button"${defaultA11yProp}${defaultHitSlopProp}
+${spaces}>
+${spaces}  ${buildMissingAssetFallback(node, styleName, spaces + '  ', `Missing asset: ${node.name}`)}
+${spaces}</TouchableOpacity>`;
+        break;
+      }
 
       result = `${spaces}<TouchableOpacity
 ${spaces}  accessibilityRole="button"${defaultA11yProp}${defaultHitSlopProp}
 ${spaces}>
-${spaces}  <${defaultComponent} source={${defaultIconSource}} style={styles.${styleName}} />
+${spaces}  <${defaultResolved.component} source={require('${defaultIconPath}')} style={styles.${styleName}} />
 ${spaces}</TouchableOpacity>`;
       break;
     }
@@ -751,12 +940,23 @@ ${spaces}</TouchableOpacity>`;
       const comp = node as ComponentIR;
 
       // Check if this component was exported as an asset (icon/logo)
-      if (comp.isExportableAsset && imagePathMap?.has(node.id)) {
-        const assetPath = imagePathMap.get(node.id)!;
-        const isSvg = assetPath.toLowerCase().endsWith('.svg');
-        const imgComponent = isSvg ? 'SvgIcon' : 'Image';
-        result = `${spaces}<${imgComponent} source={require('${assetPath}')} style={styles.${styleName}} />`;
-        break;
+      if (comp.isExportableAsset) {
+        const assetPath = resolveAssetPath(imagePathMap, node, node.id);
+        if (assetPath) {
+          const resolved = resolveAssetComponent(assetPath, options);
+          if (resolved.component === 'UnsupportedSvg') {
+            collectMissingAsset(
+              node,
+              node.id,
+              options,
+              `Component asset "${assetPath}" requires component SVG mode/provider in project profile.`
+            );
+            result = buildMissingAssetFallback(node, styleName, spaces, `Missing asset: ${node.name}`);
+            break;
+          }
+          result = `${spaces}<${resolved.component} source={require('${assetPath}')} style={styles.${styleName}} />`;
+          break;
+        }
       }
 
       // Normal component rendering

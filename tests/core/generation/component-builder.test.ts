@@ -411,6 +411,153 @@ describe('generateComponent', () => {
     expect(result.code).toContain('<Button povtorit={povtorit} />');
     expect(result.code).toContain('<Button2 value={value} />');
   });
+
+  it('should not generate network placeholders for missing image defaults', () => {
+    const screen: ScreenIR = {
+      id: 'screen_missing_image',
+      name: 'MissingImageScreen',
+      root: {
+        id: '1:1',
+        name: 'container',
+        semanticType: 'Container',
+        boundingBox: baseBoundingBox,
+        styleRef: 'container',
+        layout: baseLayout,
+        children: [
+          {
+            id: '1:2',
+            name: 'avatar',
+            semanticType: 'Image',
+            boundingBox: baseBoundingBox,
+            styleRef: 'avatar',
+            imageRef: 'unmapped_hash',
+          } as any,
+        ],
+      } as ContainerIR,
+      stylesBundle: {
+        styles: {
+          container: { id: 'container' },
+          avatar: { id: 'avatar' },
+        },
+        tokens: {
+          colors: {},
+          spacing: {},
+          radii: {},
+          typography: {},
+          shadows: {},
+        },
+      },
+    };
+
+    const result = generateComponent(screen, emptyMappings, {
+      imagePathMap: new Map<string, string>(),
+    });
+
+    expect(result.code).not.toContain('via.placeholder.com');
+    expect(result.code).not.toContain("uri: ''");
+  });
+
+  it('should fail fast on unresolved assets when assetFailurePolicy is error', () => {
+    const screen: ScreenIR = {
+      id: 'screen_missing_image_error',
+      name: 'MissingImageErrorScreen',
+      root: {
+        id: '1:1',
+        name: 'container',
+        semanticType: 'Container',
+        boundingBox: baseBoundingBox,
+        styleRef: 'container',
+        layout: baseLayout,
+        children: [
+          {
+            id: '1:2',
+            name: 'avatar',
+            semanticType: 'Image',
+            boundingBox: baseBoundingBox,
+            styleRef: 'avatar',
+            imageRef: 'unmapped_hash',
+          } as any,
+        ],
+      } as ContainerIR,
+      stylesBundle: {
+        styles: {
+          container: { id: 'container' },
+          avatar: { id: 'avatar' },
+        },
+        tokens: {
+          colors: {},
+          spacing: {},
+          radii: {},
+          typography: {},
+          shadows: {},
+        },
+      },
+    };
+
+    expect(() =>
+      generateComponent(screen, emptyMappings, {
+        imagePathMap: new Map<string, string>(),
+        assetFailurePolicy: 'error',
+      })
+    ).toThrow(/Asset resolution failed/);
+  });
+
+  it('should expose contract profile summary in generation result', () => {
+    const screen: ScreenIR = {
+      id: 'screen_contract_profile',
+      name: 'ContractProfileScreen',
+      root: {
+        id: '1:1',
+        name: 'container',
+        semanticType: 'Container',
+        boundingBox: baseBoundingBox,
+        styleRef: 'container',
+        layout: baseLayout,
+        children: [],
+      } as ContainerIR,
+      stylesBundle: {
+        styles: {
+          container: { id: 'container' },
+        },
+        tokens: {
+          colors: {},
+          spacing: {},
+          radii: {},
+          typography: {},
+          shadows: {},
+        },
+      },
+    };
+
+    const result = generateComponent(screen, emptyMappings, {
+      contractProfile: {
+        importPrefix: '@app',
+        stylePattern: 'StyleSheet',
+        safeAreaSupport: {
+          available: true,
+          importPath: 'react-native-safe-area-context',
+        },
+        svgSupport: {
+          mode: 'raster',
+          runtimeDeps: [],
+        },
+        assetImportPolicy: {
+          relativeOnly: true,
+          allowAliasAssets: false,
+        },
+        strictValidation: {
+          strictContracts: true,
+          forbidEmptyImageSources: true,
+          forbidPlaceholderUris: true,
+          forbidUnresolvedAliasRequires: true,
+        },
+        diagnostics: [],
+      },
+    } as any);
+
+    expect(result.contractProfileSummary?.importPrefix).toBe('@app');
+    expect(result.contractProfileSummary?.svgMode).toBe('raster');
+  });
 });
 
 describe('generateComponentMultiFile', () => {
