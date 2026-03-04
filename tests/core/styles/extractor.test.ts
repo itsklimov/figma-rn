@@ -51,6 +51,57 @@ describe('fillsToBackground', () => {
     expect(result.backgroundGradient?.angle).toBe(45);
   });
 
+  it('should map linear gradient handles to start/end points', () => {
+    const fills: Fill[] = [
+      {
+        type: 'gradient',
+        gradient: {
+          type: 'linear',
+          stops: [
+            { position: 0, color: { hex: '#ff0000', rgba: { r: 255, g: 0, b: 0, a: 1 } } },
+            { position: 1, color: { hex: '#0000ff', rgba: { r: 0, g: 0, b: 255, a: 1 } } },
+          ],
+          // Figma uses normalized handle positions in node bounds.
+          handles: [
+            { x: 0, y: 0.5 },
+            { x: 1, y: 0.5 },
+            { x: 0, y: 1 },
+          ],
+        } as any,
+        opacity: 1,
+      },
+    ];
+
+    const result = fillsToBackground(fills);
+    expect(result.backgroundGradient?.start).toEqual({ x: 0, y: 0.5 });
+    expect(result.backgroundGradient?.end).toEqual({ x: 1, y: 0.5 });
+  });
+
+  it('should map radial gradient handles to center and radius', () => {
+    const fills: Fill[] = [
+      {
+        type: 'gradient',
+        gradient: {
+          type: 'radial',
+          stops: [
+            { position: 0, color: { hex: '#ff0000', rgba: { r: 255, g: 0, b: 0, a: 1 } } },
+            { position: 1, color: { hex: '#0000ff', rgba: { r: 0, g: 0, b: 255, a: 1 } } },
+          ],
+          handles: [
+            { x: 0.5, y: 0.5 }, // center
+            { x: 1, y: 0.5 },   // rx = 0.5
+            { x: 0.5, y: 0.75 },// ry = 0.25
+          ],
+        } as any,
+        opacity: 1,
+      },
+    ];
+
+    const result = fillsToBackground(fills);
+    expect(result.backgroundGradient?.center).toEqual({ x: 0.5, y: 0.5 });
+    expect(result.backgroundGradient?.radius).toEqual({ x: 0.5, y: 0.25 });
+  });
+
   it('should return empty for no fills', () => {
     const result = fillsToBackground(undefined);
     expect(result).toEqual({});

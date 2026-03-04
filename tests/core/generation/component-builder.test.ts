@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { generateComponent, generateComponentMultiFile } from '../../../src/core/generation/component-builder.js';
-import type { ScreenIR, ContainerIR, TextIR, ButtonIR } from '../../../src/core/types.js';
+import type { ScreenIR, ContainerIR, TextIR, ButtonIR, ComponentIR } from '../../../src/core/types.js';
 import type { TokenMappings } from '../../../src/core/mapping/token-matcher.js';
 import type { DetectionResult } from '../../../src/core/detection/types.js';
 
@@ -276,6 +276,140 @@ describe('generateComponent', () => {
 
     expect(result.code).toContain('backgroundColor: theme.colors.primary');
     expect(result.unmappedTokens.colors).not.toContain('#3B82F6');
+  });
+
+  it('should not duplicate main component when root semantic type is Component', () => {
+    const screen: ScreenIR = {
+      id: 'screen_1',
+      name: 'CardMaster',
+      root: {
+        id: '1:1',
+        name: 'CardMaster',
+        semanticType: 'Component',
+        componentName: 'CardMaster',
+        boundingBox: baseBoundingBox,
+        styleRef: 'cardMaster',
+        props: {},
+        children: [
+          {
+            id: '1:2',
+            name: 'container',
+            semanticType: 'Container',
+            boundingBox: baseBoundingBox,
+            styleRef: 'container',
+            layout: baseLayout,
+            children: [
+              {
+                id: '1:3',
+                name: 'title',
+                semanticType: 'Text',
+                boundingBox: baseBoundingBox,
+                styleRef: 'title',
+                text: 'Master',
+              } as TextIR,
+            ],
+          } as ContainerIR,
+        ],
+      } as ComponentIR,
+      stylesBundle: {
+        styles: {
+          cardMaster: { id: 'cardMaster' },
+          container: { id: 'container' },
+          title: {
+            id: 'title',
+            typography: {
+              fontFamily: 'Inter',
+              fontSize: 16,
+              fontWeight: 500,
+              lineHeight: 20,
+              letterSpacing: 0,
+              textAlign: 'left',
+              color: '#111827',
+            },
+          },
+        },
+        tokens: {
+          colors: {},
+          spacing: {},
+          radii: {},
+          typography: {},
+          shadows: {},
+        },
+      },
+    };
+
+    const result = generateComponent(screen, emptyMappings, { componentName: 'CardMaster' });
+    const declarations = result.code.match(/function CardMaster\(/g) || [];
+
+    expect(declarations).toHaveLength(1);
+    expect(result.code).not.toContain('<CardMaster />');
+    expect(result.code).toContain('<View style={styles.container}>');
+  });
+
+  it('should disambiguate component names when signatures differ', () => {
+    const screen: ScreenIR = {
+      id: 'screen_1',
+      name: 'NameCollisionDemo',
+      root: {
+        id: '1:1',
+        name: 'root',
+        semanticType: 'Container',
+        boundingBox: baseBoundingBox,
+        styleRef: 'root',
+        layout: baseLayout,
+        children: [
+          {
+            id: '1:2',
+            name: 'Button',
+            semanticType: 'Component',
+            componentId: 'cmp_button_primary',
+            componentName: 'Button',
+            props: {
+              povtorit: { type: 'string', value: 'Участвовать', defaultValue: 'Участвовать' },
+            },
+            boundingBox: baseBoundingBox,
+            styleRef: 'buttonPrimary',
+            layout: baseLayout,
+            children: [],
+          } as ComponentIR,
+          {
+            id: '1:3',
+            name: 'Button',
+            semanticType: 'Component',
+            componentId: 'cmp_button_bottom',
+            componentName: 'Button',
+            props: {
+              value: { type: 'string', value: 'Ускорить запуск', defaultValue: 'Ускорить запуск' },
+            },
+            boundingBox: baseBoundingBox,
+            styleRef: 'buttonBottom',
+            layout: baseLayout,
+            children: [],
+          } as ComponentIR,
+        ],
+      } as ContainerIR,
+      stylesBundle: {
+        styles: {
+          root: { id: 'root' },
+          buttonPrimary: { id: 'buttonPrimary' },
+          buttonBottom: { id: 'buttonBottom' },
+        },
+        tokens: {
+          colors: {},
+          spacing: {},
+          radii: {},
+          typography: {},
+          shadows: {},
+        },
+      },
+    };
+
+    const result = generateComponent(screen, emptyMappings, { componentName: 'NameCollisionDemo' });
+
+    expect(result.code).toContain('function Button(');
+    expect(result.code).toContain('function Button2(');
+    expect(result.code).toContain('<Button povtorit={povtorit} />');
+    expect(result.code).toContain('<Button2 value={value} />');
   });
 });
 
