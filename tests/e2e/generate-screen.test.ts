@@ -21,6 +21,7 @@ import {
   LIVE_E2E_CASES,
   extractNodeId,
   requireFigmaToken,
+  requireLiveE2EConfig,
   type LiveE2ECase,
 } from '../fixtures/test-figma-urls';
 
@@ -139,6 +140,7 @@ if (!RUN_LIVE_FIGMA_E2E) {
 
     beforeAll(async () => {
       figmaToken = requireFigmaToken();
+      requireLiveE2EConfig();
       client = await createMCPClient(figmaToken);
     });
 

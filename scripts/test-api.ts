@@ -5,12 +5,21 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { FigmaClient, transformNode, transformFile } from '../src/api/index.js';
+import { FigmaClient, transformNode } from '../src/api/index.js';
 
-const FIGMA_URL = 'https://www.figma.com/design/UP4RaLYLk41imjPis2j6an/MARAFET--Copy-?node-id=2726-74525&m=dev';
 const OUTPUT_DIR = '.figma/extracted';
 
 async function main() {
+  const figmaUrl = process.argv[2] || process.env.FIGMA_TEST_URL;
+  if (!figmaUrl) {
+    console.error(
+      'Error: missing Figma URL\n' +
+        'Usage: FIGMA_TOKEN=... npx tsx scripts/test-api.ts "<figma-url-with-node-id>"\n' +
+        'Or set FIGMA_TEST_URL in environment'
+    );
+    process.exit(1);
+  }
+
   const token = process.env.FIGMA_TOKEN;
   if (!token) {
     console.error('Error: FIGMA_TOKEN environment variable not set');
@@ -22,13 +31,13 @@ async function main() {
 
   // Parse URL
   console.log('\n1. Parsing URL...');
-  const parsed = client.parseUrl(FIGMA_URL);
+  const parsed = client.parseUrl(figmaUrl);
   console.log('   File key:', parsed.fileKey);
   console.log('   Node ID:', parsed.nodeId);
 
   // Fetch nodes
   console.log('\n2. Fetching nodes from Figma...');
-  const result = await client.fetchNodeByUrl(FIGMA_URL);
+  const result = await client.fetchNodeByUrl(figmaUrl);
   console.log('   Fetched', Object.keys(result.nodes).length, 'node(s)');
 
   // Ensure output directory exists

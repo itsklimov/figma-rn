@@ -1,8 +1,17 @@
 import { parseThemeFile } from '../src/theme-parser.js';
 
 async function test() {
+  const themeFilePath = process.argv[2] || process.env.THEME_FILE_PATH;
+  if (!themeFilePath) {
+    console.error(
+      'Usage: npx tsx scripts/debug-theme-parse.mts <path-to-theme-file>\n' +
+        'Or set THEME_FILE_PATH=/path/to/theme.ts'
+    );
+    process.exit(1);
+  }
+
   console.log('=== Parsing theme.ts ===');
-  const tokens = await parseThemeFile('/Users/its/Documents/Dev/code/marafet/marafet-frontend/src/styles/theme.ts');
+  const tokens = await parseThemeFile(themeFilePath);
 
   console.log('\n=== Colors from theme.ts ===');
   console.log('Total colors:', tokens.colors.size);

@@ -19,9 +19,13 @@ if (!FIGMA_TOKEN) {
   process.exit(1);
 }
 
-const FIGMA_TEST_URL =
-  process.env.FIGMA_TEST_URL ||
-  'https://www.figma.com/design/wQQDVitfu2TuNuAXWOXRB1/MARAFET--Copy-?node-id=2453-67667&m=dev';
+const FIGMA_TEST_URL = process.env.FIGMA_TEST_URL;
+if (!FIGMA_TEST_URL) {
+  console.error(
+    'Error: FIGMA_TEST_URL is required (example: https://www.figma.com/design/...?...node-id=...)'
+  );
+  process.exit(1);
+}
 const FIGMA_TEST_PROJECT_ROOT =
   process.env.FIGMA_TEST_PROJECT_ROOT || process.cwd();
 

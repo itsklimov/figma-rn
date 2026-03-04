@@ -16,10 +16,6 @@ const REGRESSION_DIR = join(ROOT, '.figma/regression');
 const BASELINE_DIR = join(REGRESSION_DIR, 'baselines');
 const CURRENT_DIR = join(REGRESSION_DIR, 'current');
 
-// Default Marafet project root for regression testing
-// In a real scenario, this might need to be dynamic or an argument
-const MARAFET_ROOT = '/Users/its/Documents/Dev/code/marafet/marafet-frontend';
-
 async function ensureDirs() {
   await mkdir(BASELINE_DIR, { recursive: true });
   await mkdir(CURRENT_DIR, { recursive: true });
@@ -37,9 +33,12 @@ async function exists(path: string) {
 async function main() {
   const figmaUrl = process.argv[2];
   const mode = process.argv[3] || 'check'; // 'baseline' or 'check'
+  const projectRoot = process.argv[4] || process.env.REGRESSION_PROJECT_ROOT || ROOT;
 
   if (!figmaUrl) {
-    console.error('Usage: FIGMA_TOKEN=... npx tsx scripts/regression-test.mts [url] [baseline|check]');
+    console.error(
+      'Usage: FIGMA_TOKEN=... npx tsx scripts/regression-test.mts [url] [baseline|check] [project-root]'
+    );
     process.exit(1);
   }
 
@@ -54,12 +53,12 @@ async function main() {
   console.log(`🚀 Mode: ${mode.toUpperCase()}`);
   console.log(`🔗 URL: ${figmaUrl}`);
 
-  // Auto-refresh config and load tokens from Marafet
-  console.log(`🔄 Refreshing config from: ${MARAFET_ROOT}`);
-  await refreshFigmaConfig(MARAFET_ROOT);
+  // Auto-refresh config and load tokens from the target project root
+  console.log(`🔄 Refreshing config from: ${projectRoot}`);
+  await refreshFigmaConfig(projectRoot);
   
   console.log(`🎨 Loading project tokens...`);
-  const projectTokens = await loadAllProjectTokens(MARAFET_ROOT);
+  const projectTokens = await loadAllProjectTokens(projectRoot);
   if (projectTokens.colors) {
     console.log(`Debug: Loaded ${projectTokens.colors.size} colors`);
     console.log('Debug: Sample colors:', [...projectTokens.colors.entries()].slice(0, 5));
@@ -94,7 +93,7 @@ async function main() {
   console.log('Debug: Spacing mappings:', Object.entries(tokenMappings.spacing || {}).slice(0, 10));
   
   // Load config for import generation
-  const config = await getOrCreateFigmaConfig(MARAFET_ROOT);
+  const config = await getOrCreateFigmaConfig(projectRoot);
   
   const generated = generateComponent(screenIR, tokenMappings, { 
     detectionResult,

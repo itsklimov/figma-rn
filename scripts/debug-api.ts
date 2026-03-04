@@ -1,9 +1,24 @@
 import { FigmaClient } from '../src/api/index.js';
 
 async function main() {
-  const client = new FigmaClient(process.env.FIGMA_TOKEN!);
-  const result = await client.fetchNodes('UP4RaLYLk41imjPis2j6an', ['2726:74525']);
-  const node = result.nodes['2726:74525'];
+  const token = process.env.FIGMA_TOKEN;
+  const figmaUrl = process.argv[2] || process.env.FIGMA_TEST_URL;
+  if (!token || !figmaUrl) {
+    console.error(
+      'Usage: FIGMA_TOKEN=... npx tsx scripts/debug-api.ts "<figma-url-with-node-id>"\n' +
+        'Or set FIGMA_TEST_URL in environment'
+    );
+    process.exit(1);
+  }
+
+  const client = new FigmaClient(token);
+  const result = await client.fetchNodeByUrl(figmaUrl);
+  const nodeId = Object.keys(result.nodes)[0];
+  const node = result.nodes[nodeId];
+  if (!node?.document) {
+    console.error('Could not resolve document for URL:', figmaUrl);
+    process.exit(1);
+  }
 
   console.log('Keys:', Object.keys(node));
   console.log('Document type:', typeof node.document);

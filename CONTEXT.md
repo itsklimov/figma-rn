@@ -19,8 +19,7 @@ At every session, we must maintain high confidence through two primary testing l
 ### 1. Regression Testing (Stable Functionality)
 We use a custom regression suite to ensure architectural changes don't break the generator's output.
 - **Workflow**: Use `/regression-test` (defined in `.agent/workflows/regression-test.md`).
-- **Target**: Baseline for "Мастер главная" (`2256:25238`).
-- **Command**: `FIGMA_TOKEN=$(grep FIGMA_TOKEN .env | cut -d '"' -f 2) npx tsx scripts/regression-test.mts "URL" check`
+- **Command**: `FIGMA_TOKEN=... npx tsx scripts/regression-test.mts "<figma-url-with-node-id>" check "<target-project-root>"`
 
 ### 2. Configuration & Auto-Discovery
 The tool must correctly detect the project environment.
