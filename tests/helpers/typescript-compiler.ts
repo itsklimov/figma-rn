@@ -33,19 +33,10 @@ export interface CompilationError {
   code?: number;
 }
 
-export interface CompileTypeScriptOptions {
-  mode?: 'permissive' | 'strict';
-}
-
 /**
  * Compiles TypeScript code and returns result
  */
-export function compileTypeScript(
-  code: string,
-  filename = 'test.tsx',
-  options: CompileTypeScriptOptions = {}
-): CompilationResult {
-  const mode = options.mode || 'permissive';
+export function compileTypeScript(code: string, filename = 'test.tsx'): CompilationResult {
   const project = new Project({
     compilerOptions: {
       target: ts.ScriptTarget.ES2022,
@@ -103,7 +94,6 @@ declare module 'react-native' {
   export const FlatList: any;
   export const TextInput: any;
   export const StyleSheet: { create: <T>(styles: T) => T };
-  export type ImageSourcePropType = any;
   export type ViewStyle = any;
   export type TextStyle = any;
   export type ImageStyle = any;
@@ -148,60 +138,8 @@ declare module 'zod' {
   export function boolean(): any;
   export type infer<T> = any;
 }
-
-declare module 'expo-linear-gradient' {
-  export const LinearGradient: any;
-}
-
-declare module 'react-native-svg' {
-  const Svg: any;
-  export const Defs: any;
-  export const Rect: any;
-  export const Stop: any;
-  export const RadialGradient: any;
-  export default Svg;
-}
-
-declare module 'react-native-unistyles' {
-  export const StyleSheet: { create: <T>(styles: T) => T };
-  export function useUnistyles(): any;
-}
-
-declare module 'react-native-safe-area-context' {
-  export const SafeAreaView: any;
-}
-
-declare function require(path: string): any;
 `
   );
-
-  if (mode === 'permissive') {
-    project.createSourceFile(
-      'node_modules/@types/project-aliases/index.d.ts',
-      `
-declare module '@app/*' {
-  export const theme: any;
-  export const scale: any;
-  export const SvgIcon: any;
-  const value: any;
-  export default value;
-  export = value;
-}
-
-declare module '@/*' {
-  const value: any;
-  export default value;
-  export = value;
-}
-
-declare module '~/*' {
-  const value: any;
-  export default value;
-  export = value;
-}
-`
-    );
-  }
 
   // Add code file
   const sourceFile = project.createSourceFile(filename, code);

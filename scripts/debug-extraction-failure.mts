@@ -1,16 +1,8 @@
 import { extractProjectTokens } from '../src/core/mapping/theme-extractor.js';
 import * as path from 'path';
 
-const projectRoot = process.argv[2] || process.env.DEBUG_PROJECT_ROOT;
-if (!projectRoot) {
-  console.error(
-    'Usage: npx tsx scripts/debug-extraction-failure.mts <project-root>\n' +
-      'Or set DEBUG_PROJECT_ROOT=/path/to/project'
-  );
-  process.exit(1);
-}
-
-const tokenFile = path.join(projectRoot, 'src/styles/generated/tokens.ts');
+const MARAFET_ROOT = '/Users/its/Documents/Dev/code/marafet/marafet-frontend';
+const tokenFile = path.join(MARAFET_ROOT, 'src/styles/generated/tokens.ts');
 
 console.log('Testing extraction from:', tokenFile);
 try {

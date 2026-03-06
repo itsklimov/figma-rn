@@ -2,7 +2,7 @@
  * Test script for the core module
  *
  * Usage:
- *   FIGMA_TOKEN=xxx npx tsx scripts/test-core.ts "https://figma.com/design/xxx?node-id=xxx"
+ *   FIGMA_TOKEN=xxx bunx tsx scripts/test-core.ts "https://figma.com/design/xxx?node-id=xxx"
  */
 
 import { FigmaClient } from '../src/api/index.js';
@@ -19,7 +19,7 @@ async function main() {
   }
 
   if (!url) {
-    console.error('Usage: FIGMA_TOKEN=xxx npx tsx scripts/test-core.ts "<figma-url>"');
+    console.error('Usage: FIGMA_TOKEN=xxx bunx tsx scripts/test-core.ts "<figma-url>"');
     process.exit(1);
   }
 

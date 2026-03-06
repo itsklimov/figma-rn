@@ -35,7 +35,7 @@ function simplifyPath(path: string): string {
  * Extract project tokens from theme file using AST parsing (ts-morph)
  */
 export async function extractProjectTokens(themePath: string): Promise<ProjectTokens> {
-  const { parseThemeFile } = await import('../../theme-parser.js');
+  const { parseThemeFile } = await import('../../theme-parser/index.js');
   const themeTokens = await parseThemeFile(themePath);
   
   const tokens: ProjectTokens = {

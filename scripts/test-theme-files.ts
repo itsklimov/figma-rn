@@ -1,14 +1,14 @@
 /**
  * Test theme extraction from different file types
  *
- * Usage: npx tsx scripts/test-theme-files.ts [theme-directory]
+ * Usage: bunx tsx scripts/test-theme-files.ts [theme-directory]
  */
 import { extractProjectTokens } from '../src/core/mapping/theme-extractor.js';
 
 const THEME_DIR = process.argv[2];
 if (!THEME_DIR) {
-  console.error('Usage: npx tsx scripts/test-theme-files.ts <theme-directory>');
-  console.error('Example: npx tsx scripts/test-theme-files.ts ./path/to/theme');
+  console.error('Usage: bunx tsx scripts/test-theme-files.ts <theme-directory>');
+  console.error('Example: bunx tsx scripts/test-theme-files.ts ./path/to/theme');
   process.exit(1);
 }
 

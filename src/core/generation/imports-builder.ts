@@ -4,7 +4,6 @@
  */
 
 import type { IRNode, StylesBundle } from '../types.js';
-import type { ContractDiagnostic } from '../contracts/types.js';
 
 /**
  * Configuration for import generation
@@ -16,103 +15,84 @@ export interface ImportConfig {
   useThemeHookPath?: string;
   /** Path to theme/styles directory */
   themeImportPath?: string;
+  /** Whether the theme should be imported as default */
+  themeImportIsDefault?: boolean;
+  /** Export name to import for the theme module */
+  themeImportName?: string;
   /** Style pattern: useTheme uses hooks, StyleSheet uses direct imports, unistyles uses react-native-unistyles */
   stylePattern: 'useTheme' | 'StyleSheet' | 'unistyles';
   /** Has project theme tokens */
   hasProjectTheme: boolean;
   /** Scaling function name */
   scaleFunction?: string;
-  /** Scaling function path */
-  scaleFunctionPath?: string;
-  /** Whether to include theme import in generated file */
-  includeThemeImport?: boolean;
-  /** Explicit SvgIcon provider path (contract-driven, optional) */
-  svgIconImportPath?: string;
-  /** Optional diagnostics collector */
-  diagnostics?: ContractDiagnostic[];
+  /** Scaling function import path */
+  scaleFunctionImportPath?: string;
 }
 
 /**
  * Collect RN components needed based on IR tree
  */
-function collectComponents(
-  node: IRNode,
-  set: Set<string>,
-  visited: Set<string> = new Set()
-): void {
-  if (visited.has(node.id)) return;
-  visited.add(node.id);
+function collectComponents(node: IRNode, set: Set<string>): void {
+  const children = 'children' in node && Array.isArray(node.children) ? node.children : [];
 
-  try {
   switch (node.semanticType) {
     case 'Container':
     case 'Card':
       set.add('View');
-      for (const child of node.children) {
-        collectComponents(child, set, visited);
-      }
       break;
     case 'Text':
       set.add('Text');
       break;
     case 'Image':
-      set.add('Image');
+      if (children.length > 0) {
+        set.add('View');
+      } else {
+        set.add('Image');
+      }
       break;
     case 'Icon':
-      set.add('Image');
       set.add('TouchableOpacity');
+      if (!children.length) {
+        set.add('Image');
+      }
       break;
     case 'Button':
       set.add('TouchableOpacity');
-      set.add('Text');
+      if (!children.length) {
+        set.add('Text');
+      }
+      break;
+    case 'Component':
+      set.add('View');
+      break;
+    case 'Repeater':
       break;
   }
-  } finally {
-    visited.delete(node.id);
+
+  for (const child of children) {
+    collectComponents(child, set);
   }
 }
 
 /**
- * Check gradient usage (linear/radial) in a tree.
+ * Check if any node in tree has a gradient background
  */
-function collectGradientUsage(
-  node: IRNode,
-  stylesBundle?: StylesBundle,
-  visited: Set<string> = new Set()
-): { hasLinear: boolean; hasRadial: boolean } {
-  if (visited.has(node.id)) {
-    return { hasLinear: false, hasRadial: false };
-  }
-  visited.add(node.id);
-
-  let hasLinear = false;
-  let hasRadial = false;
-
+function hasGradients(node: IRNode, stylesBundle?: StylesBundle): boolean {
   if (stylesBundle) {
     const style = stylesBundle.styles[node.styleRef];
-    if (style?.backgroundGradient) {
-      if (style.backgroundGradient.type === 'radial') hasRadial = true;
-      if (style.backgroundGradient.type === 'linear') hasLinear = true;
-    }
+    if (style?.backgroundGradient) return true;
   }
 
   if ('children' in node && node.children) {
-    for (const child of node.children) {
-      const childUsage = collectGradientUsage(child, stylesBundle, visited);
-      if (childUsage.hasLinear) hasLinear = true;
-      if (childUsage.hasRadial) hasRadial = true;
-    }
+    return node.children.some(child => hasGradients(child, stylesBundle));
   }
-
-  visited.delete(node.id);
-  return { hasLinear, hasRadial };
+  return false;
 }
 
 /**
  * Generate theme/hook import based on config
  */
 function generateThemeImport(config: ImportConfig): string | null {
-  if (config.includeThemeImport === false) return null;
   if (!config.hasProjectTheme) return null;
   
   const imports: string[] = [];
@@ -127,19 +107,18 @@ function generateThemeImport(config: ImportConfig): string | null {
   
   // 2. Static theme import (for module-level StyleSheet.create)
   if (config.themeImportPath) {
-    imports.push(`import { theme } from '${config.themeImportPath}';`);
-  } else {
-    imports.push(`import { theme } from '${config.importPrefix}/styles';`);
+    if (config.themeImportIsDefault) {
+      imports.push(`import theme from '${config.themeImportPath}';`);
+    } else {
+      imports.push(`import { ${config.themeImportName || 'theme'} } from '${config.themeImportPath}';`);
+    }
+  } else if (config.hasProjectTheme) {
+    imports.push('// TODO: Wire a theme import for mapped theme tokens.');
   }
 
   // 3. Scaling function import
-  if (config.scaleFunction && config.scaleFunctionPath) {
-    const providedPath = config.scaleFunctionPath.replace(/\.(ts|tsx|js|jsx)$/, '');
-    const isAliased = providedPath.startsWith(`${config.importPrefix}/`) || providedPath.startsWith('@');
-    const cleanPath = isAliased
-      ? providedPath
-      : `${config.importPrefix}/${providedPath.replace(/^(.*\/)?(src|app)\//, '')}`;
-    imports.push(`import { ${config.scaleFunction} } from '${cleanPath}';`);
+  if (config.scaleFunction && config.scaleFunctionImportPath) {
+    imports.push(`import { ${config.scaleFunction} } from '${config.scaleFunctionImportPath}';`);
   }
   
   return imports.join('\n');
@@ -155,18 +134,11 @@ export function buildImports(
   config?: ImportConfig
 ): string {
   const rnComponents = new Set<string>(['StyleSheet']);
-  let needsSvgIcon = false;
 
   collectComponents(root, rnComponents);
 
   // Add extra imports (like ImageSourcePropType)
-  extraImports.forEach((i) => {
-    if (i === 'SvgIcon') {
-      needsSvgIcon = true;
-      return;
-    }
-    rnComponents.add(i);
-  });
+  extraImports.forEach(i => rnComponents.add(i));
 
   // For Unistyles, StyleSheet comes from react-native-unistyles
   const isUnistyles = config?.stylePattern === 'unistyles';
@@ -190,15 +162,9 @@ export function buildImports(
     lines.push(`import { StyleSheet } from 'react-native-unistyles';`);
   }
 
-  // Add gradient imports only when they are actually used.
-  const gradientUsage = collectGradientUsage(root, stylesBundle);
-  if (gradientUsage.hasLinear) {
+  // Add LinearGradient if needed
+  if (hasGradients(root, stylesBundle)) {
     lines.push(`import { LinearGradient } from 'expo-linear-gradient';`);
-  }
-  if (gradientUsage.hasRadial) {
-    lines.push(
-      `import Svg, { Defs, Rect, RadialGradient as SvgRadialGradient, Stop } from 'react-native-svg';`
-    );
   }
 
   // Add theme/hook import based on config
@@ -210,16 +176,15 @@ export function buildImports(
     }
   }
 
-  if (needsSvgIcon) {
-    if (config?.svgIconImportPath) {
-      lines.push(`import { SvgIcon } from '${config.svgIconImportPath}';`);
-    } else if (config?.diagnostics) {
-      config.diagnostics.push({
-        level: 'warning',
-        code: 'SVG_ICON_IMPORT_SKIPPED',
-        message: 'SvgIcon usage detected but no contract provider path was resolved.',
-      });
-    }
+  // Add SvgIcon if needed (checking extraImports or manually here)
+  if (rnComponents.has('SvgIcon')) {
+    // SvgIcon is likely a custom component in the project
+    // We remove it from RN imports and add it as a separate import
+    rnComponents.delete('SvgIcon');
+    const sortedRN = Array.from(rnComponents).sort();
+    lines[1] = `import { ${sortedRN.join(', ')} } from 'react-native';`;
+    const prefix = config?.importPrefix || '@app';
+    lines.push(`import { SvgIcon } from '${prefix}/components';`);
   }
 
   return lines.join('\n');

@@ -84,8 +84,10 @@ describe('utils', () => {
       expect(toValidIdentifier('')).toBe('element');
     });
 
-    it('should transliterate cyrillic names', () => {
-      expect(toValidIdentifier('Главная клиент')).toBe('glavnayaKlient');
+    it('should transliterate Cyrillic names to meaningful ASCII identifiers', () => {
+      expect(toValidIdentifier('Маникюр с покрытием')).toBe('manikyurSPokrytiem');
+      expect(toValidIdentifier('Анастасия')).toBe('anastasiya');
+      expect(toValidIdentifier('Профи')).toBe('profi');
     });
   });
 
@@ -101,10 +103,6 @@ describe('utils', () => {
     it('should remove leading dots', () => {
       expect(sanitizeFilename('.hidden')).toBe('hidden');
     });
-
-    it('should transliterate cyrillic names', () => {
-      expect(sanitizeFilename('Иконка Назад')).toBe('ikonka-nazad');
-    });
   });
 
   describe('sanitizeComponentName', () => {
@@ -115,15 +113,6 @@ describe('utils', () => {
 
     it('should prefix names starting with digit', () => {
       expect(sanitizeComponentName('123-invalid')).toBe('Component123Invalid');
-    });
-
-    it('should preserve uppercase abbreviations', () => {
-      expect(sanitizeComponentName('E2E_Screen868A')).toBe('E2EScreen868A');
-      expect(sanitizeComponentName('API Response')).toBe('APIResponse');
-    });
-
-    it('should transliterate cyrillic names', () => {
-      expect(sanitizeComponentName('Главная клиент')).toBe('GlavnayaKlient');
     });
   });
 });

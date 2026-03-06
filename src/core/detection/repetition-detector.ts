@@ -5,7 +5,7 @@
 import type { IRNode, ContainerIR, CardIR, TextIR, ButtonIR, StylesBundle } from '../types.js';
 import type { ComponentHint } from './types.js';
 import type { TokenMappings } from '../mapping/token-matcher.js';
-import { mapColor } from '../generation/styles-builder.js';
+import { mapColor } from '../mapping/color-map.js';
 
 /** Minimum occurrences to extract a component */
 const MIN_OCCURRENCES = 2;

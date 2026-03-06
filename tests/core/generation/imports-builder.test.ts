@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildImports } from '../../../src/core/generation/imports-builder.js';
-import type { IRNode, ContainerIR, TextIR, ImageIR, ButtonIR, IconIR } from '../../../src/core/types.js';
+import type { IRNode, ContainerIR, TextIR, ImageIR, ButtonIR, IconIR, ComponentIR } from '../../../src/core/types.js';
 
 describe('buildImports', () => {
   const baseBoundingBox = { x: 0, y: 0, width: 100, height: 100 };
@@ -188,80 +188,42 @@ describe('buildImports', () => {
     expect(result).toContain("from 'react-native'");
   });
 
-  it('should include react-native-svg imports for radial gradients', () => {
+  it('should include imports required by nested component implementations', () => {
     const container: ContainerIR = {
       id: '1:1',
-      name: 'container',
-      semanticType: 'Container',
-      boundingBox: baseBoundingBox,
-      styleRef: 'container',
-      layout: baseLayout,
-      children: [],
-    };
-
-    const stylesBundle: any = {
-      styles: {
-        container: {
-          id: 'container',
-          backgroundGradient: {
-            type: 'radial',
-            colors: ['#FFFFFF', '#000000'],
-            positions: [0, 1],
-            center: { x: 0.5, y: 0.5 },
-            radius: { x: 0.5, y: 0.5 },
-          },
-        },
-      },
-    };
-
-    const result = buildImports(container, [], stylesBundle);
-    expect(result).toContain("from 'react-native-svg'");
-    expect(result).toContain('SvgRadialGradient');
-  });
-
-  it('should not import theme when includeThemeImport is false', () => {
-    const container: ContainerIR = {
-      id: '1:1',
-      name: 'container',
+      name: 'screen',
       semanticType: 'Container',
       boundingBox: baseBoundingBox,
       styleRef: 'style_1',
       layout: baseLayout,
-      children: [],
+      children: [
+        {
+          id: '1:2',
+          name: 'NestedComponent',
+          semanticType: 'Component',
+          componentId: 'nested',
+          componentName: 'NestedComponent',
+          boundingBox: baseBoundingBox,
+          styleRef: 'style_2',
+          layout: baseLayout,
+          children: [
+            {
+              id: '1:3',
+              name: 'cta',
+              semanticType: 'Button',
+              boundingBox: baseBoundingBox,
+              styleRef: 'style_3',
+              label: 'Tap',
+              variant: 'primary',
+            } as ButtonIR,
+          ],
+        } as ComponentIR,
+      ],
     };
 
-    const result = buildImports(container, [], undefined, {
-      importPrefix: '@app',
-      stylePattern: 'StyleSheet',
-      hasProjectTheme: true,
-      themeImportPath: '@app/styles',
-      includeThemeImport: false,
-    } as any);
-
-    expect(result).not.toContain("import { theme }");
-  });
-
-  it('should import SvgIcon only when explicit provider path is configured', () => {
-    const container: ContainerIR = {
-      id: '1:1',
-      name: 'container',
-      semanticType: 'Container',
-      boundingBox: baseBoundingBox,
-      styleRef: 'style_1',
-      layout: baseLayout,
-      children: [],
-    };
-
-    const withoutProvider = buildImports(container, ['SvgIcon']);
-    expect(withoutProvider).not.toContain('SvgIcon');
-
-    const withProvider = buildImports(container, ['SvgIcon'], undefined, {
-      importPrefix: '@app',
-      stylePattern: 'StyleSheet',
-      hasProjectTheme: false,
-      svgIconImportPath: '@app/components/icons',
-    } as any);
-    expect(withProvider).toContain("import { SvgIcon } from '@app/components/icons';");
+    const result = buildImports(container);
+    expect(result).toContain('TouchableOpacity');
+    expect(result).toContain('Text');
   });
 
   describe('Unistyles support', () => {

@@ -6,13 +6,6 @@
 import type { ScreenIR, IRNode, ComponentIR, StylesBundle, RepeaterIR } from '../types.js';
 import type { TokenMappings } from '../mapping/token-matcher.js';
 import type { DetectionResult, ComponentHint } from '../detection/types.js';
-import type {
-  ContractDiagnostic,
-  ContractProfileSummary,
-  ResolvedProjectProfile,
-  UnresolvedAssetRef,
-} from '../contracts/types.js';
-import { toContractProfileSummary } from '../contracts/types.js';
 import { buildImports, type ImportConfig } from './imports-builder.js';
 import { buildJSX } from './jsx-builder.js';
 import { buildStyles } from './styles-builder.js';
@@ -34,9 +27,6 @@ export interface GenerationResult {
     spacing: number[];
     radii: number[];
   };
-  diagnostics: ContractDiagnostic[];
-  unresolvedAssets: UnresolvedAssetRef[];
-  contractProfileSummary?: ContractProfileSummary;
 }
 
 /**
@@ -55,14 +45,18 @@ export interface GenerationOptions {
   imagePathMap?: Map<string, string>;
   /** Theme import path (e.g., '@app/styles/theme') */
   themeImportPath?: string;
+  /** Whether the theme import is default */
+  themeImportIsDefault?: boolean;
+  /** Export name to use for theme import */
+  themeImportName?: string;
   /** Assets import prefix (e.g., '@assets') */
   assetsPrefix?: string;
   /** Suppress TODO comments in output (default: false) */
   suppressTodos?: boolean;
   /** Responsive scaling function name (e.g., 'scale') */
   scaleFunction?: string;
-  /** Path to scaling function for import generation */
-  scaleFunctionPath?: string;
+  /** Import path to scaling function for import generation */
+  scaleFunctionImportPath?: string;
   /** Style pattern: useTheme, StyleSheet, or unistyles */
   stylePattern?: 'useTheme' | 'StyleSheet' | 'unistyles';
   /** Path to useTheme hook if discovered */
@@ -71,16 +65,6 @@ export interface GenerationOptions {
   importPrefix?: string;
   /** Semantic state information for state-based styling (internal use) */
   semanticState?: import('../detection/state-detector.js').SemanticState;
-  /** Resolved contract profile */
-  contractProfile?: ResolvedProjectProfile;
-  /** Strict contracts mode */
-  strictContracts?: boolean;
-  /** Missing asset policy */
-  assetFailurePolicy?: 'fallback' | 'error';
-  /** Internal diagnostics collector */
-  diagnosticsCollector?: ContractDiagnostic[];
-  /** Internal unresolved assets collector */
-  unresolvedAssetsCollector?: UnresolvedAssetRef[];
 }
 
 /**
@@ -109,9 +93,6 @@ export interface MultiFileResult {
     spacing: number[];
     radii: number[];
   };
-  diagnostics?: ContractDiagnostic[];
-  unresolvedAssets?: UnresolvedAssetRef[];
-  contractProfileSummary?: ContractProfileSummary;
 }
 
 /**
@@ -124,165 +105,8 @@ function toPascalCase(str: string): string {
     .replace(/[^a-zA-Z0-9]/g, '');
 }
 
-function escapeStringLiteral(value: string): string {
-  return value
-    .replace(/\\/g, '\\\\')
-    .replace(/\r?\n/g, '\\n')
-    .replace(/"/g, '\\"');
-}
-
-function resolveMainImplementationRoot(root: IRNode, componentName: string): IRNode {
-  if (root.semanticType !== 'Component') {
-    return root;
-  }
-
-  const componentRoot = root as ComponentIR;
-  let implementationRoot: IRNode = {
-    ...componentRoot,
-    semanticType: 'Container',
-  } as IRNode;
-
-  if (componentRoot.children && componentRoot.children.length === 1) {
-    const child = componentRoot.children[0];
-    const shouldUseChildAsRoot =
-      child.name === componentRoot.name ||
-      child.name === componentRoot.componentName ||
-      child.name === componentName ||
-      (child.boundingBox.width === componentRoot.boundingBox.width &&
-        child.boundingBox.height === componentRoot.boundingBox.height);
-
-    if (shouldUseChildAsRoot) {
-      implementationRoot = child;
-    }
-  }
-
-  return implementationRoot;
-}
-
-/**
- * Build a stable signature for a component implementation shape.
- * Used to disambiguate components that share the same display name.
- */
-function getComponentSignature(component: ComponentIR): string {
-  const propKeys = Object.keys(component.props || {}).sort().join('|');
-  const componentId = component.componentId || 'unknown';
-  const childCount = component.children?.length || 0;
-  return `${componentId}::${propKeys}::${childCount}`;
-}
-
-/**
- * Ensure component names are unique across the tree.
- * If two components share the same name but different signatures, suffixes are added.
- */
-function ensureUniqueComponentNames(root: IRNode, reservedNames: Set<string> = new Set()): void {
-  const usedNames = new Set<string>(reservedNames);
-  const signatureByName = new Map<string, string>();
-  const path = new Set<string>();
-
-  function walk(node: IRNode): void {
-    if (path.has(node.id)) return;
-    path.add(node.id);
-
-    if (node.semanticType === 'Component') {
-      const comp = node as ComponentIR;
-      const baseName = comp.componentName || toPascalCase(comp.name) || 'Component';
-      const signature = getComponentSignature(comp);
-      const baseSignature = signatureByName.get(baseName);
-
-      if (!usedNames.has(baseName) && !baseSignature) {
-        comp.componentName = baseName;
-        usedNames.add(baseName);
-        signatureByName.set(baseName, signature);
-      } else if (baseSignature === signature) {
-        comp.componentName = baseName;
-      } else {
-        let suffix = 2;
-        let assigned = false;
-
-        while (!assigned) {
-          const candidate = `${baseName}${suffix}`;
-          const candidateSignature = signatureByName.get(candidate);
-          if (!candidateSignature) {
-            comp.componentName = candidate;
-            signatureByName.set(candidate, signature);
-            usedNames.add(candidate);
-            assigned = true;
-            continue;
-          }
-          if (candidateSignature === signature) {
-            comp.componentName = candidate;
-            assigned = true;
-            continue;
-          }
-          suffix += 1;
-        }
-      }
-    }
-
-    if ('children' in node && node.children) {
-      for (const child of node.children) {
-        walk(child);
-      }
-    }
-
-    path.delete(node.id);
-  }
-
-  walk(root);
-}
-
-function resolveAssetPathFromMap(
-  imagePathMap: Map<string, string> | undefined,
-  ref: string
-): string | undefined {
-  if (!imagePathMap) return undefined;
-  return imagePathMap.get(ref) || imagePathMap.get(`ref:${ref}`);
-}
-
-interface NamedSubComponent {
-  name: string;
-  code: string;
-}
-
-function extractSubComponentName(code: string): string | null {
-  const match = code.match(/function\s+([A-Z][A-Za-z0-9_]*)\s*\(/);
-  return match ? match[1] : null;
-}
-
-function extractReferencedComponentNames(code: string): Set<string> {
-  const refs = new Set<string>();
-  const regex = /<([A-Z][A-Za-z0-9_]*)\b/g;
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(code)) !== null) {
-    refs.add(match[1]);
-  }
-  return refs;
-}
-
-function keepReferencedSubComponents(
-  components: NamedSubComponent[],
-  entryCode: string
-): NamedSubComponent[] {
-  const byName = new Map<string, NamedSubComponent>();
-  for (const comp of components) {
-    byName.set(comp.name, comp);
-  }
-
-  const needed = new Set<string>();
-  const queue = Array.from(extractReferencedComponentNames(entryCode));
-
-  while (queue.length > 0) {
-    const name = queue.shift()!;
-    if (needed.has(name)) continue;
-    needed.add(name);
-    const comp = byName.get(name);
-    if (!comp) continue;
-    for (const ref of extractReferencedComponentNames(comp.code)) {
-      if (!needed.has(ref)) queue.push(ref);
-    }
-  }
-
-  return components.filter((c) => needed.has(c.name));
+function isOptionalUnresolvedImageProp(config: { type: 'string' | 'image' | 'style'; defaultValue: string }): boolean {
+  return config.type === 'image' && config.defaultValue.trim().length === 0;
 }
 
 /**
@@ -321,60 +145,42 @@ export function generateComponent(
   mappings: TokenMappings,
   options?: GenerationOptions
 ): GenerationResult {
-  const diagnostics = options?.diagnosticsCollector ?? [];
-  const unresolvedAssets = options?.unresolvedAssetsCollector ?? [];
-  const contractProfile = options?.contractProfile;
-  const stylePattern = options?.stylePattern || contractProfile?.stylePattern || 'StyleSheet';
-  const importPrefix = options?.importPrefix || contractProfile?.importPrefix || '@app';
-  const hasProjectTheme = options?.hasProjectTheme ?? false;
-  const themeImportPath = options?.themeImportPath || contractProfile?.themeImportPath;
-  const scaleFunction = options?.scaleFunction || contractProfile?.scaleImport?.name;
-  const scaleFunctionPath = options?.scaleFunctionPath || contractProfile?.scaleImport?.path;
-  const strictContracts = options?.strictContracts ?? contractProfile?.strictValidation.strictContracts ?? true;
-  const assetFailurePolicy = options?.assetFailurePolicy || 'fallback';
-
   // 1. Resolve component name and root props
   const componentName = options?.componentName || toPascalCase(screen.name) || 'GeneratedComponent';
-  const renderRoot = resolveMainImplementationRoot(screen.root, componentName);
-  ensureUniqueComponentNames(renderRoot, new Set([componentName]));
-  const { props: rootProps } = extractProps(renderRoot, screen.stylesBundle);
+  const { props: rootProps } = extractProps(
+    screen.root,
+    screen.stylesBundle,
+    undefined,
+    { stopAtSemanticBoundaries: ['Component', 'Repeater'] }
+  );
   const rootPropsList = Object.keys(rootProps);
-
+  
   // Generate props interface for the main component
   let rootPropsInterface = '';
   let rootPropsDestructure = '';
   if (rootPropsList.length > 0) {
     const propLines = Object.entries(rootProps).map(([name, config]: [string, any]) => {
-      if (config.type === 'image') {
-        return `  /** Default: "${config.defaultValue}" */\n  ${name}?: ImageSourcePropType;`;
-      }
-      return `  /** Default: "${config.defaultValue}" */\n  ${name}: string;`;
+      const isOptional = isOptionalUnresolvedImageProp(config);
+      const type = config.type === 'image' ? 'ImageSourcePropType' : 'string';
+      return `  /** Default: "${config.defaultValue}" */\n  ${name}${isOptional ? '?' : ''}: ${type};`;
     });
     const interfaceName = `${componentName}Props`;
     rootPropsInterface = `interface ${interfaceName} {\n${propLines.join('\n')}\n}\n\n`;
-
+    
+    // Destructured props with defaults
     const destructureParts = Object.entries(rootProps).map(([name, config]: [string, any]) => {
       if (config.type === 'image') {
+        // Resolve image default
         const hash = config.defaultValue;
-        const resolvedPath = resolveAssetPathFromMap(options?.imagePathMap, hash);
-        if (resolvedPath) {
-          return `${name} = require("${resolvedPath}")`;
+        if (options?.imagePathMap?.has(hash)) {
+          return `${name} = require("${options.imagePathMap.get(hash)}")`;
         }
-        unresolvedAssets.push({
-          ref: hash,
-          nodeId: renderRoot.id,
-          semanticType: 'Image',
-          location: `${componentName}Props.${name}`,
-        });
-        diagnostics.push({
-          level: assetFailurePolicy === 'error' ? 'error' : 'warning',
-          code: 'ASSET_UNRESOLVED_PROP_DEFAULT',
-          message: `Image prop "${name}" default could not be resolved for ref "${hash}".`,
-          location: `${componentName}Props`,
-        });
+        if (hash) {
+          return `${name} = { uri: "" } /* TODO: Image ref: ${hash} */`;
+        }
         return name;
       }
-      const defaultVal = config.defaultValue ? ` = "${escapeStringLiteral(config.defaultValue)}"` : '';
+      const defaultVal = config.defaultValue ? ` = "${config.defaultValue.replace(/"/g, '\\"')}"` : '';
       return `${name}${defaultVal}`;
     });
     rootPropsDestructure = `{ ${destructureParts.join(', ')} }: ${interfaceName}`;
@@ -389,239 +195,231 @@ export function generateComponent(
     renderItems: [] as string[],
     subComponents: [] as string[],
     repeaterContent: [] as string[],
+    // Track component names generated for lists to avoid duplication
     generatedComponentNames: new Set<string>(),
   };
 
-  const subComponentGenerationOptions: GenerationOptions = {
-    ...options,
-    stylePattern,
-    importPrefix,
-    hasProjectTheme,
-    themeImportPath,
-    scaleFunction,
-    scaleFunctionPath,
-    strictContracts,
-    assetFailurePolicy,
-    contractProfile,
-    diagnosticsCollector: diagnostics,
-    unresolvedAssetsCollector: unresolvedAssets,
-  };
-
-  // 2.6 Process Repeaters
-  const repeaters = collectRepeaters(renderRoot);
+  // 2.6 Process Repeaters (Update tree and collect parts)
+  const repeaters = collectRepeaters(screen.root);
   for (const repeater of repeaters) {
-    const { dataConstant, itemComponent, typeDefinition, itemComponentName } = generateRepeaterParts(
-      repeater,
-      screen.stylesBundle,
-      mappings,
-      subComponentGenerationOptions,
-      listExtras.generatedComponentNames
-    );
+    const { dataConstant, itemComponent, typeDefinition, itemComponentName } = generateRepeaterParts(repeater, screen.stylesBundle, mappings, options, listExtras.generatedComponentNames);
     listExtras.data.push(dataConstant);
     listExtras.types.push(typeDefinition);
     listExtras.subComponents.push(itemComponent);
     listExtras.generatedComponentNames.add(itemComponentName);
   }
 
-  // 3. Collect and generate sub-components
-  const components = collectComponents(renderRoot, new Set([componentName]));
-  let needsImageSourcePropType = Object.values(rootProps).some((p: any) => p.type === 'image');
+  // 7. Collect and generate sub-components
+  const components = collectComponents(screen.root);
+  let needsImageSourcePropType = false;
   const subComponentsCodeParts: string[] = [];
-
+  
   for (const comp of components) {
+    // Skip if this component was already generated as part of a repeater
     if (listExtras.generatedComponentNames.has(comp.componentName)) {
       continue;
     }
-    const code = generateSubComponent(comp, screen.stylesBundle, mappings, subComponentGenerationOptions);
+    const code = generateSubComponent(comp, screen.stylesBundle, mappings, options);
     if (code.includes('ImageSourcePropType')) {
       needsImageSourcePropType = true;
     }
     subComponentsCodeParts.push(code);
   }
 
-  const jsxOptions: import('./jsx-builder.js').BuildJSXOptions = {
-    assetFailurePolicy,
-    svgMode: contractProfile?.svgSupport.mode,
-    hasSvgIconProvider: !!contractProfile?.svgSupport.svgIconProviderPath,
-    diagnostics,
-    unresolvedAssets,
-  };
+  
+  const subComponentsCode = subComponentsCodeParts.join('\n\n');
 
-  // 4. Build JSX for main tree
+  // 3. Build imports from IR tree
+  const extraRNImports: string[] = [];
+  if (listExtras.imports.has('FlatList')) extraRNImports.push('FlatList');
+  if (needsImageSourcePropType) extraRNImports.push('ImageSourcePropType');
+  
+  // Check if any generated code uses Pressable (semantic state components)
+  const allSubComponentsCode = [...subComponentsCodeParts, ...listExtras.subComponents].join('\n');
+  if (allSubComponentsCode.includes('<Pressable')) {
+    extraRNImports.push('Pressable');
+  }
+  
+  // Check for SVG usage in paths
+  if (options?.imagePathMap) {
+    for (const path of options.imagePathMap.values()) {
+      if (path.toLowerCase().endsWith('.svg')) {
+        extraRNImports.push('SvgIcon');
+        break;
+      }
+    }
+  }
+
+  // Build ImportConfig from options
+  const importConfig: ImportConfig | undefined = options ? {
+    importPrefix: options.importPrefix || '@app',
+    useThemeHookPath: options.useThemeHookPath,
+    themeImportPath: options.themeImportPath,
+    themeImportIsDefault: options.themeImportIsDefault,
+    themeImportName: options.themeImportName,
+    stylePattern: options.stylePattern || 'StyleSheet',
+    hasProjectTheme: options.hasProjectTheme ?? false,
+    scaleFunction: options.scaleFunction,
+    scaleFunctionImportPath: options.scaleFunctionImportPath,
+  } : undefined;
+
+  const imports = buildImports(screen.root, extraRNImports, screen.stylesBundle, importConfig);
+
+  // 4. Build JSX from IR tree (indented for return statement)
   const jsx = buildJSX(
-    renderRoot,
+    screen.root,
     2,
     options?.imagePathMap,
     jsxOverrides,
     screen.stylesBundle,
     mappings,
-    jsxOptions
+    { availableProps: rootPropsList }
   );
 
-  const additionalTypes = listExtras.types.join('\n\n');
-  const additionalData = listExtras.data.join('\n\n');
-  const renderItems = listExtras.renderItems.map((fn) => fn.replace(/^ {2}/, '')).join('\n\n');
-
-  // Remove dead subcomponents by reference graph from main entry code.
-  const allGeneratedComponents = [...subComponentsCodeParts, ...listExtras.subComponents].filter(Boolean);
-  const namedSubComponents: NamedSubComponent[] = [];
-  const anonymousSubComponents: string[] = [];
-  for (const code of allGeneratedComponents) {
-    const name = extractSubComponentName(code);
-    if (name) {
-      namedSubComponents.push({ name, code });
-    } else {
-      anonymousSubComponents.push(code);
-    }
-  }
-  const entryCode = [jsx, renderItems].join('\n');
-  const reachableNamedSubComponents = keepReferencedSubComponents(namedSubComponents, entryCode);
-  const allSubComponents = [...anonymousSubComponents, ...reachableNamedSubComponents.map((c) => c.code)]
-    .filter(Boolean)
-    .join('\n\n');
-
-  // 5. Extract used style names from effective generated JSX
+  // Fix #8: Extract used style names from ALL generated JSX (main + sub-components) for tree-shaking
   const usedStyles = new Set<string>();
-  const allGeneratedJSX = [jsx, allSubComponents, renderItems].join('\n');
+  const allGeneratedJSX = [jsx, ...subComponentsCodeParts, ...listExtras.subComponents].join('\n');
   const styleRefPattern = /styles\.([a-zA-Z0-9_]+)/g;
-  let styleMatch: RegExpExecArray | null;
+  let styleMatch;
   while ((styleMatch = styleRefPattern.exec(allGeneratedJSX)) !== null) {
     usedStyles.add(styleMatch[1]);
   }
 
-  // 6. Build StyleSheet from StylesBundle with mappings
-  const { code: stylesCode, unmapped } = buildStyles(renderRoot, screen.stylesBundle, mappings, {
-    usedStyles,
-    suppressTodos: options?.suppressTodos,
-    scaleFunction,
-    stylePattern,
-    hasProjectTheme,
-  });
+  // 5. Build StyleSheet from StylesBundle with mappings
+  const { code: stylesCode, unmapped } = buildStyles(
+    screen.root,
+    screen.stylesBundle,
+    mappings,
+    {
+      usedStyles,
+      suppressTodos: options?.suppressTodos,
+      scaleFunction: options?.scaleFunction,
+      stylePattern: options?.stylePattern,
+      hasProjectTheme: options?.hasProjectTheme,
+    }
+  );
 
-  // 7. Generate selected variant styles for semantic state components
+  // 6. Generate Selected variant styles for semantic state components
+  // Find all styles.XXXSelected references and generate the variant styles
   let finalStylesCode = stylesCode;
   const selectedStylePattern = /styles\.([a-zA-Z0-9_]+)Selected/g;
   const selectedStyles = new Set<string>();
-  let selectedMatch: RegExpExecArray | null;
+  let selectedMatch;
   while ((selectedMatch = selectedStylePattern.exec(allGeneratedJSX)) !== null) {
     selectedStyles.add(selectedMatch[1]);
   }
-
+  
   if (selectedStyles.size > 0) {
+    // Generate Selected variant styles with the state-specific colors
+    // TODO: Get actual colors from stateStyles - for now use semantic defaults
     const variantStylesCode: string[] = [];
+    
     for (const baseStyle of selectedStyles) {
+      // Check if base style looks like a container or text
       const isText = baseStyle.includes('text') || baseStyle.includes('Text');
+      
       if (isText) {
+        // Text selected state typically has white color
         variantStylesCode.push(`  ${baseStyle}Selected: {\n    color: '#ffffff',\n  },`);
       } else {
-        variantStylesCode.push(
-          `  ${baseStyle}Selected: {\n    backgroundColor: theme.gradients?.primary?.from || '#7a54ff',\n  },`
-        );
+        // Container selected state typically has accent background
+        const selectedBackground = options?.hasProjectTheme
+          ? "theme.gradients?.primary?.from || '#7a54ff'"
+          : "'#7a54ff'";
+        variantStylesCode.push(`  ${baseStyle}Selected: {\n    backgroundColor: ${selectedBackground},\n  },`);
       }
     }
+    
+    // Insert variant styles before the closing });
     if (variantStylesCode.length > 0) {
-      finalStylesCode = finalStylesCode.replace(/\n\}\);$/, `\n${variantStylesCode.join('\n')}\n});`);
+      finalStylesCode = finalStylesCode.replace(
+        /\n\}\);$/,
+        '\n' + variantStylesCode.join('\n') + '\n});'
+      );
     }
   }
 
-  // 8. Safe area wrapper based on resolved contract
-  const requestedSafeArea = screen.hasSafeAreaLayout === true;
-  const safeAreaAvailable = contractProfile ? contractProfile.safeAreaSupport.available : true;
-  const useSafeAreaWrapper = requestedSafeArea && safeAreaAvailable;
-  const useSafeAreaFallbackWrapper = requestedSafeArea && !safeAreaAvailable;
-  if (useSafeAreaFallbackWrapper) {
-    diagnostics.push({
-      level: strictContracts ? 'error' : 'warning',
-      code: 'SAFE_AREA_UNAVAILABLE',
-      message:
-        'Safe area layout detected, but react-native-safe-area-context was not confirmed by project profile. Falling back to View wrapper.',
-      location: componentName,
-    });
-  }
-
-  if (useSafeAreaWrapper || useSafeAreaFallbackWrapper) {
-    const safeAreaBlock = `  safeArea: {\n    flex: 1,\n  },`;
-    if (stylePattern === 'unistyles') {
-      finalStylesCode = finalStylesCode.replace(
-        /const styles = StyleSheet\.create\(theme => \(\{/,
-        `const styles = StyleSheet.create(theme => ({\n${safeAreaBlock}`
-      );
+  // 6. Theme access is via useTheme() hook - no additional imports needed
+  // Token paths are prefixed with 'theme.' (e.g., theme.spacing.md, theme.color.primary)
+  let finalImports = imports;
+  
+  // Add ImageSourcePropType to imports if needed by root props
+  if (Object.values(rootProps).some((p: any) => p.type === 'image') && !finalImports.includes('ImageSourcePropType')) {
+    if (finalImports.includes('import {')) {
+       finalImports = finalImports.replace(/import { ([^}]+) } from 'react-native';/, "import { $1, ImageSourcePropType } from 'react-native';");
     } else {
-      finalStylesCode = finalStylesCode.replace(
-        /const styles = StyleSheet\.create\(\{/,
-        `const styles = StyleSheet.create({\n${safeAreaBlock}`
-      );
+       finalImports = `import { ImageSourcePropType } from 'react-native';\n${finalImports}`;
     }
   }
 
-  // 9. Build imports from effective usage and contract rules
-  const importScanCode = [allGeneratedJSX, finalStylesCode].join('\n');
-  const extraRNImports: string[] = [];
-  if (listExtras.imports.has('FlatList')) extraRNImports.push('FlatList');
-  if (needsImageSourcePropType) extraRNImports.push('ImageSourcePropType');
-  if (useSafeAreaFallbackWrapper) extraRNImports.push('View');
 
-  const rnTagsToImport: Array<[string, string]> = [
-    ['View', '<View'],
-    ['Text', '<Text'],
-    ['Image', '<Image'],
-    ['TouchableOpacity', '<TouchableOpacity'],
-    ['TextInput', '<TextInput'],
-    ['ScrollView', '<ScrollView'],
-    ['Pressable', '<Pressable'],
-    ['FlatList', '<FlatList'],
-  ];
-  for (const [rnComponent, tag] of rnTagsToImport) {
-    if (importScanCode.includes(tag)) {
-      extraRNImports.push(rnComponent);
-    }
-  }
-  if (importScanCode.includes('<SvgIcon')) {
-    extraRNImports.push('SvgIcon');
-  }
+  // Combine list sub-components
+  // Fix #7: Filter to only include components that are actually referenced in JSX
+  const allGeneratedComponents = [
+    subComponentsCode,
+    ...listExtras.subComponents
+  ].filter(Boolean);
+  
+  // 8. Assemble final component file in standard order:
+  const allSubComponents = allGeneratedComponents.join('\n\n');
 
-  const includeThemeImport = hasProjectTheme && /(^|[^a-zA-Z0-9_])theme\./.test(importScanCode);
-  const importConfig: ImportConfig = {
-    importPrefix,
-    useThemeHookPath: options?.useThemeHookPath,
-    themeImportPath,
-    stylePattern,
-    hasProjectTheme,
-    scaleFunction,
-    scaleFunctionPath,
-    includeThemeImport,
-    svgIconImportPath: contractProfile?.svgSupport.svgIconProviderPath,
-    diagnostics,
-  };
-  const finalImports = buildImports(renderRoot, extraRNImports, screen.stylesBundle, importConfig);
+  // 8. Assemble final component file in standard order:
+  // 1. Imports
+  // 2. Interfaces/Types
+  // 3. Shared Data (Constants)
+  // 4. Utility/Sub-components
+  // 5. Main Component
+  // 6. Styles
+  
+  const additionalTypes = listExtras.types.join('\n\n');
+  const additionalData = listExtras.data.join('\n\n');
+  const renderItems = listExtras.renderItems.map(fn => fn.replace(/^ {2}/, '')).join('\n\n');
 
-  let safeAreaImport = '';
-  if (useSafeAreaWrapper) {
-    safeAreaImport = `import { SafeAreaView } from '${contractProfile?.safeAreaSupport.importPath || 'react-native-safe-area-context'}';\n`;
-  }
+  // Determine if we need SafeAreaView wrapper
+  const needsSafeArea = screen.hasSafeAreaLayout === true;
 
-  // 10. Build component body
+  // Build body content with optional SafeAreaView wrapper
   let bodyContent: string;
-  if (useSafeAreaWrapper) {
+  if (needsSafeArea) {
+    // Wrap content with SafeAreaView for proper safe area handling
+    // Determine which edges to protect based on insets
     const edges: string[] = [];
     if (screen.safeAreaInsets?.top && screen.safeAreaInsets.top > 0) edges.push("'top'");
     if (screen.safeAreaInsets?.bottom && screen.safeAreaInsets.bottom > 0) edges.push("'bottom'");
     if (screen.safeAreaInsets?.left && screen.safeAreaInsets.left > 0) edges.push("'left'");
     if (screen.safeAreaInsets?.right && screen.safeAreaInsets.right > 0) edges.push("'right'");
+
     const edgesAttr = edges.length > 0 ? ` edges={[${edges.join(', ')}]}` : '';
     bodyContent = `  return (
     <SafeAreaView style={styles.safeArea}${edgesAttr}>
 ${jsx}
     </SafeAreaView>
   );`;
-  } else if (useSafeAreaFallbackWrapper) {
-    bodyContent = `  return (
-    <View style={styles.safeArea}>
-${jsx}
-    </View>
-  );`;
   } else {
     bodyContent = `  return (\n${jsx}\n  );`;
+  }
+
+  const themeHook = jsx.includes('theme.') && options?.hasProjectTheme
+    ? '  const { theme } = useTheme();\n\n'
+    : '';
+
+  // Add SafeAreaView import if needed
+  let safeAreaImport = '';
+  if (needsSafeArea) {
+    safeAreaImport = "import { SafeAreaView } from 'react-native-safe-area-context';\n";
+  }
+
+  // Add safeArea style if SafeAreaView is used
+  if (needsSafeArea) {
+    // Insert safeArea style at the beginning of the styles
+    // Support both standard StyleSheet.create({ and Unistyles StyleSheet.create(theme => ({
+    finalStylesCode = finalStylesCode.replace(
+      /const styles = StyleSheet\.create\((?:theme => )?\(\{/,
+      `const styles = StyleSheet.create(${options?.stylePattern === 'unistyles' ? 'theme => ' : ''}({
+  safeArea: {
+    flex: 1,
+  },`
+    );
   }
 
   let code = `${finalImports}
@@ -631,48 +429,37 @@ ${additionalTypes}
 
 ${additionalData}
 
+export function ${componentName}(${rootPropsDestructure}) {
+${themeHook}${bodyContent}
+}
+
 ${allSubComponents}
 
 ${renderItems}
 
-export function ${componentName}(${rootPropsDestructure}) {
-${bodyContent}
-}
-
 ${finalStylesCode}
 `;
 
+  // Clean up extra double newlines
   code = code.replace(/\n{3,}/g, '\n\n');
-
-  if (assetFailurePolicy === 'error' && unresolvedAssets.length > 0) {
-    const unresolvedRefs = unresolvedAssets.map((asset) => `${asset.semanticType}:${asset.ref}`).join(', ');
-    throw new Error(`Asset resolution failed for ${componentName}: ${unresolvedRefs}`);
-  }
 
   return {
     code,
     unmappedTokens: unmapped,
-    diagnostics,
-    unresolvedAssets,
-    contractProfileSummary: contractProfile ? toContractProfileSummary(contractProfile) : undefined,
   };
 }
 
 /**
  * Collect all unique Component nodes from the tree
  */
-function collectComponents(root: IRNode, reservedNames: Set<string> = new Set()): ComponentIR[] {
-  const components = new Map<string, ComponentIR>();
-  const path = new Set<string>();
+function collectComponents(root: IRNode): ComponentIR[] {
+  const components = new Map<string, { component: ComponentIR; depth: number }>();
 
-  function walk(node: IRNode) {
-    if (path.has(node.id)) return;
-    path.add(node.id);
-
+  function walk(node: IRNode, depth: number) {
     if (node.semanticType === 'Component') {
       // Use componentName as key to deduplicate
-      if (!reservedNames.has(node.componentName) && !components.has(node.componentName)) {
-        components.set(node.componentName, node as ComponentIR);
+      if (!components.has(node.componentName)) {
+        components.set(node.componentName, { component: node as ComponentIR, depth });
       }
       // Components might have children that are also components (nested instances)
       // But usually we don't want to extract children OF the component instance if they are overrides?
@@ -684,15 +471,15 @@ function collectComponents(root: IRNode, reservedNames: Set<string> = new Set())
 
     if ('children' in node && node.children) {
       for (const child of node.children) {
-        walk(child);
+        walk(child, depth + 1);
       }
     }
-
-    path.delete(node.id);
   }
 
-  walk(root);
-  return Array.from(components.values());
+  walk(root, 0);
+  return Array.from(components.values())
+    .sort((a, b) => b.depth - a.depth)
+    .map((entry) => entry.component);
 }
 
 /**
@@ -700,12 +487,8 @@ function collectComponents(root: IRNode, reservedNames: Set<string> = new Set())
  */
 function collectRepeaters(root: IRNode): RepeaterIR[] {
   const repeaters: RepeaterIR[] = [];
-  const path = new Set<string>();
 
   function walk(node: IRNode) {
-    if (path.has(node.id)) return;
-    path.add(node.id);
-
     if (node.semanticType === 'Repeater') {
       repeaters.push(node as RepeaterIR);
     }
@@ -715,8 +498,6 @@ function collectRepeaters(root: IRNode): RepeaterIR[] {
         walk(child);
       }
     }
-
-    path.delete(node.id);
   }
 
   walk(root);
@@ -865,6 +646,14 @@ function generateRepeaterParts(
         } else if (propConfig.type === 'string') {
           const rawKey = propName.replace(/([A-Z])/g, '_$1').toLowerCase();
           itemData[propName] = rawValues[rawKey] || rawValues[`child0_text`] || propConfig.defaultValue || '';
+        } else if (propConfig.type === 'image') {
+          const rawKey = propName.replace(/([A-Z])/g, '_$1').toLowerCase();
+          const rawValue = rawValues[rawKey];
+          if (rawValue) {
+            itemData[propName] = rawValue;
+          } else if (propConfig.defaultValue) {
+            itemData[propName] = propConfig.defaultValue;
+          }
         } else {
           itemData[propName] = propConfig.defaultValue || '';
         }
@@ -904,40 +693,68 @@ function generateSubComponent(
   mappings?: TokenMappings,
   options?: GenerationOptions
 ): string {
-  // We treat the component root as a Container/View for its internal structure
-  // The buildJSX will recurse into its children to build the tree.
-  // However, buildJSX expects to render "Component" nodes as <Name />.
-  // We need to temporarily "unwrap" the component semantic type for its own definition?
-  // NO. The ComponentIR *is* the root of the component.
-  // If we pass it to buildJSX, it will return <ComponentName /> which is infinite recursion.
-  
-  // solution: pass the children to buildJSX wrapped in a View (since Component acts as a View)
-  // OR: create a temporary ContainerIR that represents the implementation.
-  
-  // Optimize: Check if the component wraps a single child with the same name/structure
-  // This often happens in Figma (Instance -> Frame with same name)
-  let implementationNode: IRNode = {
-    ...component,
-    semanticType: 'Container',
-  } as any;
+  const filterUnusedProps = (
+    extractedProps: Record<string, { type: 'string' | 'image' | 'style'; value: string; defaultValue: string; property?: string }>,
+    jsx: string
+  ) => {
+    const filteredEntries = Object.entries(extractedProps).filter(([name]) => {
+      const usagePattern = new RegExp(`\\b${name}\\b`);
+      return usagePattern.test(jsx);
+    });
+    return Object.fromEntries(filteredEntries);
+  };
 
-  if (component.children && component.children.length === 1) {
-    const child = component.children[0];
-    const isRedundant = 
-      child.name === component.name || 
-      child.name === component.componentName ||
-      (child.boundingBox.width === component.boundingBox.width && child.boundingBox.height === component.boundingBox.height);
-      
-    if (isRedundant) {
-      // Use the child as the root for implementation
-      implementationNode = child;
+  const isRedundantWrapper = (parent: IRNode, child: IRNode): boolean => (
+    child.name === parent.name ||
+    ('componentName' in parent && child.name === parent.componentName) ||
+    (
+      child.boundingBox.width === parent.boundingBox.width &&
+      child.boundingBox.height === parent.boundingBox.height
+    )
+  );
+
+  const toImplementationContainer = (node: ComponentIR): IRNode => ({
+    ...node,
+    semanticType: 'Container',
+  } as IRNode);
+
+  const resolveImplementationNode = (node: ComponentIR): IRNode => {
+    let current: IRNode = node;
+    const visited = new Set<string>();
+
+    while (current.semanticType === 'Component') {
+      if (visited.has(current.id)) {
+        return toImplementationContainer(current as ComponentIR);
+      }
+      visited.add(current.id);
+
+      const componentNode = current as ComponentIR;
+      const componentChildren = componentNode.children || [];
+      if (componentChildren.length !== 1) {
+        return toImplementationContainer(componentNode);
+      }
+
+      const child = componentChildren[0];
+      if (!isRedundantWrapper(componentNode, child)) {
+        return toImplementationContainer(componentNode);
+      }
+
+      if (child.semanticType !== 'Component') {
+        return child;
+      }
+
+      current = child;
     }
-  } 
+
+    return current;
+  };
+
+  const implementationNode = resolveImplementationNode(component);
 
   // Ensure component has props extracted from its own sub-tree
   // We use extractProps again here to populate component.props and set propName on children
   const variations = (component as any).propsVariations || 
-                    options?.detectionResult?.components.find(c => c.componentName === component.componentName)?.propsVariations;
+                    options?.detectionResult?.components?.find(c => c.componentName === component.componentName)?.propsVariations;
                     
   const { props: extractedProps } = extractProps(implementationNode, stylesBundle, variations);
 
@@ -947,15 +764,6 @@ function generateSubComponent(
   
   // Check if we have semantic state (e.g., isSelected pattern)
   const semanticState = options?.semanticState;
-  const assetFailurePolicy = options?.assetFailurePolicy || 'fallback';
-  const contractProfile = options?.contractProfile;
-  const baseJSXOptions: import('./jsx-builder.js').BuildJSXOptions = {
-    assetFailurePolicy,
-    svgMode: contractProfile?.svgSupport.mode,
-    hasSvgIconProvider: !!contractProfile?.svgSupport.svgIconProviderPath,
-    diagnostics: options?.diagnosticsCollector,
-    unresolvedAssets: options?.unresolvedAssetsCollector,
-  };
   
   if (semanticState && semanticState.propType === 'boolean') {
     // Semantic state detected - generate isSelected-style interface
@@ -982,11 +790,6 @@ function generateSubComponent(
 
     // Mark text nodes with propName and optional containers with conditionalProp
     for (const [propName, info] of textPropsMap.entries()) {
-      // Skip malformed names to avoid invalid destructuring like "{ , isSelected }"
-      if (!propName || !/^[A-Za-z_]\w*$/.test(propName)) {
-        continue;
-      }
-
       const isOptional = !info.isPrimary;
       const comment = info.isPrimary ? 'Text to display' : `Optional ${propName} text`;
       propLines.push(`  /** ${comment} */\n  ${propName}${isOptional ? '?' : ''}: string;`);
@@ -1013,16 +816,15 @@ function generateSubComponent(
     propLines.push(`  /** Called when item is pressed */\n  onPress?: () => void;`);
 
     propsInterface = `interface ${interfaceName} {\n${propLines.join('\n')}\n}\n\n`;
-    const destructureParts = [...propNames, `${statePropName} = false`, 'onPress'];
-    propsDestructure = `{ ${destructureParts.join(', ')} }: ${interfaceName}`;
+    propsDestructure = `{ ${propNames.join(', ')}, ${statePropName} = false, onPress }: ${interfaceName}`;
 
     // Use buildJSX with semantic state options for proper rendering
     // This automatically handles gradients, images, and any other features
     const jsxOptions: import('./jsx-builder.js').BuildJSXOptions = {
-      ...baseJSXOptions,
       wrapperOverride: 'Pressable',
       stateProp: statePropName,
       selectedStyleSuffix: 'Selected',
+      availableProps: [...Object.keys(extractedProps), ...propNames, statePropName, 'onPress'],
       rootProps: [
         'onPress={onPress}',
         'accessibilityRole="button"',
@@ -1030,15 +832,9 @@ function generateSubComponent(
       ],
     };
 
-    const jsx = buildJSX(
-      implementationNode,
-      2,
-      options?.imagePathMap,
-      undefined,
-      stylesBundle,
-      mappings,
-      jsxOptions
-    );
+    const jsx = buildJSX(implementationNode, 2, options?.imagePathMap, undefined, stylesBundle, mappings, jsxOptions);
+    const filteredProps = filterUnusedProps(extractedProps, jsx);
+    component.props = filteredProps;
 
     return `${propsInterface}function ${component.componentName}(${propsDestructure}) {
   return (
@@ -1047,54 +843,6 @@ ${jsx}
 }`;
   }
   
-  if (Object.keys(extractedProps).length > 0) {
-    const propLines = Object.entries(extractedProps).map(([name, config]: [string, any]) => {
-      const type =
-        config.type === 'image'
-          ? 'ImageSourcePropType'
-          : config.type === 'style'
-          ? 'string'
-          : 'string';
-      const typeDoc = config.type === 'style' ? `Visual property: ${config.property}` : `Default: "${config.defaultValue}"`;
-      const optional = config.type === 'image' ? '?' : '';
-      return `  /** ${typeDoc} */\n  ${name}${optional}: ${type};`;
-    });
-    
-    const interfaceName = `${component.componentName}Props`;
-    propsInterface = `interface ${interfaceName} {\n${propLines.join('\n')}\n}\n\n`;
-
-    // Destructured props for the signature
-    const destructureParts = Object.entries(extractedProps).map(([name, config]: [string, any]) => {
-      if (config.type === 'image') {
-        const hash = config.defaultValue;
-        const resolvedPath = resolveAssetPathFromMap(options?.imagePathMap, hash);
-        if (resolvedPath) {
-          return `${name} = require("${resolvedPath}")`;
-        }
-        options?.unresolvedAssetsCollector?.push({
-          ref: hash,
-          nodeId: component.id,
-          semanticType: 'Image',
-          location: `${component.componentName}Props.${name}`,
-        });
-        options?.diagnosticsCollector?.push({
-          level: assetFailurePolicy === 'error' ? 'error' : 'warning',
-          code: 'ASSET_UNRESOLVED_SUBCOMPONENT_PROP_DEFAULT',
-          message: `Image prop "${name}" default could not be resolved for ref "${hash}".`,
-          location: component.componentName,
-        });
-        return name;
-      }
-      const defaultVal = config.defaultValue ? ` = "${escapeStringLiteral(config.defaultValue)}"` : '';
-      return `${name}${defaultVal}`;
-    });
-    propsDestructure = `{ ${destructureParts.join(', ')} }: ${interfaceName}`;
-  } else {
-    // Fallback if no props extracted
-    propsDestructure = '{}'; // Use empty object instead of any
-  }
-
-  // We use indent 1 because it's inside a function
   const jsx = buildJSX(
     implementationNode,
     2,
@@ -1102,9 +850,43 @@ ${jsx}
     undefined,
     stylesBundle,
     mappings,
-    baseJSXOptions
+    { availableProps: Object.keys(extractedProps) }
   );
-  
+  const filteredProps = filterUnusedProps(extractedProps, jsx);
+  component.props = filteredProps;
+
+  if (Object.keys(filteredProps).length > 0) {
+    const propLines = Object.entries(filteredProps).map(([name, config]: [string, any]) => {
+      const isOptional = isOptionalUnresolvedImageProp(config);
+      const type = (config.type === 'image' || config.type === 'style') ? (config.type === 'image' ? 'ImageSourcePropType' : 'string') : 'string';
+      const typeDoc = config.type === 'style' ? `Visual property: ${config.property}` : `Default: "${config.defaultValue}"`;
+      return `  /** ${typeDoc} */\n  ${name}${isOptional ? '?' : ''}: ${type};`;
+    });
+    
+    const interfaceName = `${component.componentName}Props`;
+    propsInterface = `interface ${interfaceName} {\n${propLines.join('\n')}\n}\n\n`;
+
+    // Destructured props for the signature
+    const destructureParts = Object.entries(filteredProps).map(([name, config]: [string, any]) => {
+      if (config.type === 'image') {
+        const hash = config.defaultValue;
+        if (options?.imagePathMap?.has(hash)) {
+          return `${name} = require("${options.imagePathMap.get(hash)}")`;
+        }
+        if (hash) {
+          return `${name} = { uri: "" } /* TODO: Image ref: ${hash} */`;
+        }
+        return name;
+      }
+      const defaultVal = config.defaultValue ? ` = "${config.defaultValue.replace(/"/g, '\\"')}"` : '';
+      return `${name}${defaultVal}`;
+    });
+    propsDestructure = `{ ${destructureParts.join(', ')} }: ${interfaceName}`;
+  } else {
+    // Fallback if no props extracted
+    component.props = {};
+    propsDestructure = '{}'; // Use empty object instead of any
+  }
 
 
 
@@ -1186,8 +968,7 @@ export function generateComponentMultiFile(
           templateNode,
           screen.stylesBundle,
           mappings,
-          options?.imagePathMap,
-          options
+          options?.imagePathMap
         );
         extractedComponents.push({
           path: `${outputDir}/${hint.componentName}.tsx`,
@@ -1206,14 +987,7 @@ export function generateComponentMultiFile(
         const itemCode = generateItemComponent(
           hint, 
           templateItem, 
-          (n, i) =>
-            buildJSX(n, i, options?.imagePathMap, undefined, screen.stylesBundle, mappings, {
-              assetFailurePolicy: options?.assetFailurePolicy || 'fallback',
-              svgMode: options?.contractProfile?.svgSupport.mode,
-              hasSvgIconProvider: !!options?.contractProfile?.svgSupport.svgIconProviderPath,
-              diagnostics: options?.diagnosticsCollector,
-              unresolvedAssets: options?.unresolvedAssetsCollector,
-            })
+          (n, i) => buildJSX(n, i, options?.imagePathMap, undefined, screen.stylesBundle, mappings)
         );
         extractedComponents.push({
           path: `${outputDir}/${hint.itemType}Component.tsx`,
@@ -1248,9 +1022,6 @@ export function generateComponentMultiFile(
     extractedComponents,
     tokens,
     unmappedTokens: basicResult.unmappedTokens,
-    diagnostics: basicResult.diagnostics,
-    unresolvedAssets: basicResult.unresolvedAssets,
-    contractProfileSummary: basicResult.contractProfileSummary,
   };
 }
 
@@ -1262,8 +1033,7 @@ function generateExtractedComponent(
   templateNode: IRNode,
   stylesBundle: StylesBundle,
   mappings: TokenMappings,
-  imagePathMap?: Map<string, string>,
-  options?: GenerationOptions
+  imagePathMap?: Map<string, string>
 ): string {
   const { componentName, propsVariations } = hint;
 
@@ -1283,37 +1053,11 @@ function generateExtractedComponent(
 
   const propsDestructure = propLines.length > 0 ? `{ ${Object.keys(extractedProps).join(', ')} }: ${componentName}Props` : '';
 
-  const extractedJSXOptions: import('./jsx-builder.js').BuildJSXOptions = {
-    assetFailurePolicy: options?.assetFailurePolicy || 'fallback',
-    svgMode: options?.contractProfile?.svgSupport.mode,
-    hasSvgIconProvider: !!options?.contractProfile?.svgSupport.svgIconProviderPath,
-    diagnostics: options?.diagnosticsCollector,
-    unresolvedAssets: options?.unresolvedAssetsCollector,
-  };
+  // Build imports from template node
+  const imports = buildImports(templateNode);
 
   // Build JSX from template node
-  const jsx = buildJSX(
-    templateNode,
-    2,
-    imagePathMap,
-    undefined,
-    stylesBundle,
-    mappings,
-    extractedJSXOptions
-  );
-
-  const extraImports = jsx.includes('<SvgIcon') ? ['SvgIcon'] : [];
-  const imports = buildImports(templateNode, extraImports, stylesBundle, {
-    importPrefix: options?.importPrefix || options?.contractProfile?.importPrefix || '@app',
-    stylePattern: options?.stylePattern || options?.contractProfile?.stylePattern || 'StyleSheet',
-    hasProjectTheme: options?.hasProjectTheme ?? false,
-    includeThemeImport: (options?.hasProjectTheme ?? false) && /(^|[^a-zA-Z0-9_])theme\./.test(jsx),
-    themeImportPath: options?.themeImportPath || options?.contractProfile?.themeImportPath,
-    scaleFunction: options?.scaleFunction || options?.contractProfile?.scaleImport?.name,
-    scaleFunctionPath: options?.scaleFunctionPath || options?.contractProfile?.scaleImport?.path,
-    svgIconImportPath: options?.contractProfile?.svgSupport.svgIconProviderPath,
-    diagnostics: options?.diagnosticsCollector,
-  });
+  const jsx = buildJSX(templateNode, 2, imagePathMap, undefined, stylesBundle, mappings);
 
   // Build styles from template node
   const { code: stylesCode } = buildStyles(templateNode, stylesBundle, mappings);

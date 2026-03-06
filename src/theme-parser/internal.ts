@@ -1,7 +1,7 @@
 import { Project, SourceFile, SyntaxKind, Node, ObjectLiteralExpression } from 'ts-morph';
 import { existsSync } from 'fs';
 import { resolve, join, basename } from 'path';
-import { pathComplexity, normalizeHex } from './core/utils/path-utils.js';
+import { pathComplexity, normalizeHex } from '../core/utils/path-utils.js';
 
 /**
  * Color token from theme

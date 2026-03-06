@@ -5,21 +5,13 @@
  * to avoid filename conflicts.
  */
 
-import type { Manifest, ManifestCategory } from '../figma-workspace.js';
-import { sanitizeComponentName } from '../core/generation/utils.js';
+import type { Manifest, ManifestCategory } from '../workspace/index.js';
+import { sanitizeComponentName } from '../core/shared/naming.js';
 
 export interface ResolvedName {
   name: string;
   isUpdate: boolean;  // true if reusing existing name
   previousName?: string; // name that was previously used for this nodeId
-}
-
-function isEphemeralTestName(name: string): boolean {
-  return (
-    /^E2E[A-Za-z0-9]*$/.test(name) ||
-    name === 'DebugScreen' ||
-    name === 'TransportHealthcheck'
-  );
 }
 
 /**
@@ -86,32 +78,6 @@ export function resolveComponentName(
   }
 
   if (existingEntry) {
-    // Auto-heal temporary test/debug names when user did not provide an explicit override.
-    // This prevents polluted manifests from locking future generations to synthetic names.
-    if (isEphemeralTestName(existingEntry.name)) {
-      const sanitized = sanitizeComponentName(baseName);
-      const existingNames = new Set(
-        Object.values(categoryEntries)
-          .filter(entry => entry.nodeId !== nodeId)
-          .map(entry => entry.name)
-      );
-
-      let recoveredName = sanitized;
-      let counter = 2;
-      while (existingNames.has(recoveredName)) {
-        recoveredName = `${sanitized}${counter}`;
-        counter++;
-      }
-
-      if (recoveredName !== existingEntry.name) {
-        return {
-          name: recoveredName,
-          isUpdate: false,
-          previousName: existingEntry.name,
-        };
-      }
-    }
-
     // Reuse existing name for updates
     return {
       name: existingEntry.name,

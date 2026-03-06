@@ -17,16 +17,19 @@ export type { CacheKey, CacheEntry, CacheOptions } from './cache.js';
 export { defaultConventions, matchesPattern, shouldIgnoreNode, isComponent } from './config.js';
 export type { FigmaConventions } from './config.js';
 
-// Assets
-export { downloadImage, downloadAssets, saveAssetManifest } from './assets.js';
-export type { DownloadedAsset, AssetDownloadOptions } from './assets.js';
+// URL parsing
+export {
+  normalizeNodeId,
+  parseFigmaUrl,
+  extractNodeIdFromUrl,
+  normalizeFigmaUrl,
+} from './url.js';
 
 // Core types
 export type {
   ParsedFigmaUrl,
   Color,
   GradientStop,
-  GradientHandle,
   Gradient,
   BoundingBox,
   Padding,

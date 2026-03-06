@@ -39,14 +39,6 @@ export interface GradientStop {
 }
 
 /**
- * Gradient handle position in normalized node coordinates (can be outside 0..1)
- */
-export interface GradientHandle {
-  x: number;
-  y: number;
-}
-
-/**
  * Gradient definition
  */
 export interface Gradient {
@@ -56,8 +48,6 @@ export interface Gradient {
   stops: GradientStop[];
   /** Angle in degrees (for linear gradients) */
   angle?: number;
-  /** Raw Figma handle positions (for accurate direction/shape reconstruction) */
-  handles?: GradientHandle[];
 }
 
 /**

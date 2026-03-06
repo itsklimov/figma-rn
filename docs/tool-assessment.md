@@ -1,43 +1,98 @@
-# Figma-RN Tool Assessment
+# Tool Assessment
 
-## 1. Legacy Tools Comparison: `generate_screen` vs `generate_flow`
+## Current Runtime Contract
 
-Between the two legacy tools, **`generate_screen` is currently superior** for production-grade work.
+`figma-rn` exposes one MCP tool in production runtime:
 
-| Feature | `generate_screen` (Legacy) | `generate_flow` (Legacy) |
-| :--- | :--- | :--- |
-| **Focus** | Depth & Polish (Single Component) | Breadth & Structure (Multi-screen) |
-| **Output Quality** | High: Self-contained folder with screenshot, tokens, and assets. | Medium: Scaffolds navigation but may need more cleanup. |
-| **Validation** | Built-in screenshot capture and LLM review checklist. | Summary-based; hard to verify all screens at once visually. |
-| **Persistence** | Categorized into `.figma/screens`, `/modals`, etc. | Flatter file structure, usually direct to project folders. |
+- `get_screen`
 
-**Verdict**: `generate_screen` is better because it ensures each component is "correct" before moving to the next. The "one URL = one folder" philosophy provides a safer, more verifiable developer experience.
+This is the only supported generation entrypoint.
 
----
+## Why `get_screen` is canonical
 
-## 2. The New Architecture: `get_screen`
+- Uses a staged pipeline (`normalize -> layout -> recognize -> detect -> map -> generate`).
+- Produces deterministic `.figma/{category}/{name}` output.
+- Integrates with project token discovery and mapping.
+- Supports asset extraction and screenshot capture in the same flow.
 
-The refactoring move from root-level monolithic scripts to structured modules (`src/core`, `src/edge`, `src/api`) is a massive leap forward.
+## Historical Context
 
-### Why `get_screen` is the "Future":
-- **Intermediate Representation (IR)**: Unlike legacy tools that try to generate code directly from raw Figma JSON, `get_screen` uses a **ScreenIR** layer. This allows for complex transformations (like layout detection and semantic recognition) to happen *before* a single line of code is written.
-- **Multi-File Extraction**: It automatically identifies repeated patterns and extracts them into sub-components, following React best practices.
-- **Token Mapping**: It matches Figma colors/spacing against your *actual* project theme tokens, avoiding hardcoded hex values.
+`generate_screen` and `generate_flow` were legacy handlers from older architecture iterations. They are removed from runtime contract and retained only as historical references in commit history.
 
----
+## Assessment Criteria Going Forward
 
-## 3. Assessment Against the "Ideal One-Shot Tool"
+- Contract correctness: `tools/list` must return only `get_screen`.
+- Layering discipline: `recognize/layout/detection` must not import `generation`.
+- Regression safety: baseline diff for `2256:25238` remains stable unless change is intentional.
+- Documentation fidelity: docs must not advertise removed legacy tools.
+- Validation must stay project-agnostic: compare Figma/API input structure to generated output, not only behavior inside one concrete app codebase.
 
-An ideal one-shot Figma-to-code tool should meet three criteria:
-1.  **Architectural Integrity** (Represented by `get_screen`)
-2.  **Rich Validation & Assets** (Represented by `generate_screen`)
-3.  **Semantic Intelligence** (Deep recognition of forms, lists, etc.)
+## Improvement Bits
 
-### Current Gap Analysis:
-*   **Legacy (`generate_screen`)** has the **Assets & Validation**.
-*   **New (`get_screen`)** has the **Architecture & Clean Code**.
+### Bit 1: Root Public API Boundary
 
-**Final Recommendation**:
-You should prioritize **`get_screen`** as your primary tool. It produces more maintainable code and respects your existing theme. However, it would reach "Ideal Status" by incorporating the rich verification features (screenshot embeds and detailed review checklists) that currently exist in the legacy `generate_screen` handler.
+- Problem: root prop extraction traverses nested `Component` / `Repeater` internals and pollutes the main screen interface with implementation-level props.
+- Impact: one-shot LLM handoff gets a noisy public surface with false top-level inputs.
+- Validation:
+  - Unit: root screen props must exclude nested component-only props.
+  - Live: compare `publicApi.props.length` and generic prop names on `8136:48458` before/after.
 
-The refactoring to "Structured Folders" has successfully decoupled the **Reasoning** (Core) from the **IO/Delivery** (Edge), making the entire system significantly more efficient and easier to evolve.
+### Bit 2: Semantic Prop Naming Gaps
+
+- Problem: content like `18:00`, `90 мин`, `4.6`, `(254)` still degrades into `style1800`, `style90`, `style46`, `style254`.
+- Impact: generated props lose intent and force extra LLM interpretation.
+- Validation:
+  - Unit: content-pattern and generation tests for time, duration, rating, review count, address.
+  - Live: verify noisy `style*` props decrease without losing rendered values.
+
+### Bit 3: Theme Resolution Confidence
+
+- Problem: unresolved theme integration still leaves `theme.` references plus warnings.
+- Impact: generated code can be structurally correct but not immediately portable into the target codebase.
+- Validation:
+  - Unit: resolve only real exported theme modules.
+  - Live: compare `integration.theme.mode` and warning count before/after.
+
+### Bit 4: Manual Validation Loop
+
+- Every behavior change must be checked in two ways:
+  - Local regression: `bun run test`
+  - Live regression: `FIGMA_LIVE_TESTS=1 bunx vitest run tests/e2e/get-screen-debug.test.ts`
+- Before/after comparison must use the same Figma node and compare:
+  - raw/semantic input counts from Figma/IR
+  - generated JSX/code structure
+  - validation/fidelity deltas
+- Example live fixture:
+  - `https://www.figma.com/design/wQQDVitfu2TuNuAXWOXRB1/MARAFET--Copy-?node-id=8136-48458&m=dev`
+
+### Bit 5: Scope-Safe Prop Forwarding
+
+- Problem: parent JSX can forward child component props that are not defined in the current component scope, producing plausible-looking but uncompilable identifiers.
+- Impact: generated output passes fidelity checks visually but fails one-shot handoff because LLM receives invalid TSX.
+- Validation:
+  - Unit: root screen must not emit `<Child label={label} />` when `label` is not part of the root API.
+  - Live: inspect generated code for undefined forwarded identifiers after `get_screen`.
+
+### Bit 6: Decorative Vector Asset Isolation
+
+- Problem: generic vector-derived shapes (`Union`, `Ellipse`, `Line`, `Vector`) can leak into the public API as image props instead of staying internal implementation assets.
+- Impact: one-shot LLM handoff gets noisy, non-semantic inputs and may preserve decorative implementation details as external props.
+- Validation:
+  - Unit: generic vector-exported image assets must not be extracted as props.
+  - Live: `publicApi.props` for `8136:48458` must stay limited to semantic text inputs after asset export improvements.
+
+### Bit 7: Remaining Signal Quality Work
+
+- Problem: correctness is substantially better, but generated subcomponents still contain generic names and sparse repeater data in some paths.
+- Impact: LLM still has to infer intent for `element*`-style props and under-specified repeated items.
+- Validation:
+  - Unit: improve semantic naming and repeater extraction coverage without reintroducing root API noise.
+  - Live: compare `publicApi`, repeated item data richness, and generic prop counts before/after on `8136:48458`.
+
+### Bit 8: Non-Latin Identifier Fidelity
+
+- Problem: meaningful non-Latin layer names and text content can collapse to generic fallbacks like `element`, even when the content itself is semantically rich.
+- Impact: one-shot LLM handoff loses intent on multilingual designs and has to reconstruct prop meaning from surrounding JSX.
+- Validation:
+  - Unit: `toValidIdentifier()` must transliterate non-Latin names into stable ASCII identifiers.
+  - Live: `genericInterfaces.length` should trend to zero on `8136:48458` without regressing `publicApi` or runtime validation.

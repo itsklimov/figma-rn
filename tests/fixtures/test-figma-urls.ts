@@ -17,11 +17,8 @@ const __dirname = dirname(__filename);
 config({ path: resolve(__dirname, '../../.env') });
 
 // Base URL for test file
-const DEFAULT_TEST_FILE_KEY = 'TESTFILEKEY1234567890AB';
-const DEFAULT_TEST_FILE_NAME = 'E2E-Design-File';
-export const TEST_FILE_KEY = process.env.FIGMA_E2E_FILE_KEY || DEFAULT_TEST_FILE_KEY;
-export const TEST_FILE_NAME = process.env.FIGMA_E2E_FILE_NAME || DEFAULT_TEST_FILE_NAME;
-export const MAIN_SCREEN_NODE_ID = '7621-71846';
+export const TEST_FILE_KEY = 'BlgBBt56cEbSVY2xiSXqkp';
+export const TEST_FILE_NAME = 'MARAFET-dev2';
 export const BASE_URL = `https://www.figma.com/design/${TEST_FILE_KEY}/${TEST_FILE_NAME}`;
 
 /**
@@ -36,7 +33,10 @@ export function createFigmaUrl(nodeId: string): string {
  */
 export const TEST_URLS = {
   // Main test screen
-  mainScreen: createFigmaUrl(MAIN_SCREEN_NODE_ID),
+  mainScreen: createFigmaUrl('2804-44718'),
+
+  // Complex live screen used for real-world regression checks
+  complexLaunchScreen: 'https://www.figma.com/design/wQQDVitfu2TuNuAXWOXRB1/MARAFET--Copy-?node-id=8136-48458&m=dev',
 
   // Alternative nodes for testing different patterns
   // TODO: Add after exploring Figma file structure
@@ -46,78 +46,6 @@ export const TEST_URLS = {
   // bottomSheet: createFigmaUrl('xxx-xxx'),
   // smallComponent: createFigmaUrl('xxx-xxx'),
 };
-
-export interface LiveE2ECase {
-  id: string;
-  figmaUrl: string;
-  componentName?: string;
-  expectedResolvedName: string;
-  category: 'screens' | 'modals' | 'sheets' | 'components' | 'icons';
-  minAssets: number;
-  maxTodos: number;
-  maxPlaceholders: number;
-}
-
-/**
- * Curated live E2E matrix used for end-to-end quality validation.
- * These URLs are expected to be stable enough for repeatable checks.
- */
-export const LIVE_E2E_CASES: LiveE2ECase[] = [
-  {
-    id: 'screen-main',
-    figmaUrl: createFigmaUrl('7621-71846'),
-    expectedResolvedName: 'GlavnayaKlient',
-    category: 'screens',
-    minAssets: 8,
-    maxTodos: 8,
-    maxPlaceholders: 10,
-  },
-  {
-    id: 'screen-1669-21091',
-    figmaUrl: createFigmaUrl('1669-21091'),
-    expectedResolvedName: 'Session',
-    category: 'screens',
-    minAssets: 10,
-    maxTodos: 20,
-    maxPlaceholders: 35,
-  },
-  {
-    id: 'screen-2453-67667',
-    figmaUrl: createFigmaUrl('2453-67667'),
-    expectedResolvedName: 'Notifications',
-    category: 'screens',
-    minAssets: 1,
-    maxTodos: 6,
-    maxPlaceholders: 2,
-  },
-  {
-    id: 'screen-868-33060',
-    figmaUrl: createFigmaUrl('868-33060'),
-    expectedResolvedName: 'HomeWithoutVisit',
-    category: 'screens',
-    minAssets: 8,
-    maxTodos: 8,
-    maxPlaceholders: 12,
-  },
-  {
-    id: 'component-868-33071',
-    figmaUrl: createFigmaUrl('868-33071'),
-    expectedResolvedName: 'CardMaster',
-    category: 'components',
-    minAssets: 4,
-    maxTodos: 8,
-    maxPlaceholders: 8,
-  },
-  {
-    id: 'modal-866-30573',
-    figmaUrl: createFigmaUrl('866-30573'),
-    expectedResolvedName: 'SummarySheetLocation',
-    category: 'modals',
-    minAssets: 2,
-    maxTodos: 6,
-    maxPlaceholders: 2,
-  },
-];
 
 /**
  * Invalid URLs for error tests
@@ -166,16 +94,6 @@ export function requireFigmaToken(): string {
     );
   }
   return token;
-}
-
-export function requireLiveE2EConfig(): void {
-  if (!process.env.FIGMA_E2E_FILE_KEY) {
-    throw new Error(
-      'FIGMA_E2E_FILE_KEY not found.\n' +
-      'Set it in .env to run live E2E:\n' +
-      'FIGMA_E2E_FILE_KEY=your_figma_file_key'
-    );
-  }
 }
 
 /**

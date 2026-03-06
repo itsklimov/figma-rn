@@ -4,8 +4,10 @@
 
 import type { StylesBundle, ExtractedStyle, LayoutMeta, IRNode } from '../types.js';
 import type { TokenMappings } from '../mapping/token-matcher.js';
-import { formatInteger, formatSmart, formatFloat } from './utils.js';
-import { normalizeHex } from '../utils/path-utils.js';
+import { formatInteger, formatSmart, formatFloat } from '../shared/number-format.js';
+import { mapColor } from '../mapping/color-map.js';
+
+export { mapColor };
 
 /**
  * Shadow size categories based on blur radius
@@ -82,23 +84,6 @@ function formatDim(val: string | number, scaleFn?: string): string {
    return String(val);
 }
 
-
-/**
- * Map a color value using token mappings
- * Returns theme path if mapped, raw value otherwise
- * All colors are normalized to uppercase for consistent lookup
- */
-export function mapColor(hex: string, mappings: TokenMappings): { value: string; mapped: boolean } {
-  const colorMappings = mappings.colors || {};
-  const normHex = normalizeHex(hex);
-
-  const mapped = colorMappings[normHex];
-  if (mapped && mapped !== normHex) {
-    return { value: mapped, mapped: true };
-  }
-
-  return { value: `'${normHex}'`, mapped: false };
-}
 
 /**
  * Map a numeric value (spacing/radius) using token mappings
@@ -245,6 +230,7 @@ function buildStyleProps(
   const scale = options?.scaleFunction;
   const hasProjectTheme = options?.hasProjectTheme ?? false;
   const sc = (val: string | number) => applyScaling(val, scale);
+  const themeTodo = (mapped: boolean) => !mapped && !suppress && hasProjectTheme ? ' // TODO: map to theme' : '';
 
   // 1. Layout props (if container/card)
   if (layout) {
@@ -330,7 +316,7 @@ function buildStyleProps(
   }
   if (style.borderColor) {
     const { value, mapped } = mapColor(style.borderColor, mappings);
-    lines.push(`    borderColor: ${value},${!mapped && !suppress ? ' // TODO: map to theme' : ''}`);
+    lines.push(`    borderColor: ${value},${themeTodo(mapped)}`);
     if (!mapped) unmapped.colors.add(style.borderColor);
   }
 
@@ -338,7 +324,7 @@ function buildStyleProps(
   if (style.borderRadius !== undefined) {
     if (typeof style.borderRadius === 'number') {
       const { value, mapped } = mapNumber(style.borderRadius, 'radii', mappings);
-      lines.push(`    borderRadius: ${mapped ? value : sc(value)},${!mapped && !suppress ? ' // TODO: map to theme' : ''}`);
+      lines.push(`    borderRadius: ${mapped ? value : sc(value)},${themeTodo(mapped)}`);
       if (!mapped) unmapped.radii.add(style.borderRadius);
     } else {
       // Individual corners
@@ -371,7 +357,7 @@ function buildStyleProps(
   const isTextNode = style.typography != null;
   if (style.backgroundColor && !style.backgroundGradient && !isTextNode) {
     const { value, mapped } = mapColor(style.backgroundColor, mappings);
-    lines.push(`    backgroundColor: ${value},${!mapped && !suppress ? ' // TODO: map to theme' : ''}`);
+    lines.push(`    backgroundColor: ${value},${themeTodo(mapped)}`);
     if (!mapped) unmapped.colors.add(style.backgroundColor);
   }
 
@@ -402,7 +388,7 @@ function buildStyleProps(
       } else {
         // 3. No match - generate raw shadow values
         const { value: shadowColor, mapped } = mapColor(color, mappings);
-        lines.push(`    shadowColor: ${shadowColor},${!mapped && !suppress ? ' // TODO: map to theme' : ''}`);
+        lines.push(`    shadowColor: ${shadowColor},${themeTodo(mapped)}`);
         lines.push(`    shadowOffset: { width: ${formatSmart(offsetX)}, height: ${formatSmart(offsetY)} },`);
         lines.push(`    shadowOpacity: 1,`);
         lines.push(`    shadowRadius: ${formatSmart(blur)},`);
@@ -437,7 +423,7 @@ function buildStyleProps(
     if (textAlign && textAlign !== 'left') lines.push(`    textAlign: '${textAlign}',`);
     if (color) {
       const { value, mapped } = mapColor(color, mappings);
-      lines.push(`    color: ${value},${!mapped && !suppress ? ' // TODO: map to theme' : ''}`);
+      lines.push(`    color: ${value},${themeTodo(mapped)}`);
       if (!mapped) unmapped.colors.add(color);
     }
   }
@@ -452,12 +438,8 @@ function buildStyleProps(
 function collectLayouts(
   node: IRNode,
   map: Map<string, LayoutWithContext>,
-  parentType?: 'row' | 'column' | 'stack' | 'absolute',
-  path: Set<string> = new Set()
+  parentType?: 'row' | 'column' | 'stack' | 'absolute'
 ): void {
-  if (path.has(node.id)) return;
-  path.add(node.id);
-
   // Check at runtime for nodes with layout and children (now includes Button/Icon/Image)
   if ('layout' in node && node.layout && 'children' in node && node.children) {
     // Store layout with parent context
@@ -468,11 +450,9 @@ function collectLayouts(
 
     // Recurse with OUR type as parent
     for (const child of node.children) {
-      collectLayouts(child, map, node.layout.type, path);
+      collectLayouts(child, map, node.layout.type);
     }
   }
-
-  path.delete(node.id);
 }
 
 /**

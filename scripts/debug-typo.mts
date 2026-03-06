@@ -1,17 +1,12 @@
-import { loadAllProjectTokens } from '../src/figma-workspace.js';
+import { loadAllProjectTokens } from '../src/workspace/index.js';
+import { matchTokens } from '../src/core/mapping/token-matcher.js';
+import { createEmptyStylesBundle } from '../src/core/styles/extractor.js';
 
-const projectRoot = process.argv[2] || process.env.DEBUG_PROJECT_ROOT;
-if (!projectRoot) {
-  console.error(
-    'Usage: npx tsx scripts/debug-typo.mts <project-root>\n' +
-      'Or set DEBUG_PROJECT_ROOT=/path/to/project'
-  );
-  process.exit(1);
-}
+const MARAFET_ROOT = '/Users/its/Documents/Dev/code/marafet/marafet-frontend';
 
 async function verifyTypography() {
-  console.log('Loading tokens from:', projectRoot);
-  const projectTokens = await loadAllProjectTokens(projectRoot);
+  console.log('Loading tokens from:', MARAFET_ROOT);
+  const projectTokens = await loadAllProjectTokens(MARAFET_ROOT);
 
   if (!projectTokens || !projectTokens.typography) {
     console.error('No typography tokens found!');

@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "server",
+  "dolt_database": "figma_rn",
+  "project_id": "ddc8cc14-7f97-4e01-b914-e409301e81b3"
+}

@@ -24,6 +24,7 @@ import { mkdir, writeFile, readFile, appendFile, rm } from 'fs/promises';
 import { join, dirname } from 'path';
 // existsSync removed - now using glob for recursive search
 import { glob } from 'glob';
+import { extractNodeIdFromUrl, normalizeFigmaUrl } from '../api/url.js';
 
 // ============================================================================
 // Types
@@ -137,32 +138,6 @@ export interface ElementMeta {
     /** Confidence */
     confidence: number;
   }>;
-  /** Contract diagnostics emitted during generation */
-  diagnostics?: Array<{
-    level: 'info' | 'warning' | 'error';
-    code: string;
-    message: string;
-    location?: string;
-  }>;
-  /** Unresolved asset references */
-  unresolvedAssets?: Array<{
-    ref: string;
-    nodeId: string;
-    semanticType: string;
-    location?: string;
-  }>;
-  /** Snapshot of resolved project profile */
-  profileSnapshot?: {
-    importPrefix: string;
-    stylePattern: 'useTheme' | 'StyleSheet' | 'unistyles';
-    themeImportPath?: string;
-    scaleImport?: { name: string; path: string };
-    safeAreaAvailable: boolean;
-    svgMode: 'component' | 'runtime' | 'raster';
-    svgIconProviderPath?: string;
-    relativeAssetImportsOnly: boolean;
-    strictContracts: boolean;
-  };
 }
 
 /**
@@ -315,29 +290,14 @@ const CATEGORY_FOLDERS: Record<ManifestCategory, string> = {
  * Normalize URL
  */
 export function normalizeUrl(url: string): string {
-  try {
-    const parsed = new URL(url);
-    const nodeId = parsed.searchParams.get('node-id');
-    return `${parsed.origin}${parsed.pathname}?node-id=${nodeId}`;
-  } catch {
-    return url;
-  }
+  return normalizeFigmaUrl(url);
 }
 
 /**
  * Extract node-id
  */
 export function extractNodeId(url: string): string {
-  try {
-    const parsed = new URL(url);
-    const nodeId = parsed.searchParams.get('node-id') || 'unknown';
-    // Convert to canonical colon format
-    return nodeId.replace(/-/g, ':');
-  } catch {
-    const match = url.match(/node-id=([^&]+)/);
-    const nodeId = match ? match[1] : 'unknown';
-    return nodeId.replace(/-/g, ':');
-  }
+  return extractNodeIdFromUrl(url, 'unknown');
 }
 
 /**
@@ -765,9 +725,9 @@ export async function loadAllProjectTokens(projectRoot: string): Promise<any> {
     return null;
   }
 
-  const { extractProjectTokens, mergeProjectTokens } = await import('./core/mapping/theme-extractor.js');
+  const { extractProjectTokens, mergeProjectTokens } = await import('../core/mapping/theme-extractor.js');
   
-  console.error(`📦 Loading tokens from ${config.tokenFiles.length} file(s)...`);
+  console.log(`📦 Loading tokens from ${config.tokenFiles.length} file(s)...`);
   
   const tokenSets = await Promise.all(
     config.tokenFiles.map(async (file) => {
@@ -1152,9 +1112,6 @@ export async function registerGeneration(
     interactions?: ElementMeta['interactions'];
     componentGroups?: ElementMeta['componentGroups'];
     previousName?: string;
-    diagnostics?: ElementMeta['diagnostics'];
-    unresolvedAssets?: ElementMeta['unresolvedAssets'];
-    profileSnapshot?: ElementMeta['profileSnapshot'];
   } = {}
 ): Promise<GenerationResult> {
   // Get manifest
@@ -1172,15 +1129,8 @@ export async function registerGeneration(
     delete manifest[existing.category][nodeId];
   }
 
-  // Handle cleanup if renamed.
-  // Important: avoid deleting assets when the rename differs only by case
-  // on case-insensitive filesystems (e.g., default macOS).
-  const isCaseOnlyRename =
-    !!options.previousName &&
-    options.previousName !== name &&
-    options.previousName.toLowerCase() === name.toLowerCase();
-
-  if (options.previousName && options.previousName !== name && !isCaseOnlyRename) {
+  // Handle cleanup if renamed
+  if (options.previousName && options.previousName !== name) {
     const oldFolder = join(projectRoot, FIGMA_DIR, CATEGORY_FOLDERS[category], options.previousName);
     try {
       console.error(`🗑️ Cleaning up old component folder: ${oldFolder}`);
@@ -1221,9 +1171,6 @@ export async function registerGeneration(
     tokensExtracted: 0,
     interactions: options.interactions,
     componentGroups: options.componentGroups,
-    diagnostics: options.diagnostics,
-    unresolvedAssets: options.unresolvedAssets,
-    profileSnapshot: options.profileSnapshot,
   };
 
   await saveElementMeta(elementFolder, meta);
