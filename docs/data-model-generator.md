@@ -291,7 +291,7 @@ Module can be integrated as a new MCP tool:
 
 Run examples:
 ```bash
-npx tsx examples/data-model-example.ts
+bunx tsx examples/data-model-example.ts
 ```
 
 Output shows:

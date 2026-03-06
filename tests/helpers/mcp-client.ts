@@ -29,35 +29,20 @@ export interface MCPResponse {
   };
 }
 
+export type MCPToolContent =
+  | {
+      type: 'text';
+      text: string;
+    }
+  | {
+      type: 'image';
+      data: string;
+      mimeType: string;
+    };
+
 export interface MCPToolResult {
-  content: Array<{
-    type: 'text';
-    text: string;
-  }>;
+  content: MCPToolContent[];
   isError?: boolean;
-}
-
-export interface GenerateScreenParams {
-  figmaUrl: string;
-  screenName?: string;
-  projectRoot?: string;
-  options?: {
-    generateTypes?: boolean;
-    generateHooks?: boolean;
-    detectAnimations?: boolean;
-  };
-}
-
-export interface GenerateFlowParams {
-  screens: Array<{
-    figmaUrl: string;
-    screenName: string;
-  }>;
-  options?: {
-    generateNavigation?: boolean;
-    generateSharedTypes?: boolean;
-    generateIndex?: boolean;
-  };
 }
 
 export interface GetScreenParams {
@@ -67,10 +52,6 @@ export interface GetScreenParams {
   outputDir?: string;
   projectRoot?: string;
   category?: string;
-  strictContracts?: boolean;
-  assetFailurePolicy?: 'fallback' | 'error';
-  svgMode?: 'auto' | 'component' | 'runtime' | 'raster';
-  profileMode?: 'auto' | 'portable';
 }
 
 export class MCPClient {
@@ -82,7 +63,6 @@ export class MCPClient {
   }>();
   private buffer = '';
   private serverReady = false;
-  private readonly requestTimeoutMs = Number(process.env.MCP_REQUEST_TIMEOUT_MS || 120000);
 
   /**
    * Starts MCP server and waits for readiness
@@ -112,7 +92,10 @@ export class MCPClient {
     this.process.stderr?.on('data', (data: Buffer) => {
       const message = data.toString();
       // Detect server readiness from stderr messages
-      if (message.includes('Marafet Figma MCP Server')) {
+      if (
+        message.includes('react-native-figma-generator') ||
+        message.includes('Available tools:')
+      ) {
         this.serverReady = true;
       }
       // For debugging, uncomment:
@@ -209,13 +192,13 @@ export class MCPClient {
         }
       });
 
-      // Figma API responses can be slow for large nodes; keep timeout configurable.
+      // 60 second timeout (API calls can be slow)
       setTimeout(() => {
         if (this.pendingRequests.has(id)) {
           this.pendingRequests.delete(id);
           reject(new Error(`Request timeout: ${method}`));
         }
-      }, this.requestTimeoutMs);
+      }, 60000);
     });
   }
 
@@ -231,38 +214,6 @@ export class MCPClient {
 
     const result = response.result as { tools: Array<{ name: string; description: string }> };
     return result.tools;
-  }
-
-  /**
-   * Calls generate_screen tool
-   */
-  async generateScreen(params: GenerateScreenParams): Promise<MCPToolResult> {
-    const response = await this.sendRequest('tools/call', {
-      name: 'generate_screen',
-      arguments: params,
-    });
-
-    if (response.error) {
-      throw new Error(response.error.message);
-    }
-
-    return response.result as MCPToolResult;
-  }
-
-  /**
-   * Calls generate_flow tool (deprecated - commented out in server)
-   */
-  async generateFlow(params: GenerateFlowParams): Promise<MCPToolResult> {
-    const response = await this.sendRequest('tools/call', {
-      name: 'generate_flow',
-      arguments: params,
-    });
-
-    if (response.error) {
-      throw new Error(response.error.message);
-    }
-
-    return response.result as MCPToolResult;
   }
 
   /**

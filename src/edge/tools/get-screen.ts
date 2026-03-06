@@ -9,6 +9,7 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { FigmaClient } from '../../api/client.js';
 import { retryOnError } from '../../api/errors.js';
 import { transformNode } from '../../api/transformers.js';
+import { parseFigmaUrl } from '../../api/url.js';
 import { transformToScreenIR } from '../../core/pipeline.js';
 import { runDetectors } from '../../core/detection/index.js';
 import { matchTokens, createEmptyMappings, type TokenMappings } from '../../core/mapping/token-matcher.js';
@@ -17,47 +18,21 @@ import {
   generateComponent, 
   type MultiFileResult 
 } from '../../core/generation/index.js';
-import {
-  resolveProjectProfile,
-  validateGeneratedCodeContracts,
-  type ContractDiagnostic,
-  type ContractProfileSummary,
-  type UnresolvedAssetRef,
-} from '../../core/contracts/index.js';
 import type { ScreenIR } from '../../core/types.js';
-import { downloadAssets } from '../asset-downloader.js';
+import type { DetectionResult } from '../../core/detection/types.js';
+import { downloadAssets, type DownloadedAsset } from '../asset-downloader.js';
 import { resolveComponentName } from '../name-resolver.js';
 import { writeGeneratedFiles, type WriteResult } from '../file-writer.js';
 import {
+  type FigmaConfig,
   getOrCreateManifest,
   loadAllProjectTokens,
   refreshFigmaConfig,
   getOrCreateFigmaConfig,
   type ManifestCategory,
-} from '../../figma-workspace.js';
-import { join, resolve } from 'path';
-import { mkdir } from 'fs/promises';
-
-/**
- * Parse Figma URL to extract fileKey and nodeId
- */
-function parseFigmaUrl(figmaUrl: string): { fileKey: string; nodeId: string } | null {
-  // Supported formats:
-  // - https://www.figma.com/file/{fileKey}/...?node-id={nodeId}
-  // - https://www.figma.com/design/{fileKey}/...?node-id={nodeId}
-
-  const fileKeyMatch = figmaUrl.match(/figma\.com\/(file|design)\/([a-zA-Z0-9]+)/);
-  const nodeIdMatch = figmaUrl.match(/node-id=([^&]+)/);
-
-  if (!fileKeyMatch || !nodeIdMatch) {
-    return null;
-  }
-
-  const fileKey = fileKeyMatch[2];
-  const nodeId = decodeURIComponent(nodeIdMatch[1]).replace(/-/g, ':');
-
-  return { fileKey, nodeId };
-}
+} from '../../workspace/index.js';
+import { join, relative, resolve } from 'path';
+import { mkdir, readFile, stat } from 'fs/promises';
 
 /**
  * Tool definition for MCP server
@@ -104,11 +79,11 @@ Returns:
       },
       outputDir: {
         type: 'string',
-        description: 'Deprecated path hint for legacy clients. Files are persisted in projectRoot/.figma/',
+        description: 'Output directory for generated files (default: "components")',
       },
       projectRoot: {
         type: 'string',
-        description: 'Project root for .figma workspace (default: current working directory)',
+        description: 'Project root directory (default: current working directory)',
       },
       category: {
         type: 'string',
@@ -122,25 +97,6 @@ Returns:
       scaleFunction: {
         type: 'string',
         description: 'Responsive scaling function name (e.g., "scale") (default: from figma.config.json)',
-      },
-      strictContracts: {
-        type: 'boolean',
-        description: 'Enable strict contract validation (default: true)',
-      },
-      assetFailurePolicy: {
-        type: 'string',
-        description: 'How unresolved assets are handled (default: fallback)',
-        enum: ['fallback', 'error'],
-      },
-      svgMode: {
-        type: 'string',
-        description: 'SVG handling mode (default: auto)',
-        enum: ['auto', 'component', 'runtime', 'raster'],
-      },
-      profileMode: {
-        type: 'string',
-        description: 'Project profile mode (default: auto)',
-        enum: ['auto', 'portable'],
       },
     },
     required: ['figmaUrl'],
@@ -159,10 +115,6 @@ export interface GetScreenArgs {
   category?: string;
   suppressTodos?: boolean;
   scaleFunction?: string;
-  strictContracts?: boolean;
-  assetFailurePolicy?: 'fallback' | 'error';
-  svgMode?: 'auto' | 'component' | 'runtime' | 'raster';
-  profileMode?: 'auto' | 'portable';
 }
 
 /**
@@ -171,15 +123,523 @@ export interface GetScreenArgs {
 export interface GetScreenResult {
   success: boolean;
   screenIR?: ScreenIR;
+  detectionResult?: DetectionResult;
   multiFileResult?: MultiFileResult;
   writeResult?: WriteResult;
+  analysis?: ToolAnalysis;
   screenshot?: Buffer;
-  resolvedName?: string;
   previousName?: string;
-  diagnostics?: ContractDiagnostic[];
-  contractProfileSummary?: ContractProfileSummary;
-  unresolvedAssets?: UnresolvedAssetRef[];
   error?: string;
+}
+
+export interface ThemeImportTarget {
+  mode: 'named-import' | 'default-import' | 'injected' | 'unresolved';
+  importPath?: string;
+  sourceFile?: string;
+  exportName?: 'theme' | 'default';
+  confidence: 'high' | 'low' | 'none';
+  scannedFiles: string[];
+  warnings: string[];
+}
+
+export interface NamedImportTarget {
+  importPath?: string;
+  sourceFile?: string;
+  exportName: string;
+  confidence: 'high' | 'none';
+  warnings: string[];
+}
+
+export interface GeneratedCodeValidation {
+  lineCount: number;
+  todoCount: number;
+  placeholderCount: number;
+  relativeAssetImportCount: number;
+  selfRecursiveComponents: string[];
+  missingReactNativeImports: string[];
+  duplicateAssetPaths: string[];
+  warnings: string[];
+}
+
+export interface PublicApiProp {
+  name: string;
+  type: string;
+  optional: boolean;
+}
+
+export interface ToolAnalysis {
+  validation: GeneratedCodeValidation;
+  integration: {
+    theme: ThemeImportTarget;
+    assets: {
+      strategy: 'relative-to-generated-output';
+      files: Array<{
+        nodeId: string;
+        filename: string;
+        relativePath: string;
+        category: 'icon' | 'image';
+      }>;
+    };
+    config: {
+      stylePattern: string;
+      importPrefix: string;
+      tokenFileCount: number;
+      tokenFiles: string[];
+      useThemeHookPath?: string;
+      scaleFunction?: string;
+      scaleFunctionImportPath?: string;
+    };
+  };
+  publicApi: {
+    exportName?: string;
+    props: PublicApiProp[];
+  };
+  fidelity: {
+    input: {
+      semanticTypes: Record<string, number>;
+      textNodes: number;
+      imageLikeNodes: number;
+      interactiveNodes: number;
+      componentNodes: number;
+      detectedLists: number;
+      detectedRepeatedComponents: number;
+      assetsDownloaded: number;
+    };
+    output: {
+      textElements: number;
+      imageElements: number;
+      svgElements: number;
+      touchables: number;
+      pressables: number;
+      flatLists: number;
+      scrollViews: number;
+      componentFunctions: number;
+      assetRequires: number;
+    };
+    gaps: string[];
+  };
+}
+
+function normalizeRelativePath(filePath: string): string {
+  return filePath.replace(/\\/g, '/');
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function toAliasImportPath(projectRoot: string, filePath: string, importPrefix: string): string | undefined {
+  const absolutePath = resolve(projectRoot, filePath);
+  const relativePath = normalizeRelativePath(relative(projectRoot, absolutePath));
+
+  if (!relativePath || relativePath.startsWith('..')) {
+    return undefined;
+  }
+
+  if (!relativePath.startsWith('src/') && !relativePath.startsWith('app/')) {
+    return undefined;
+  }
+
+  const importPath = relativePath
+    .replace(/^(src|app)\//, '')
+    .replace(/\.(ts|tsx|js|jsx)$/, '')
+    .replace(/\/index$/, '');
+
+  return importPath.length > 0 ? `${importPrefix}/${importPath}` : importPrefix;
+}
+
+function detectThemeExport(content: string): 'theme' | 'default' | null {
+  if (
+    /export\s+(const|let|var)\s+theme\b/.test(content) ||
+    /export\s*\{\s*theme\b/.test(content)
+  ) {
+    return 'theme';
+  }
+
+  if (/export\s+default\s+theme\b/.test(content) || /export\s+default\s+{/.test(content)) {
+    return 'default';
+  }
+
+  return null;
+}
+
+function detectNamedExport(content: string, exportName: string): boolean {
+  const escapedName = escapeRegExp(exportName);
+  const namedDeclaration = new RegExp(`export\\s+(?:const|let|var|function|class)\\s+${escapedName}\\b`);
+  const namedReExport = new RegExp(`export\\s*\\{[^}]*\\b${escapedName}\\b[^}]*\\}`);
+  return namedDeclaration.test(content) || namedReExport.test(content);
+}
+
+function scoreThemeCandidate(filePath: string): number {
+  const normalized = normalizeRelativePath(filePath).toLowerCase();
+  let score = 0;
+
+  if (normalized.includes('/theme/')) score += 4;
+  if (normalized.endsWith('/theme.ts') || normalized.endsWith('/theme.tsx')) score += 4;
+  if (normalized.endsWith('/theme/index.ts') || normalized.endsWith('/theme/index.tsx')) score += 5;
+  if (normalized.includes('unistyles')) score += 3;
+  if (normalized.endsWith('/styles/index.ts') || normalized.endsWith('/styles/index.tsx')) score += 2;
+  if (normalized.endsWith('/index.ts') || normalized.endsWith('/index.tsx')) score += 1;
+
+  return score;
+}
+
+export async function resolveThemeImportTarget(
+  projectRoot: string,
+  config: FigmaConfig,
+  explicitThemeFilePath?: string
+): Promise<ThemeImportTarget> {
+  if (config.stylePattern === 'unistyles') {
+    return {
+      mode: 'injected',
+      confidence: 'high',
+      scannedFiles: [],
+      warnings: [],
+    };
+  }
+
+  const warnings: string[] = [];
+  const candidateFiles = new Set<string>();
+
+  if (explicitThemeFilePath) {
+    candidateFiles.add(explicitThemeFilePath);
+  }
+
+  for (const tokenFile of config.tokenFiles) {
+    candidateFiles.add(tokenFile);
+  }
+
+  const orderedCandidates = Array.from(candidateFiles)
+    .sort((a, b) => scoreThemeCandidate(b) - scoreThemeCandidate(a));
+
+  const scannedFiles: string[] = [];
+
+  for (const candidate of orderedCandidates) {
+    const absolutePath = resolve(projectRoot, candidate);
+    const relativePath = normalizeRelativePath(relative(projectRoot, absolutePath));
+    scannedFiles.push(relativePath);
+
+    let content: string;
+    try {
+      content = await readFile(absolutePath, 'utf-8');
+    } catch {
+      continue;
+    }
+
+    const exportName = detectThemeExport(content);
+    if (!exportName) {
+      continue;
+    }
+
+    const importPath = toAliasImportPath(projectRoot, absolutePath, config.importPrefix);
+    if (!importPath) {
+      warnings.push(`Theme source "${relativePath}" exports theme but is outside src/app alias roots.`);
+      continue;
+    }
+
+    return {
+      mode: exportName === 'default' ? 'default-import' : 'named-import',
+      importPath,
+      sourceFile: absolutePath,
+      exportName,
+      confidence: 'high',
+      scannedFiles,
+      warnings,
+    };
+  }
+
+  warnings.push('Could not resolve a theme module that explicitly exports "theme" or a default theme object.');
+  return {
+    mode: 'unresolved',
+    confidence: orderedCandidates.length > 0 ? 'low' : 'none',
+    scannedFiles,
+    warnings,
+  };
+}
+
+export async function resolveNamedImportTarget(
+  projectRoot: string,
+  candidateFilePath: string | undefined,
+  importPrefix: string,
+  exportName: string
+): Promise<NamedImportTarget> {
+  if (!candidateFilePath) {
+    return {
+      exportName,
+      confidence: 'none',
+      warnings: [],
+    };
+  }
+
+  const absolutePath = resolve(projectRoot, candidateFilePath);
+  const relativePath = normalizeRelativePath(relative(projectRoot, absolutePath));
+  const warnings: string[] = [];
+
+  let content: string;
+  try {
+    content = await readFile(absolutePath, 'utf-8');
+  } catch {
+    warnings.push(`Utility source "${relativePath}" could not be read.`);
+    return {
+      exportName,
+      confidence: 'none',
+      warnings,
+    };
+  }
+
+  if (!detectNamedExport(content, exportName)) {
+    warnings.push(`Utility source "${relativePath}" does not export "${exportName}".`);
+    return {
+      exportName,
+      confidence: 'none',
+      warnings,
+    };
+  }
+
+  const importPath = toAliasImportPath(projectRoot, absolutePath, importPrefix);
+  if (!importPath) {
+    warnings.push(`Utility source "${relativePath}" exports "${exportName}" but is outside src/app alias roots.`);
+    return {
+      exportName,
+      sourceFile: absolutePath,
+      confidence: 'none',
+      warnings,
+    };
+  }
+
+  return {
+    importPath,
+    sourceFile: absolutePath,
+    exportName,
+    confidence: 'high',
+    warnings,
+  };
+}
+
+function extractPublicApi(code: string): ToolAnalysis['publicApi'] {
+  const exportName = code.match(/export function (\w+)\(/)?.[1];
+  if (!exportName) {
+    return { exportName: undefined, props: [] };
+  }
+
+  const interfaceMatch = code.match(new RegExp(`interface\\s+${exportName}Props\\s*\\{([\\s\\S]*?)\\n\\}`, 'm'));
+  if (!interfaceMatch) {
+    return { exportName, props: [] };
+  }
+
+  const props: PublicApiProp[] = [];
+  for (const match of interfaceMatch[1].matchAll(/^\s*([A-Za-z0-9_]+)(\?)?:\s*([^;]+);$/gm)) {
+    props.push({
+      name: match[1],
+      optional: match[2] === '?',
+      type: match[3].trim(),
+    });
+  }
+
+  return { exportName, props };
+}
+
+function countMatches(code: string, pattern: RegExp): number {
+  const flags = pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`;
+  return [...code.matchAll(new RegExp(pattern.source, flags))].length;
+}
+
+export function analyzeInputOutputFidelity(
+  screenIR: ScreenIR,
+  detectionResult: DetectionResult | undefined,
+  code: string,
+  assets: DownloadedAsset[] = []
+): ToolAnalysis['fidelity'] {
+  const semanticTypes = collectSemanticTypeCounts(screenIR.root);
+  const input = {
+    semanticTypes,
+    textNodes: semanticTypes.Text || 0,
+    imageLikeNodes: (semanticTypes.Image || 0) + (semanticTypes.Icon || 0),
+    interactiveNodes: (semanticTypes.Button || 0) + (semanticTypes.Icon || 0),
+    componentNodes: semanticTypes.Component || 0,
+    detectedLists: detectionResult?.lists?.length ?? 0,
+    detectedRepeatedComponents: detectionResult?.components?.length ?? 0,
+    assetsDownloaded: assets.length,
+  };
+
+  const output = {
+    textElements: countMatches(code, /<Text\b/),
+    imageElements: countMatches(code, /<Image\b/),
+    svgElements: countMatches(code, /<SvgIcon\b/),
+    touchables: countMatches(code, /<TouchableOpacity\b/),
+    pressables: countMatches(code, /<Pressable\b/),
+    flatLists: countMatches(code, /<FlatList\b/),
+    scrollViews: countMatches(code, /<ScrollView\b/),
+    componentFunctions: countMatches(code, /(?:export\s+)?function\s+\w+\(/),
+    assetRequires: countMatches(code, /require\(['"]\.\/assets\//),
+  };
+
+  const gaps: string[] = [];
+
+  if (input.textNodes > 0 && output.textElements === 0) {
+    gaps.push('Figma input contains text nodes, but generated output has no <Text> elements.');
+  }
+  if (input.imageLikeNodes > 0 && output.imageElements + output.svgElements === 0) {
+    gaps.push('Figma input contains image/icon nodes, but generated output has no <Image> or <SvgIcon> elements.');
+  }
+  if (input.interactiveNodes > 0 && output.touchables + output.pressables === 0) {
+    gaps.push('Figma input contains interactive nodes, but generated output has no Touchable/Pressable elements.');
+  }
+  if (input.detectedLists > 0 && output.flatLists === 0) {
+    gaps.push('List detection found repeatable content, but generated output has no <FlatList>.');
+  }
+  if (input.assetsDownloaded > 0 && output.assetRequires === 0) {
+    gaps.push('Assets were exported from Figma, but generated output does not require any local assets.');
+  }
+  if (input.detectedRepeatedComponents > 0 && output.componentFunctions <= 1) {
+    gaps.push('Repeated components were detected in Figma input, but generated output did not produce helper component functions.');
+  }
+
+  return {
+    input,
+    output,
+    gaps,
+  };
+}
+
+export function analyzeGeneratedCode(
+  code: string,
+  assets: DownloadedAsset[] = [],
+  themeTarget?: ThemeImportTarget
+): GeneratedCodeValidation {
+  const lineCount = code.split(/\r?\n/).length;
+  const todoCount = (code.match(/\bTODO\b/g) || []).length;
+  const placeholderCount = (
+    code.match(/via\.placeholder\.com|uri:\s*''/g) || []
+  ).length;
+  const relativeAssetImportCount = (code.match(/require\(['"]\.\/assets\//g) || []).length;
+
+  const reactNativeImports = new Set<string>();
+  for (const match of code.matchAll(/import\s*\{\s*([^}]+)\s*\}\s*from\s*'react-native';/g)) {
+    for (const imported of match[1].split(',')) {
+      const name = imported.trim();
+      if (name) reactNativeImports.add(name);
+    }
+  }
+
+  const usagePatterns: Record<string, RegExp> = {
+    TouchableOpacity: /<TouchableOpacity\b/,
+    Image: /<Image\b/,
+    Text: /<Text\b/,
+    View: /<View\b/,
+    Pressable: /<Pressable\b/,
+    FlatList: /<FlatList\b/,
+    ScrollView: /<ScrollView\b/,
+    TextInput: /<TextInput\b/,
+    StyleSheet: /\bStyleSheet\.create\(/,
+    ImageSourcePropType: /\bImageSourcePropType\b/,
+  };
+
+  const missingReactNativeImports = Object.entries(usagePatterns)
+    .filter(([name, pattern]) => pattern.test(code) && !reactNativeImports.has(name))
+    .map(([name]) => name);
+
+  const functionNames = [...code.matchAll(/function (\w+)\(/g)].map((match) => match[1]);
+  const selfRecursiveComponents = functionNames.filter((name) => {
+    const body = code.match(new RegExp(`function ${name}\\([^]*?\\n\\}`, 'm'))?.[0];
+    return body ? new RegExp(`<${name}\\b`).test(body) : false;
+  });
+
+  const duplicateAssetPaths = Array.from(
+    assets.reduce((duplicates, asset) => {
+      const count = duplicates.get(asset.relativePath) || 0;
+      duplicates.set(asset.relativePath, count + 1);
+      return duplicates;
+    }, new Map<string, number>())
+      .entries()
+  )
+    .filter(([, count]) => count > 1)
+    .map(([path]) => path);
+
+  const warnings: string[] = [];
+  if (themeTarget?.mode === 'unresolved' && /\btheme\./.test(code)) {
+    warnings.push('Generated code references theme tokens but theme import could not be resolved confidently.');
+  }
+  if (selfRecursiveComponents.length > 0) {
+    warnings.push(`Self-recursive components detected: ${selfRecursiveComponents.join(', ')}.`);
+  }
+  if (missingReactNativeImports.length > 0) {
+    warnings.push(`Missing React Native imports detected: ${missingReactNativeImports.join(', ')}.`);
+  }
+  if (todoCount > 0) {
+    warnings.push(`Generated output still contains ${todoCount} TODO marker(s).`);
+  }
+  if (duplicateAssetPaths.length > 0) {
+    warnings.push(`Duplicate asset output paths detected: ${duplicateAssetPaths.join(', ')}.`);
+  }
+  if (assets.length > 0 && relativeAssetImportCount === 0) {
+    warnings.push('Assets were downloaded but the generated code does not reference any relative asset paths.');
+  }
+
+  return {
+    lineCount,
+    todoCount,
+    placeholderCount,
+    relativeAssetImportCount,
+    selfRecursiveComponents,
+    missingReactNativeImports,
+    duplicateAssetPaths,
+    warnings,
+  };
+}
+
+function collectSemanticTypeCounts(node: ScreenIR['root']): Record<string, number> {
+  const counts: Record<string, number> = {};
+
+  function walk(current: ScreenIR['root']): void {
+    counts[current.semanticType] = (counts[current.semanticType] || 0) + 1;
+    if ('children' in current && current.children) {
+      for (const child of current.children) {
+        walk(child as ScreenIR['root']);
+      }
+    }
+  }
+
+  walk(node);
+  return counts;
+}
+
+function buildAnalysis(
+  screenIR: ScreenIR,
+  detectionResult: DetectionResult | undefined,
+  code: string,
+  assets: DownloadedAsset[],
+  config: FigmaConfig,
+  themeTarget: ThemeImportTarget,
+  scaleFunction?: string,
+  scaleFunctionImportPath?: string
+): ToolAnalysis {
+  return {
+    validation: analyzeGeneratedCode(code, assets, themeTarget),
+    integration: {
+      theme: themeTarget,
+      assets: {
+        strategy: 'relative-to-generated-output',
+        files: assets.map((asset) => ({
+          nodeId: asset.nodeId,
+          filename: asset.filename,
+          relativePath: asset.relativePath,
+          category: asset.category,
+        })),
+      },
+      config: {
+        stylePattern: config.stylePattern,
+        importPrefix: config.importPrefix,
+        tokenFileCount: config.tokenFiles.length,
+        tokenFiles: config.tokenFiles,
+        useThemeHookPath: config.hooks?.useTheme,
+        scaleFunction,
+        scaleFunctionImportPath,
+      },
+    },
+    publicApi: extractPublicApi(code),
+    fidelity: analyzeInputOutputFidelity(screenIR, detectionResult, code, assets),
+  };
 }
 
 /**
@@ -220,17 +680,29 @@ export async function executeGetScreen(
   args: GetScreenArgs,
   figmaToken: string
 ): Promise<GetScreenResult> {
-  const { figmaUrl, componentName, themeFilePath } = args;
-  const projectRoot = args.projectRoot ? resolve(args.projectRoot) : process.cwd();
-  const strictContracts = args.strictContracts ?? true;
-  const assetFailurePolicy = args.assetFailurePolicy || 'fallback';
-  const svgMode = args.svgMode || 'auto';
-  const profileMode = args.profileMode || 'auto';
+  const { figmaUrl, componentName, themeFilePath, outputDir } = args;
+  const effectiveProjectRoot = resolve(args.projectRoot || process.cwd());
+
+  // Validate project root before any generation work
+  try {
+    const rootStat = await stat(effectiveProjectRoot);
+    if (!rootStat.isDirectory()) {
+      return {
+        success: false,
+        error: `Invalid projectRoot: "${effectiveProjectRoot}" is not a directory`,
+      };
+    }
+  } catch {
+    return {
+      success: false,
+      error: `Invalid projectRoot: "${effectiveProjectRoot}" does not exist or is not accessible`,
+    };
+  }
 
   // STEP 0: Always refresh config first - this is the foundation for everything else
   // The config contains theme file paths needed for token matching
   try {
-    await refreshFigmaConfig(projectRoot);
+    await refreshFigmaConfig(effectiveProjectRoot);
   } catch (error) {
     console.error('Config refresh failed:', error);
   }
@@ -238,10 +710,10 @@ export async function executeGetScreen(
   try {
     // 1. Parse Figma URL to get fileKey and nodeId
     const parsed = parseFigmaUrl(figmaUrl);
-    if (!parsed) {
+    if (!parsed?.nodeId) {
       return {
         success: false,
-        error: 'Invalid Figma URL format',
+        error: 'Invalid Figma URL format (missing file key or node-id)',
       };
     }
 
@@ -294,7 +766,7 @@ export async function executeGetScreen(
     } else {
       // Auto-discovery from refreshed config
       try {
-        projectTokens = await loadAllProjectTokens(projectRoot);
+        projectTokens = await loadAllProjectTokens(effectiveProjectRoot);
       } catch (error) {
         console.error('Auto-discovery of tokens failed:', error);
       }
@@ -306,7 +778,7 @@ export async function executeGetScreen(
     }
 
     // 6. Get manifest and resolve component name
-    const manifest = await getOrCreateManifest(projectRoot);
+    const manifest = await getOrCreateManifest(effectiveProjectRoot);
     
     // Validate category input
     const validCategories: ManifestCategory[] = ['screens', 'modals', 'sheets', 'components', 'icons'];
@@ -326,7 +798,7 @@ export async function executeGetScreen(
     console.error(`[DEBUG] get_screen result: "${resolved.name}", isUpdate=${resolved.isUpdate}`);
 
     // 8. Create element folder path for assets and screenshot
-    const elementFolder = join(projectRoot, '.figma', category, resolved.name);
+    const elementFolder = join(effectiveProjectRoot, '.figma', category, resolved.name);
     const assetsDir = join(elementFolder, 'assets');
 
     // 9. Create element folder and assets directory before downloading
@@ -345,122 +817,94 @@ export async function executeGetScreen(
       // Continue without screenshot
     }
 
-    // 11.5 Load config to derive theme import path
-    const config = await getOrCreateFigmaConfig(projectRoot);
-    
-    // Derive theme import path from config (leverages existing project scanning)
-    // Uses the importPrefix from config + first token file path
-    let themeImportPath = `${config.importPrefix}/styles`;
-    
-    if (config.tokenFiles.length > 0) {
-      const mainFile = config.tokenFiles[0];
-      // Convert 'src/styles/generated/tokens.ts' → 'styles/generated' (strip src/ and extension)
-      const relativePath = mainFile
-        .replace(/^(src|app)\//, '')
-        .replace(/\/[^/]+\.(ts|tsx|js|jsx)$/, '');
-      themeImportPath = `${config.importPrefix}/${relativePath}`;
-    }
-    
-    const contractProfile = await resolveProjectProfile(projectRoot, {
-      strictContracts,
-      profileMode,
-      svgMode,
-      config: {
-        importPrefix: config.importPrefix,
-        stylePattern: config.stylePattern,
-        themeImportPath,
-        scaleFunctionName: args.scaleFunction || config.utils?.scaleFunctionName,
-        scaleFunctionPath: config.utils?.scale,
-      },
-    });
+    // 11.5 Load config to get validated import targets and integration hints
+    const config = await getOrCreateFigmaConfig(effectiveProjectRoot);
+    const themeTarget = await resolveThemeImportTarget(effectiveProjectRoot, config, themeFilePath);
+    const canUseResolvedTheme = themeTarget.mode !== 'unresolved';
+    const generationMappings = canUseResolvedTheme ? tokenMappings : createEmptyMappings();
+    const generationHasProjectTheme = hasProjectTheme && canUseResolvedTheme;
+    const transformedPathMap = new Map(assetResult.pathMap);
+    const effectiveScaleFunction = args.scaleFunction || config.utils?.scaleFunctionName;
+    const scaleTarget = await resolveNamedImportTarget(
+      effectiveProjectRoot,
+      config.utils?.scale,
+      config.importPrefix,
+      effectiveScaleFunction || 'scale'
+    );
+    const resolvedScaleFunction = scaleTarget.importPath ? effectiveScaleFunction : undefined;
 
     // 12. Generate monolithic output with imagePathMap
-    const generationResult = generateComponent(screenIR, tokenMappings, {
+    const generationResult = generateComponent(screenIR, generationMappings, {
       componentName: resolved.name,
       detectionResult,
-      hasProjectTheme,
-      imagePathMap: assetResult.pathMap,
-      themeImportPath,
+      hasProjectTheme: generationHasProjectTheme,
+      imagePathMap: transformedPathMap,
+      themeImportPath: themeTarget.importPath,
+      themeImportIsDefault: themeTarget.mode === 'default-import',
+      themeImportName: themeTarget.exportName,
       suppressTodos: args.suppressTodos,
-      scaleFunction: args.scaleFunction || config.utils?.scaleFunctionName,
-      scaleFunctionPath: config.utils?.scale,
-      stylePattern: contractProfile.stylePattern,
+      scaleFunction: resolvedScaleFunction,
+      scaleFunctionImportPath: scaleTarget.importPath,
+      // New: Pass config for import generation
+      stylePattern: config.stylePattern,
       useThemeHookPath: config.hooks?.useTheme,
-      importPrefix: contractProfile.importPrefix,
-      strictContracts,
-      assetFailurePolicy,
-      contractProfile,
+      importPrefix: config.importPrefix,
     });
-
-    const diagnostics: ContractDiagnostic[] = [
-      ...contractProfile.diagnostics,
-      ...generationResult.diagnostics,
-    ];
-    const unresolvedAssets = generationResult.unresolvedAssets;
-
-    const validation = validateGeneratedCodeContracts(generationResult.code, contractProfile);
-    diagnostics.push(...validation.diagnostics);
-
-    if (strictContracts && validation.hasBlockingErrors) {
-      return {
-        success: false,
-        error: `Strict contract validation failed with ${validation.diagnostics.length} error(s).`,
-        diagnostics,
-        unresolvedAssets,
-        contractProfileSummary: generationResult.contractProfileSummary,
-      };
-    }
 
     const multiFileResult: MultiFileResult = {
       mainComponent: {
-        // All persisted files are written into .figma workspace via writeGeneratedFiles()
-        path: `.figma/${category}/${resolved.name}/index.tsx`,
+        path: `${outputDir || 'components'}/${resolved.name}.tsx`,
         content: generationResult.code,
       },
       extractedComponents: [],
       tokens: null,
       unmappedTokens: generationResult.unmappedTokens,
-      diagnostics,
-      unresolvedAssets,
-      contractProfileSummary: generationResult.contractProfileSummary,
     };
 
+    const analysis = buildAnalysis(
+      screenIR,
+      detectionResult,
+      generationResult.code,
+      assetResult.assets,
+      config,
+      themeTarget,
+      resolvedScaleFunction,
+      scaleTarget.importPath
+    );
+
     // 13. Write files
-    let writeResult: WriteResult | undefined;
-    try {
-      writeResult = await writeGeneratedFiles({
-        projectRoot,
-        figmaUrl,
-        category,
-        componentName: resolved.name,
-        multiFileResult,
-        assets: assetResult.assets,
-        screenshot: screenshotBuffer,
-        figmaName: screenIR.name,
-        previousName: resolved.previousName,
-        diagnostics,
-        unresolvedAssets,
-        profileSnapshot: generationResult.contractProfileSummary,
-      });
-    } catch (error) {
-      console.error('Failed to write files:', error);
-      // Continue without writing files
+    const writeResult = await writeGeneratedFiles({
+      projectRoot: effectiveProjectRoot,
+      figmaUrl,
+      category,
+      componentName: resolved.name,
+      multiFileResult,
+      assets: assetResult.assets,
+      screenshot: screenshotBuffer,
+      figmaName: screenIR.name,
+      previousName: resolved.previousName,
+    });
+
+    if (!writeResult.success) {
+      return {
+        success: false,
+        error: writeResult.error || 'Failed to write generated files',
+      };
     }
 
     // 14. Prepare response
     return {
       success: true,
       screenIR,
+      detectionResult,
       multiFileResult,
       writeResult,
+      analysis,
       screenshot: screenshotBuffer,
-      resolvedName: resolved.name,
       previousName: resolved.previousName,
-      diagnostics,
-      unresolvedAssets,
-      contractProfileSummary: generationResult.contractProfileSummary,
     };
   } catch (error) {
+    console.error('executeGetScreen failed:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : String(error),
@@ -473,50 +917,54 @@ export async function executeGetScreen(
  */
 export function formatGetScreenResponse(result: GetScreenResult): any[] {
   if (!result.success) {
-    const diagnosticsText =
-      result.diagnostics && result.diagnostics.length > 0
-        ? `\n\nDiagnostics:\n${result.diagnostics
-            .slice(0, 20)
-            .map((d) => `- [${d.level}] ${d.code}: ${d.message}`)
-            .join('\n')}`
-        : '';
-    return [{ type: 'text', text: `# ❌ Error\n\n${result.error}${diagnosticsText}` }];
+    return [{ type: 'text', text: `# ❌ Error\n\n${result.error}` }];
   }
 
-  const {
-    screenIR,
-    multiFileResult,
-    writeResult,
-    screenshot,
-    previousName,
-    resolvedName,
-    diagnostics,
-    unresolvedAssets,
-    contractProfileSummary,
-  } = result;
+  const { screenIR, detectionResult, multiFileResult, writeResult, analysis, screenshot, previousName } = result;
   if (!screenIR || !multiFileResult) {
     return [{ type: 'text', text: '# ❌ Error\n\nNo result generated' }];
   }
 
-  const folderNameFromWriteResult = writeResult?.folder.split('/').pop();
-  const effectiveComponentName = resolvedName || folderNameFromWriteResult || screenIR.name;
-
   const content: any[] = [];
-  let textResponse = `# ✅ Generated: ${effectiveComponentName}\n\n`;
+  const countNodes = (node: ScreenIR['root']): number =>
+    1 + ('children' in node && node.children ? node.children.reduce((sum, child) => sum + countNodes(child as ScreenIR['root']), 0) : 0);
 
-  if (previousName && previousName !== effectiveComponentName) {
-    textResponse = `# 🔄 Replaced ${previousName} with ${effectiveComponentName}\n\n`;
+  const summary = {
+    screenName: screenIR.name,
+    replacedName: previousName && previousName !== screenIR.name ? previousName : null,
+    output: writeResult?.success
+      ? {
+          projectRoot: writeResult.projectRoot,
+          folder: writeResult.folder,
+          indexPath: writeResult.indexPath,
+          extractedPaths: writeResult.extractedPaths,
+          tokensPath: writeResult.tokensPath ?? null,
+          screenshotPath: writeResult.screenshotPath ?? null,
+          assetsCount: writeResult.assetsCount,
+          isUpdate: writeResult.isUpdate,
+        }
+      : null,
+    structure: {
+      nodeCount: countNodes(screenIR.root),
+      styleCount: Object.keys(screenIR.stylesBundle.styles).length,
+      semanticTypes: collectSemanticTypeCounts(screenIR.root),
+      detectedLists: detectionResult?.lists?.length ?? 0,
+      detectedRepeatedComponents: detectionResult?.components?.length ?? 0,
+    },
+    validation: analysis?.validation ?? null,
+    integration: analysis?.integration ?? null,
+    publicApi: analysis?.publicApi ?? null,
+    fidelity: analysis?.fidelity ?? null,
+    unmappedTokens: multiFileResult.unmappedTokens,
+  };
+
+  let textResponse = `# ✅ Generated: ${screenIR.name}\n\n`;
+
+  if (previousName && previousName !== screenIR.name) {
+    textResponse = `# 🔄 Replaced ${previousName} with ${screenIR.name}\n\n`;
   }
 
-  textResponse += `**Resolved component name:** \`${effectiveComponentName}\`\n`;
-  textResponse += `**Figma node name:** \`${screenIR.name}\`\n\n`;
-
-  if (contractProfileSummary) {
-    textResponse += `**Contract profile:** style=${contractProfileSummary.stylePattern}, svg=${contractProfileSummary.svgMode}, strict=${contractProfileSummary.strictContracts}\n\n`;
-  }
-
-  // 1. What's Generated (Inventory)
-  textResponse += `## 📦 What's Generated\n\n`;
+  textResponse += `## Artifacts\n\n`;
   if (writeResult?.success) {
     const root = writeResult.projectRoot;
     textResponse += `| File | Absolute Path |\n`;
@@ -537,87 +985,35 @@ export function formatGetScreenResponse(result: GetScreenResult): any[] {
     textResponse += `\n`;
   }
 
-  // 2. Smart Integration Instructions
-  textResponse += `## 🚀 Smart Integration Instructions\n\n`;
-  textResponse += `I have generated the base architectural parts for you. **Your goal is to perform a perfect one-shot integration** into the project:\n\n`;
-  textResponse += `1. **Analyze Content Type**: Evaluate if \`${effectiveComponentName}\` is a top-level screen, a reusable component, or a specific element like a Modal or BottomSheet.\n`;
-  textResponse += `2. **Relocate**: Check the project's existing directory structure (e.g., \`src/screens\`, \`src/components\`) and move the generated files from \`.figma/\` to their proper permanent locations.\n`;
-  textResponse += `3. **Rename**: Rename directories and files if necessary to match the project's naming conventions and React Native best practices.\n`;
-  textResponse += `4. **Process Assets**: Relocate the icons and images from the temporary \`assets/\` folder to your project's shared asset directory (e.g., \`src/assets\`) and update the import paths in the code.\n\n`;
+  textResponse += `## Summary JSON\n\n`;
+  textResponse += '```json\n';
+  textResponse += `${JSON.stringify(summary, null, 2)}\n`;
+  textResponse += '```\n\n';
 
-  // 3. Understanding & Gaps
-  textResponse += `## 🔍 Understanding & Gaps\n\n`;
-  
-  // Dynamic gap reporting based on detections
-  const d = multiFileResult.unmappedTokens;
-  const hasUnmapped = d.colors.length > 0 || d.spacing.length > 0 || d.radii.length > 0;
-  
-  textResponse += `### What I understood:\n`;
-  textResponse += `- **Structure**: Successfully parsed the ${screenIR.name} hierarchy.\n`;
-  
-  // Pattern-specific understanding
-  const detection = multiFileResult.mainComponent.content.includes('FlatList') ? 'List' : 
-                   multiFileResult.mainComponent.content.includes('useForm') ? 'Form' : 'Regular';
-  textResponse += `- **Pattern**: Detected and implemented as a **${detection}** component.\n`;
-  
+  textResponse += `## Main Component\n\n`;
+  textResponse += '```tsx\n';
+  textResponse += `${multiFileResult.mainComponent.content}\n`;
+  textResponse += '```\n\n';
+
   if (multiFileResult.extractedComponents.length > 0) {
-    textResponse += `- **Composition**: Identified ${multiFileResult.extractedComponents.length} repeating patterns and extracted them into sub-components.\n`;
-  }
-
-  textResponse += `\n### Gaps & Assumptions:\n`;
-  if (hasUnmapped) {
-    textResponse += `- **Tokens**: Some styles did not match project tokens and were exported as hardcoded values (see unmapped tokens below).\n`;
-  } else {
-    textResponse += `- **Tokens**: Successfully mapped all styles to project theme tokens! ✅\n`;
-  }
-
-  if (diagnostics && diagnostics.length > 0) {
-    textResponse += `### Diagnostics\n\n`;
-    const critical = diagnostics.filter((d) => d.level === 'error');
-    textResponse += `Total: ${diagnostics.length} (${critical.length} errors)\n\n`;
-    for (const d of diagnostics.slice(0, 20)) {
-      textResponse += `- [${d.level}] \`${d.code}\`: ${d.message}${d.location ? ` (${d.location})` : ''}\n`;
+    for (const extracted of multiFileResult.extractedComponents) {
+      textResponse += `## Extracted Component: ${extracted.path}\n\n`;
+      textResponse += '```tsx\n';
+      textResponse += `${extracted.content}\n`;
+      textResponse += '```\n\n';
     }
-    textResponse += `\n`;
   }
 
-  if (unresolvedAssets && unresolvedAssets.length > 0) {
-    textResponse += `### Unresolved Assets\n\n`;
-    for (const asset of unresolvedAssets.slice(0, 20)) {
-      textResponse += `- \`${asset.semanticType}\` ref=\`${asset.ref}\` node=\`${asset.nodeId}\`${asset.location ? ` (${asset.location})` : ''}\n`;
-    }
-    textResponse += `\n`;
-  }
-  
-  if (detection === 'List') {
-    textResponse += `- **Data**: Used **mock items** for the FlatList. You should replace these with a real data source or API hook.\n`;
-  }
-  if (detection === 'Form') {
-    textResponse += `- **Validation**: Generated basic Zod validation. Review the schema to ensure it matches your business requirements.\n`;
-  }
-  
-  textResponse += `\n`;
-
-  // 4. Unmapped Tokens (if any)
-  if (hasUnmapped) {
-    textResponse += `### Unmapped Tokens\n\n`;
-    if (d.colors.length > 0) textResponse += `**Colors:** ${d.colors.slice(0, 10).join(', ')}${d.colors.length > 10 ? '...' : ''}\n`;
-    if (d.spacing.length > 0) textResponse += `**Spacing:** ${d.spacing.join(', ')}\n`;
-    if (d.radii.length > 0) textResponse += `**Radii:** ${d.radii.join(', ')}\n`;
-    textResponse += `\n`;
+  if (multiFileResult.tokens?.content) {
+    textResponse += `## Tokens File\n\n`;
+    textResponse += '```ts\n';
+    textResponse += `${multiFileResult.tokens.content}\n`;
+    textResponse += '```\n\n';
   }
 
-  // 5. Integration Summary
-  textResponse += `## 📄 Integration Summary\n\n`;
-  textResponse += `Main component: \`${multiFileResult.mainComponent.path}\`\n`;
-  if (multiFileResult.extractedComponents.length > 0) {
-    textResponse += `Extracted parts: ${multiFileResult.extractedComponents.length} files\n`;
-  }
-  textResponse += `\n**Integration Step**: Move these files from the paths above to your codebase and update the imports. I have used your theme tokens where possible.\n\n`;
-  
   content.push({ type: 'text', text: textResponse });
 
-  // 6. Visual Reference (Screenshot)
+  // Visual reference for downstream review or comparison.
   if (screenshot) {
     content.push({
       type: 'image',

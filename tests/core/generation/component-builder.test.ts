@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { generateComponent, generateComponentMultiFile } from '../../../src/core/generation/component-builder.js';
-import type { ScreenIR, ContainerIR, TextIR, ButtonIR, ComponentIR } from '../../../src/core/types.js';
+import type { ScreenIR, ContainerIR, TextIR, ButtonIR, ComponentIR, ImageIR } from '../../../src/core/types.js';
 import type { TokenMappings } from '../../../src/core/mapping/token-matcher.js';
 import type { DetectionResult } from '../../../src/core/detection/types.js';
 
@@ -278,53 +278,67 @@ describe('generateComponent', () => {
     expect(result.unmappedTokens.colors).not.toContain('#3B82F6');
   });
 
-  it('should not duplicate main component when root semantic type is Component', () => {
+  it('should not generate self-recursive subcomponents for redundant component wrappers', () => {
     const screen: ScreenIR = {
       id: 'screen_1',
-      name: 'CardMaster',
+      name: 'ProfileScreen',
       root: {
         id: '1:1',
-        name: 'CardMaster',
-        semanticType: 'Component',
-        componentName: 'CardMaster',
+        name: 'container',
+        semanticType: 'Container',
         boundingBox: baseBoundingBox,
-        styleRef: 'cardMaster',
-        props: {},
+        styleRef: 'screen',
+        layout: baseLayout,
         children: [
           {
-            id: '1:2',
-            name: 'container',
-            semanticType: 'Container',
+            id: 'comp:1',
+            name: 'Avatar Master',
+            semanticType: 'Component',
+            componentId: 'avatar-master',
+            componentName: 'AvatarMaster',
             boundingBox: baseBoundingBox,
-            styleRef: 'container',
+            styleRef: 'avatarRoot',
             layout: baseLayout,
             children: [
               {
-                id: '1:3',
-                name: 'title',
-                semanticType: 'Text',
+                id: 'comp:2',
+                name: 'AvatarMaster',
+                semanticType: 'Component',
+                componentId: 'avatar-master-inner',
+                componentName: 'AvatarMaster',
                 boundingBox: baseBoundingBox,
-                styleRef: 'title',
-                text: 'Master',
-              } as TextIR,
+                styleRef: 'avatarInner',
+                layout: baseLayout,
+                children: [
+                  {
+                    id: 'text:1',
+                    name: 'title',
+                    semanticType: 'Text',
+                    boundingBox: baseBoundingBox,
+                    styleRef: 'title',
+                    text: 'Profile',
+                  } as TextIR,
+                ],
+              } as ComponentIR,
             ],
-          } as ContainerIR,
+          } as ComponentIR,
         ],
-      } as ComponentIR,
+      } as ContainerIR,
       stylesBundle: {
         styles: {
-          cardMaster: { id: 'cardMaster' },
-          container: { id: 'container' },
+          screen: { id: 'screen' },
+          avatarRoot: { id: 'avatarRoot' },
+          avatarInner: { id: 'avatarInner' },
           title: {
             id: 'title',
             typography: {
               fontFamily: 'Inter',
               fontSize: 16,
-              fontWeight: 500,
+              fontWeight: 400,
               lineHeight: 20,
               letterSpacing: 0,
               textAlign: 'left',
-              color: '#111827',
+              color: '#111111',
             },
           },
         },
@@ -338,61 +352,42 @@ describe('generateComponent', () => {
       },
     };
 
-    const result = generateComponent(screen, emptyMappings, { componentName: 'CardMaster' });
-    const declarations = result.code.match(/function CardMaster\(/g) || [];
+    const result = generateComponent(screen, emptyMappings);
 
-    expect(declarations).toHaveLength(1);
-    expect(result.code).not.toContain('<CardMaster />');
-    expect(result.code).toContain('<View style={styles.container}>');
+    expect(result.code).toContain('function AvatarMaster');
+    expect(result.code).toContain('<Text style={styles.title}>');
+    expect(result.code).not.toMatch(/function AvatarMaster\([^]*?<AvatarMaster\b/);
   });
 
-  it('should disambiguate component names when signatures differ', () => {
+  it('should tolerate component instances without children during subcomponent generation', () => {
     const screen: ScreenIR = {
       id: 'screen_1',
-      name: 'NameCollisionDemo',
+      name: 'ProfileScreen',
       root: {
         id: '1:1',
-        name: 'root',
+        name: 'screen',
         semanticType: 'Container',
         boundingBox: baseBoundingBox,
-        styleRef: 'root',
+        styleRef: 'screen',
         layout: baseLayout,
         children: [
           {
             id: '1:2',
-            name: 'Button',
+            name: 'AvatarMaster',
             semanticType: 'Component',
-            componentId: 'cmp_button_primary',
-            componentName: 'Button',
-            props: {
-              povtorit: { type: 'string', value: 'Участвовать', defaultValue: 'Участвовать' },
-            },
+            componentId: 'avatar_master',
+            componentName: 'AvatarMaster',
             boundingBox: baseBoundingBox,
-            styleRef: 'buttonPrimary',
+            styleRef: 'avatarRoot',
             layout: baseLayout,
-            children: [],
-          } as ComponentIR,
-          {
-            id: '1:3',
-            name: 'Button',
-            semanticType: 'Component',
-            componentId: 'cmp_button_bottom',
-            componentName: 'Button',
-            props: {
-              value: { type: 'string', value: 'Ускорить запуск', defaultValue: 'Ускорить запуск' },
-            },
-            boundingBox: baseBoundingBox,
-            styleRef: 'buttonBottom',
-            layout: baseLayout,
-            children: [],
-          } as ComponentIR,
+            children: undefined,
+          } as any,
         ],
       } as ContainerIR,
       stylesBundle: {
         styles: {
-          root: { id: 'root' },
-          buttonPrimary: { id: 'buttonPrimary' },
-          buttonBottom: { id: 'buttonBottom' },
+          screen: { id: 'screen' },
+          avatarRoot: { id: 'avatarRoot' },
         },
         tokens: {
           colors: {},
@@ -404,40 +399,41 @@ describe('generateComponent', () => {
       },
     };
 
-    const result = generateComponent(screen, emptyMappings, { componentName: 'NameCollisionDemo' });
+    const result = generateComponent(screen, emptyMappings);
 
-    expect(result.code).toContain('function Button(');
-    expect(result.code).toContain('function Button2(');
-    expect(result.code).toContain('<Button povtorit={povtorit} />');
-    expect(result.code).toContain('<Button2 value={value} />');
+    expect(result.code).toContain('function AvatarMaster');
+    expect(result.code).toContain('<View style={styles.avatarRoot} />');
   });
 
-  it('should not generate network placeholders for missing image defaults', () => {
+  it('should tolerate detection results without component hints', () => {
     const screen: ScreenIR = {
-      id: 'screen_missing_image',
-      name: 'MissingImageScreen',
+      id: 'screen_1',
+      name: 'ProfileScreen',
       root: {
         id: '1:1',
-        name: 'container',
+        name: 'screen',
         semanticType: 'Container',
         boundingBox: baseBoundingBox,
-        styleRef: 'container',
+        styleRef: 'screen',
         layout: baseLayout,
         children: [
           {
             id: '1:2',
-            name: 'avatar',
-            semanticType: 'Image',
+            name: 'AvatarMaster',
+            semanticType: 'Component',
+            componentId: 'avatar_master',
+            componentName: 'AvatarMaster',
             boundingBox: baseBoundingBox,
-            styleRef: 'avatar',
-            imageRef: 'unmapped_hash',
-          } as any,
+            styleRef: 'avatarRoot',
+            layout: baseLayout,
+            children: [],
+          } as ComponentIR,
         ],
       } as ContainerIR,
       stylesBundle: {
         styles: {
-          container: { id: 'container' },
-          avatar: { id: 'avatar' },
+          screen: { id: 'screen' },
+          avatarRoot: { id: 'avatarRoot' },
         },
         tokens: {
           colors: {},
@@ -450,39 +446,82 @@ describe('generateComponent', () => {
     };
 
     const result = generateComponent(screen, emptyMappings, {
-      imagePathMap: new Map<string, string>(),
+      detectionResult: {} as any,
     });
 
-    expect(result.code).not.toContain('via.placeholder.com');
-    expect(result.code).not.toContain("uri: ''");
+    expect(result.code).toContain('function AvatarMaster');
   });
 
-  it('should fail fast on unresolved assets when assetFailurePolicy is error', () => {
+  it('should not hoist nested component props into the root screen public API', () => {
     const screen: ScreenIR = {
-      id: 'screen_missing_image_error',
-      name: 'MissingImageErrorScreen',
+      id: 'screen_1',
+      name: 'ProfileScreen',
       root: {
         id: '1:1',
-        name: 'container',
+        name: 'screen',
         semanticType: 'Container',
         boundingBox: baseBoundingBox,
-        styleRef: 'container',
+        styleRef: 'screen',
         layout: baseLayout,
         children: [
           {
             id: '1:2',
-            name: 'avatar',
-            semanticType: 'Image',
+            name: 'title',
+            semanticType: 'Text',
             boundingBox: baseBoundingBox,
-            styleRef: 'avatar',
-            imageRef: 'unmapped_hash',
-          } as any,
+            styleRef: 'title',
+            text: 'Profile',
+          } as TextIR,
+          {
+            id: '1:3',
+            name: 'MasterCard',
+            semanticType: 'Component',
+            componentId: 'master_card',
+            componentName: 'MasterCard',
+            boundingBox: baseBoundingBox,
+            styleRef: 'masterCard',
+            layout: baseLayout,
+            children: [
+              {
+                id: '1:4',
+                name: 'rating',
+                semanticType: 'Text',
+                boundingBox: baseBoundingBox,
+                styleRef: 'rating',
+                text: '4.9',
+              } as TextIR,
+            ],
+          } as ComponentIR,
         ],
       } as ContainerIR,
       stylesBundle: {
         styles: {
-          container: { id: 'container' },
-          avatar: { id: 'avatar' },
+          screen: { id: 'screen' },
+          title: {
+            id: 'title',
+            typography: {
+              fontFamily: 'Inter',
+              fontSize: 16,
+              fontWeight: 500,
+              lineHeight: 20,
+              letterSpacing: 0,
+              textAlign: 'left',
+              color: '#111111',
+            },
+          },
+          masterCard: { id: 'masterCard' },
+          rating: {
+            id: 'rating',
+            typography: {
+              fontFamily: 'Inter',
+              fontSize: 12,
+              fontWeight: 400,
+              lineHeight: 16,
+              letterSpacing: 0,
+              textAlign: 'left',
+              color: '#222222',
+            },
+          },
         },
         tokens: {
           colors: {},
@@ -494,30 +533,69 @@ describe('generateComponent', () => {
       },
     };
 
-    expect(() =>
-      generateComponent(screen, emptyMappings, {
-        imagePathMap: new Map<string, string>(),
-        assetFailurePolicy: 'error',
-      })
-    ).toThrow(/Asset resolution failed/);
+    const result = generateComponent(screen, emptyMappings);
+    const rootPropsInterface = result.code.match(/interface ProfileScreenProps \{[\s\S]*?\n\}/)?.[0] || '';
+    const subComponentPropsInterface = result.code.match(/interface MasterCardProps \{[\s\S]*?\n\}/)?.[0] || '';
+
+    expect(result.code).toContain('interface ProfileScreenProps');
+    expect(rootPropsInterface).toContain('title: string;');
+    expect(rootPropsInterface).not.toContain('rating: string;');
+    expect(result.code).toContain('interface MasterCardProps');
+    expect(result.code).toContain('function MasterCard');
+    expect(subComponentPropsInterface).toContain('rating: string;');
   });
 
-  it('should expose contract profile summary in generation result', () => {
+  it('should not forward stale nested component props that are unused by generated JSX', () => {
+    const staleImageProp = {
+      childIcon: {
+        type: 'image' as const,
+        value: 'icon-hash',
+        defaultValue: 'icon-hash',
+      },
+    };
+
     const screen: ScreenIR = {
-      id: 'screen_contract_profile',
-      name: 'ContractProfileScreen',
+      id: 'screen_1',
+      name: 'ProfileScreen',
       root: {
         id: '1:1',
-        name: 'container',
+        name: 'screen',
         semanticType: 'Container',
         boundingBox: baseBoundingBox,
-        styleRef: 'container',
+        styleRef: 'screen',
         layout: baseLayout,
-        children: [],
+        children: [
+          {
+            id: '1:2',
+            name: 'Parent',
+            semanticType: 'Component',
+            componentId: 'parent_component',
+            componentName: 'Parent',
+            boundingBox: baseBoundingBox,
+            styleRef: 'parent',
+            layout: baseLayout,
+            children: [
+              {
+                id: '1:3',
+                name: 'Child',
+                semanticType: 'Component',
+                componentId: 'child_component',
+                componentName: 'Child',
+                boundingBox: baseBoundingBox,
+                styleRef: 'child',
+                layout: baseLayout,
+                children: [],
+                props: staleImageProp,
+              } as ComponentIR,
+            ],
+          } as ComponentIR,
+        ],
       } as ContainerIR,
       stylesBundle: {
         styles: {
-          container: { id: 'container' },
+          screen: { id: 'screen' },
+          parent: { id: 'parent' },
+          child: { id: 'child' },
         },
         tokens: {
           colors: {},
@@ -529,34 +607,137 @@ describe('generateComponent', () => {
       },
     };
 
-    const result = generateComponent(screen, emptyMappings, {
-      contractProfile: {
-        importPrefix: '@app',
-        stylePattern: 'StyleSheet',
-        safeAreaSupport: {
-          available: true,
-          importPath: 'react-native-safe-area-context',
-        },
-        svgSupport: {
-          mode: 'raster',
-          runtimeDeps: [],
-        },
-        assetImportPolicy: {
-          relativeOnly: true,
-          allowAliasAssets: false,
-        },
-        strictValidation: {
-          strictContracts: true,
-          forbidEmptyImageSources: true,
-          forbidPlaceholderUris: true,
-          forbidUnresolvedAliasRequires: true,
-        },
-        diagnostics: [],
-      },
-    } as any);
+    const result = generateComponent(screen, emptyMappings);
 
-    expect(result.contractProfileSummary?.importPrefix).toBe('@app');
-    expect(result.contractProfileSummary?.svgMode).toBe('raster');
+    expect(result.code).toContain('function Child({})');
+    expect(result.code).toContain('function Parent({})');
+    expect(result.code).not.toContain('<Child childIcon={childIcon} />');
+    expect(result.code).not.toContain('childIcon: ImageSourcePropType;');
+  });
+
+  it('should not pass nested component props from a parent scope that does not define them', () => {
+    const screen: ScreenIR = {
+      id: 'screen_1',
+      name: 'ProfileScreen',
+      root: {
+        id: '1:1',
+        name: 'screen',
+        semanticType: 'Container',
+        boundingBox: baseBoundingBox,
+        styleRef: 'screen',
+        layout: baseLayout,
+        children: [
+          {
+            id: '1:2',
+            name: 'Header',
+            semanticType: 'Component',
+            componentId: 'header_component',
+            componentName: 'Header',
+            boundingBox: baseBoundingBox,
+            styleRef: 'header',
+            layout: baseLayout,
+            children: [
+              {
+                id: '1:3',
+                name: 'label',
+                semanticType: 'Text',
+                boundingBox: baseBoundingBox,
+                styleRef: 'label',
+                text: 'Welcome',
+              } as TextIR,
+            ],
+          } as ComponentIR,
+        ],
+      } as ContainerIR,
+      stylesBundle: {
+        styles: {
+          screen: { id: 'screen' },
+          header: { id: 'header' },
+          label: {
+            id: 'label',
+            typography: {
+              fontFamily: 'Inter',
+              fontSize: 18,
+              fontWeight: 600,
+              lineHeight: 24,
+              letterSpacing: 0,
+              textAlign: 'left',
+              color: '#1f2937',
+            },
+          },
+        },
+        tokens: {
+          colors: {},
+          spacing: {},
+          radii: {},
+          typography: {},
+          shadows: {},
+        },
+      },
+    };
+
+    const result = generateComponent(screen, emptyMappings);
+
+    expect(result.code).toContain('<Header />');
+    expect(result.code).not.toContain('<Header label={label} />');
+  });
+
+  it('should treat unresolved image props as optional and avoid web placeholders', () => {
+    const screen: ScreenIR = {
+      id: 'screen_1',
+      name: 'ProfileScreen',
+      root: {
+        id: '1:1',
+        name: 'screen',
+        semanticType: 'Container',
+        boundingBox: baseBoundingBox,
+        styleRef: 'screen',
+        layout: baseLayout,
+        children: [
+          {
+            id: '1:2',
+            name: 'Badge',
+            semanticType: 'Component',
+            componentId: 'badge_component',
+            componentName: 'Badge',
+            boundingBox: baseBoundingBox,
+            styleRef: 'badge',
+            layout: baseLayout,
+            children: [
+              {
+                id: '1:3',
+                name: 'statusIcon',
+                semanticType: 'Image',
+                boundingBox: baseBoundingBox,
+                styleRef: 'statusIcon',
+                imageRef: '',
+              } as ImageIR,
+            ],
+          } as ComponentIR,
+        ],
+      } as ContainerIR,
+      stylesBundle: {
+        styles: {
+          screen: { id: 'screen' },
+          badge: { id: 'badge' },
+          statusIcon: { id: 'statusIcon' },
+        },
+        tokens: {
+          colors: {},
+          spacing: {},
+          radii: {},
+          typography: {},
+          shadows: {},
+        },
+      },
+    };
+
+    const result = generateComponent(screen, emptyMappings);
+
+    expect(result.code).toContain('statusIcon?: ImageSourcePropType;');
+    expect(result.code).toContain('{statusIcon && (');
+    expect(result.code).toContain('source={statusIcon}');
+    expect(result.code).not.toContain('via.placeholder.com');
   });
 });
 

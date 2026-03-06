@@ -1,83 +1,79 @@
 #!/usr/bin/env node
 /**
- * Test the figma-rn MCP server via official SDK client.
- *
- * Usage:
- *   FIGMA_TOKEN=... node test-mcp.js
- *
- * Optional:
- *   FIGMA_TEST_URL=<figma-url-with-node-id>
- *   FIGMA_TEST_PROJECT_ROOT=/abs/path/to/project
+ * Test the figma-rn MCP server contract.
  */
 
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { spawn } from 'child_process';
 
-const FIGMA_TOKEN = process.env.FIGMA_TOKEN;
-if (!FIGMA_TOKEN) {
-  console.error('Error: FIGMA_TOKEN is required');
-  process.exit(1);
-}
+const server = spawn('node', ['dist/index.js'], {
+  env: {
+    ...process.env,
+    FIGMA_TOKEN: process.env.FIGMA_TOKEN,
+  },
+  stdio: ['pipe', 'pipe', 'inherit'],
+});
 
-const FIGMA_TEST_URL = process.env.FIGMA_TEST_URL;
-if (!FIGMA_TEST_URL) {
-  console.error(
-    'Error: FIGMA_TEST_URL is required (example: https://www.figma.com/design/...?...node-id=...)'
-  );
-  process.exit(1);
-}
-const FIGMA_TEST_PROJECT_ROOT =
-  process.env.FIGMA_TEST_PROJECT_ROOT || process.cwd();
+console.log('Test 1: Listing tools...\n');
+const listToolsRequest = {
+  jsonrpc: '2.0',
+  id: 1,
+  method: 'tools/list',
+};
 
-async function main() {
-  const transport = new StdioClientTransport({
-    command: 'node',
-    args: ['dist/index.js'],
-    cwd: process.cwd(),
-    env: {
-      FIGMA_TOKEN,
-    },
-    stderr: 'pipe',
-  });
+server.stdin.write(JSON.stringify(listToolsRequest) + '\n');
 
-  if (transport.stderr) {
-    transport.stderr.on('data', (chunk) => {
-      process.stderr.write(`[server] ${chunk.toString()}`);
-    });
-  }
-
-  const client = new Client({ name: 'figma-rn-test-client', version: '1.0.0' });
-
-  try {
-    await client.connect(transport);
-    const tools = await client.listTools();
-    console.log('Available tools:', tools.tools.map((tool) => tool.name).join(', '));
-
-    const result = await client.callTool({
+setTimeout(() => {
+  console.log('\nTest 2: Calling get_screen...\n');
+  const getScreenRequest = {
+    jsonrpc: '2.0',
+    id: 2,
+    method: 'tools/call',
+    params: {
       name: 'get_screen',
       arguments: {
-        figmaUrl: FIGMA_TEST_URL,
-        componentName: 'TransportHealthcheck',
-        category: 'screens',
-        projectRoot: FIGMA_TEST_PROJECT_ROOT,
+        figmaUrl: 'https://www.figma.com/design/YOUR_FILE_ID?node-id=123-456',
+        componentName: 'TestMCP',
+        outputDir: 'test-mcp-output',
       },
-    });
+    },
+  };
 
-    const contentTypes = (result.content || []).map((item) => item.type);
-    console.log('Tool call result:', {
-      isError: !!result.isError,
-      contentTypes,
-    });
-  } catch (error) {
-    console.error('MCP healthcheck failed:', error);
-    process.exitCode = 1;
-  } finally {
+  server.stdin.write(JSON.stringify(getScreenRequest) + '\n');
+}, 1000);
+
+let buffer = '';
+server.stdout.on('data', (data) => {
+  buffer += data.toString();
+
+  const lines = buffer.split('\n');
+  buffer = lines.pop() || '';
+
+  for (const line of lines) {
+    if (!line.trim()) {
+      continue;
+    }
+
     try {
-      await client.close();
+      const response = JSON.parse(line);
+      console.log('\nReceived response:', JSON.stringify(response, null, 2));
     } catch {
-      // no-op
+      console.log('Raw output:', line);
     }
   }
-}
+});
 
-main();
+setTimeout(() => {
+  console.log('\nTest complete!');
+  server.kill();
+  process.exit(0);
+}, 30000);
+
+server.on('error', (error) => {
+  console.error('Server error:', error);
+  process.exit(1);
+});
+
+server.on('exit', (code) => {
+  console.log(`Server exited with code ${code}`);
+  process.exit(code || 0);
+});

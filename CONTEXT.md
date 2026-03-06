@@ -1,50 +1,51 @@
-# Figma-RN Project Context & Testing Standards
+# figma-rn Context
 
-## 🎯 Project Overview
-`figma-rn` is a Model Context Protocol (MCP) server designed to generate production-ready React Native code from Figma URLs. It follows a "One URL = One Folder" philosophy, where each generation produces a self-contained component directory with code, metadata, assets, and visual references.
+## Project Overview
 
-## 🏗️ Core Architecture (Clean Architecture)
-The project is organized into structured modules to decouple reasoning from delivery:
-- `src/api`: Figma API clients and raw data transformers.
-- `src/core`: The brain of the system.
-  - `pipeline.ts`: Transforms Figma JSON into **ScreenIR** (Intermediate Representation).
-  - `detection/`: Reusable logic for identifying lists, components, and forms in the IR.
-  - `mapping/`: Matches design tokens to local project themes using Delta E color matching.
-  - `generation/`: Generates optimized TSX/AST code from IR and matched tokens.
-- `src/edge`: MCP tool definitions and file-system delivery (`get_screen`, `generate_screen`).
+`figma-rn` is an MCP server that generates React Native code from Figma URLs.
+Current runtime contract is `get_screen` only.
 
-## 🧪 Testing & Validation Standards
-At every session, we must maintain high confidence through two primary testing layers:
+## Architecture
 
-### 1. Regression Testing (Stable Functionality)
-We use a custom regression suite to ensure architectural changes don't break the generator's output.
-- **Workflow**: Use `/regression-test` (defined in `.agent/workflows/regression-test.md`).
-- **Command**: `FIGMA_TOKEN=... npx tsx scripts/regression-test.mts "<figma-url-with-node-id>" check "<target-project-root>"`
+- `src/api`: Figma API client, URL parsing, transformers, errors.
+- `src/core`: normalization, layout, recognition, detection, token mapping, generation.
+- `src/edge`: MCP tool wiring and filesystem delivery.
+- `src/workspace`: `.figma` manifest/config/registry management.
+- `src/theme-parser`: AST-based theme token extraction.
 
-### 2. Configuration & Auto-Discovery
-The tool must correctly detect the project environment.
-- **Test Suite**: `tests/e2e/config-automation.test.ts`
-- **What to check**:
-  - `framework`: (Expo vs React Native)
-  - `stylePattern`: (`useTheme` hooks vs `StyleSheet.create`)
-  - `theme`: Correct path to `colors.ts`, `typography.ts`, etc.
-- **Run with**: `npx vitest run tests/e2e/config-automation.test.ts`
+Detailed architecture rules are documented in `docs/architecture.md`.
 
-### 3. Unified Theme Access standards
-The generator follows a strict pattern for design token access:
-- **Prefix**: All tokens must be accessed via `theme.*` (normalized during extraction).
-- **Static Styles**: `StyleSheet.create` uses a static `import { theme } from '@app/styles'`.
-- **Hooks**: Components use `const { theme } = useTheme()` for dynamic styles or props.
-- **Normalization**: Intermediary containers like `masterPalette` or `clientColors` are stripped during extraction to keep paths concise (e.g., `theme.color.primary`).
+## Testing Standards
 
-## 📋 LLM Session Checklist
-When starting a new task or session, always:
-1.  **Check the Baseline**: Run `/regression-test` to ensure the environment is healthy.
-2.  **Validate Theme detection**: If styling fails, check `.figma/config.json` to see if `colorsFile` was correctly discovered.
-3.  **Use `get_screen`**: Prefer the new `get_screen` tool for any generation, as it uses the clean pipeline.
-4.  **Compare Visuals**: Use the generated `screenshot.png` in the element folder to manually verify output accuracy.
+Core checks for every refactor cycle:
 
-## 📁 Key Folders
-- `.figma/`: All generated code and workspace registry.
-- `.agent/workflows/`: Automation shortcuts for LLMs.
-- `scripts/`: Integration and regression testing utilities.
+1. `bun run lint`
+2. `bun run test`
+3. `bun run test:coverage`
+4. Layering gate: `bun run check:layers`
+
+Live Figma validation (optional):
+
+```bash
+FIGMA_LIVE_TESTS=1 bun run test:live
+```
+
+## Regression Workflow
+
+Baseline target: `Мастер главная` (`2256:25238`)
+
+```bash
+FIGMA_TOKEN=$(grep FIGMA_TOKEN .env | cut -d '"' -f 2) bunx tsx scripts/regression-test.mts "https://www.figma.com/design/UP4RaLYLk41imjPis2j6an/MARAFET-dev?node-id=2256-25238&m=dev" check
+```
+
+Update baseline when intentional output changes are accepted:
+
+```bash
+FIGMA_TOKEN=$(grep FIGMA_TOKEN .env | cut -d '"' -f 2) bunx tsx scripts/regression-test.mts "https://www.figma.com/design/UP4RaLYLk41imjPis2j6an/MARAFET-dev?node-id=2256-25238&m=dev" baseline
+```
+
+## Key Folders
+
+- `.figma/`: generated output and per-project config.
+- `scripts/`: regression/debug/testing utilities.
+- `tests/`: unit + e2e tests.

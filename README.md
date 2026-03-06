@@ -1,38 +1,23 @@
-# ⚡️ Figma to React Native (MCP)
+# figma-rn
 
-> **One-Shot Production Code.** Turn any Figma screen into a clean, feature-sliced React Native component in seconds.
+MCP server that generates React Native code from Figma URLs using a single tool: `get_screen`.
 
-[![MCP](https://img.shields.io/badge/MCP-Ready-blue)](https://modelcontextprotocol.io) [![TypeScript](https://img.shields.io/badge/Built%20With-TypeScript-blue)](https://www.typescriptlang.org/)
+## Requirements
 
----
+- Node.js 18+
+- [Bun](https://bun.sh/)
+- `FIGMA_TOKEN` (Figma Personal Access Token)
 
-## 🚀 Why Use This?
-
-*   **Zero Manual Setup**: Auto-detects your tokens, themes, and folder structure.
-*   **Production Quality**: Generates `FlatList` for lists, `react-hook-form` for inputs, and proper TypeScript interfaces.
-*   **Pixel Perfect**: Uses Delta E algorithms to match Figma hex codes to your existing theme variables.
-*   **Asset Handling**: Automatically downloads and links icons/images to your `./assets` folder.
-
-## 🛠 Prerequisites
-
-*   **Node.js** (v18+)
-*   **Figma Access Token** ([Get it here](https://www.figma.com/developers/api#access-tokens))
-
----
-
-## 📦 Quick Start
-
-### 1. Install
-Clone and build the server locally:
+## Install and Build
 
 ```bash
 git clone https://github.com/itsklimov/figma-rn
 cd figma-rn
-yarn install && yarn build
+bun install
+bun run build
 ```
 
-### 2. Configure MCP (Claude Desktop)
-Add this to your text editor's MCP config (e.g., `claude_desktop_config.json`):
+## MCP Configuration (Claude Desktop)
 
 ```json
 {
@@ -47,64 +32,57 @@ Add this to your text editor's MCP config (e.g., `claude_desktop_config.json`):
   }
 }
 ```
-*Note: Replace `/ABSOLUTE/PATH/TO/...` with the real path to the cloned folder.*
 
----
+## Tool Contract
 
-## 🎮 How to Use
+Only one MCP tool is exposed:
 
-Once installed, just ask Claude!
+- `get_screen`
 
-**"Generate this screen: [FIGMA_URL]"**
+Input highlights:
 
-Claude will use the `get_screen` tool to:
-1.  **Analyze** the Figma node.
-2.  **Map** colors and spacing to your local theme.
-3.  **Generate** the component, styles, and assets.
-4.  **Save** everything to `.figma/screens/YourScreen`.
+- `figmaUrl` (required)
+- `componentName`
+- `projectRoot`
+- `category` (`screens`, `modals`, `sheets`, `components`, `icons`)
+- `suppressTodos`
+- `scaleFunction`
 
-### Example Prompt
+## Output Structure
 
-```text
-Generate the Login screen from https://www.figma.com/design/ABC...?node-id=1-2
-Save it to src/features/auth
-```
-
-### What You Get
-A complete feature folder is created automatically:
+Generated output is written to:
 
 ```text
-src/features/auth/
-├── index.tsx          # ⚛️ The Main Component
-├── styles.ts          # 🎨 Styles (mapped to your theme)
-├── assets/            # 🖼️ Downloaded icons & images
-└── meta.json          # 📊 Generation metadata
+.figma/{category}/{ComponentName}/
+├── index.tsx
+├── meta.json
+├── screenshot.png
+└── assets/
 ```
 
----
+## Development
 
-## 🔧 Core Capabilities
+```bash
+bun run dev
+bun run lint
+bun run test
+bun run test:coverage
+```
 
-| Feature | Description |
-| :--- | :--- |
-| **Smart Lists** | Detects repeating patterns and generates optimized `FlatList` code. |
-| **Theme Matching** | Never hardcodes hex values. Matches `#F00` to `theme.colors.error`. |
-| **Asset Pipeline** | Extracts SVGs and PNGs, saves them locally, and generates `require()` paths. |
-| **Hooks Generation** | Automatically scaffolds `useNavigation` and clean props interfaces. |
+Live e2e tests:
 
----
+```bash
+FIGMA_LIVE_TESTS=1 bun run test:live
+```
 
-## ❓ Troubleshooting
+## Regression Baseline
 
-**"Tool not found?"**
-*   Restart Claude Desktop.
-*   Check that `yarn build` completed successfully.
-*   Verify the path in your config JSON is absolute and points to `dist/index.js`.
+```bash
+FIGMA_TOKEN=$(grep FIGMA_TOKEN .env | cut -d '"' -f 2) bunx tsx scripts/regression-test.mts "https://www.figma.com/design/UP4RaLYLk41imjPis2j6an/MARAFET-dev?node-id=2256-25238&m=dev" check
+```
 
-**"Images missing?"**
-*   Ensure the Figma node allows export permissions.
-*   The tool handles standard vector exports automatically.
+## Troubleshooting
 
----
-
-_Built with ❤️ for speed._
+- `Tool not found`: rebuild with `bun run build`, then restart Claude Desktop.
+- `Invalid token`: verify `FIGMA_TOKEN` and format.
+- `No assets`: check export permissions for target nodes in Figma.

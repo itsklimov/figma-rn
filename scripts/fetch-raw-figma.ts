@@ -5,7 +5,7 @@
  * Automatically loads FIGMA_TOKEN from .env file if present.
  *
  * Usage:
- *   npx tsx scripts/fetch-raw-figma.ts [figma-url]
+ *   bunx tsx scripts/fetch-raw-figma.ts [figma-url]
  *
  * Output:
  *   debug/1-raw-figma-api.json    - Raw API response
@@ -53,8 +53,8 @@ async function main() {
   console.log(`─────────────────────────`);
 
   if (!figmaUrl) {
-    console.error('❌ Usage: npx tsx scripts/fetch-raw-figma.ts <figma-url>');
-    console.error('   Example: npx tsx scripts/fetch-raw-figma.ts "https://www.figma.com/design/FILE_ID?node-id=123-456"');
+    console.error('❌ Usage: bunx tsx scripts/fetch-raw-figma.ts <figma-url>');
+    console.error('   Example: bunx tsx scripts/fetch-raw-figma.ts "https://www.figma.com/design/FILE_ID?node-id=123-456"');
     process.exit(1);
   }
 

@@ -10,24 +10,14 @@ import {
   createCache,
   shouldIgnoreNode,
   isComponent,
-  downloadAssets,
-  saveAssetManifest,
   transformNode,
 } from '../src/api/index.js';
 
+const FIGMA_URL =
+  'https://www.figma.com/design/UP4RaLYLk41imjPis2j6an/MARAFET--Copy-?node-id=2726-74525&m=dev';
 const OUTPUT_DIR = '.figma/test-step1';
 
 async function main() {
-  const figmaUrl = process.argv[2] || process.env.FIGMA_TEST_URL;
-  if (!figmaUrl) {
-    console.error(
-      'Error: missing Figma URL\n' +
-        'Usage: FIGMA_TOKEN=... npx tsx scripts/test-step1-complete.ts "<figma-url-with-node-id>"\n' +
-        'Or set FIGMA_TEST_URL in environment'
-    );
-    process.exit(1);
-  }
-
   const token = process.env.FIGMA_TOKEN;
   if (!token) {
     console.error('Error: FIGMA_TOKEN not set');
@@ -55,14 +45,14 @@ async function main() {
   // Test 3: Client - Parse URL
   console.log('\n3️⃣  Testing Client');
   const client = new FigmaClient(token);
-  const parsed = client.parseUrl(figmaUrl);
+  const parsed = client.parseUrl(FIGMA_URL);
   console.log('   Parsed URL:');
   console.log('     File key:', parsed.fileKey);
   console.log('     Node ID:', parsed.nodeId);
 
   // Test 4: Fetch Nodes
   console.log('\n4️⃣  Fetching Nodes');
-  const result = await client.fetchNodeByUrl(figmaUrl);
+  const result = await client.fetchNodeByUrl(FIGMA_URL);
   const nodeId = parsed.nodeId!;
   const node = result.nodes[nodeId];
   console.log('   Fetched nodes:', Object.keys(result.nodes).length);
@@ -99,8 +89,8 @@ async function main() {
     );
   }
 
-  // Test 7: Export and Download Assets
-  console.log('\n7️⃣  Testing Asset Download');
+  // Test 7: Export Asset URLs (runtime downloading is now handled by edge/asset-downloader)
+  console.log('\n7️⃣  Testing Asset Export URLs');
   try {
     // Find image nodes to export
     const imageNodeIds: string[] = [];
@@ -129,20 +119,8 @@ async function main() {
       );
 
       console.log('   Export results:', exportResults.length);
-
-      const assetsDir = path.join(OUTPUT_DIR, 'assets');
-      const downloaded = await downloadAssets(exportResults, {
-        outputDir: assetsDir,
-        naming: 'nodeId',
-      });
-
-      console.log('   Downloaded:', downloaded.length, 'assets');
-      if (downloaded.length > 0) {
-        console.log('   Sample:', downloaded[0].filename, `(${downloaded[0].size} bytes)`);
-      }
-
-      saveAssetManifest(downloaded, path.join(assetsDir, 'manifest.json'));
-      console.log('   Manifest saved ✓');
+      const urlCount = exportResults.filter((item) => !!item.url).length;
+      console.log('   Exported URLs:', urlCount);
     } else {
       console.log('   No image nodes found to export');
     }

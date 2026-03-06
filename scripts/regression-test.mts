@@ -3,11 +3,12 @@ import { transformNode } from '../src/api/transformers.js';
 import { transformToScreenIR } from '../src/core/pipeline.js';
 import { generateComponent } from '../src/core/generation/index.js';
 import { runDetectors } from '../src/core/detection/index.js';
-import { matchTokens } from '../src/core/mapping/token-matcher.js';
-import type { TokenMappings } from '../src/core/mapping/token-matcher.js';
-import { loadAllProjectTokens, refreshFigmaConfig, getOrCreateFigmaConfig } from '../src/figma-workspace.js';
-import { writeFile, readFile, mkdir, access } from 'fs/promises';
+import { createEmptyMappings, matchTokens } from '../src/core/mapping/token-matcher.js';
+import { loadAllProjectTokens, refreshFigmaConfig, getOrCreateFigmaConfig } from '../src/workspace/index.js';
+import { analyzeGeneratedCode, analyzeInputOutputFidelity, resolveThemeImportTarget } from '../src/edge/tools/get-screen.js';
+import { writeFile, readFile, mkdir, access, mkdtemp } from 'fs/promises';
 import { join, dirname } from 'path';
+import { tmpdir } from 'os';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -33,12 +34,10 @@ async function exists(path: string) {
 async function main() {
   const figmaUrl = process.argv[2];
   const mode = process.argv[3] || 'check'; // 'baseline' or 'check'
-  const projectRoot = process.argv[4] || process.env.REGRESSION_PROJECT_ROOT || ROOT;
+  const projectRootArg = process.argv[4];
 
   if (!figmaUrl) {
-    console.error(
-      'Usage: FIGMA_TOKEN=... npx tsx scripts/regression-test.mts [url] [baseline|check] [project-root]'
-    );
+    console.error('Usage: FIGMA_TOKEN=... bunx tsx scripts/regression-test.mts [url] [baseline|check] [projectRoot?]');
     process.exit(1);
   }
 
@@ -52,14 +51,16 @@ async function main() {
 
   console.log(`🚀 Mode: ${mode.toUpperCase()}`);
   console.log(`🔗 URL: ${figmaUrl}`);
+  const validationProjectRoot = projectRootArg || await mkdtemp(join(tmpdir(), 'figma-rn-regression-'));
+  console.log(`🧪 Validation root: ${validationProjectRoot}${projectRootArg ? '' : ' (temporary project-agnostic root)'}`);
 
-  // Auto-refresh config and load tokens from the target project root
-  console.log(`🔄 Refreshing config from: ${projectRoot}`);
-  await refreshFigmaConfig(projectRoot);
+  // Re-scan the selected project root, but default to a temporary root to keep validation project-agnostic.
+  console.log(`🔄 Refreshing config from: ${validationProjectRoot}`);
+  await refreshFigmaConfig(validationProjectRoot);
   
   console.log(`🎨 Loading project tokens...`);
-  const projectTokens = await loadAllProjectTokens(projectRoot);
-  if (projectTokens.colors) {
+  const projectTokens = await loadAllProjectTokens(validationProjectRoot);
+  if (projectTokens?.colors) {
     console.log(`Debug: Loaded ${projectTokens.colors.size} colors`);
     console.log('Debug: Sample colors:', [...projectTokens.colors.entries()].slice(0, 5));
   } else {
@@ -83,17 +84,20 @@ async function main() {
   const screenIR = transformToScreenIR(figmaNode);
   const detectionResult = runDetectors(screenIR.root, screenIR.stylesBundle);
   
-  // Match tokens
-  const tokenMappings = matchTokens(screenIR.stylesBundle.tokens, projectTokens);
+  // Match tokens only when the validation root actually exposes them.
+  const tokenMappings = projectTokens
+    ? matchTokens(screenIR.stylesBundle.tokens, projectTokens)
+    : createEmptyMappings();
   
   // Debug mappings
   console.log('Debug: Mapped colors:', Object.entries(tokenMappings.colors).slice(0, 5));
-  console.log('Debug: Project Spacing tokens:', projectTokens.spacing?.size || 0);
+  console.log('Debug: Project Spacing tokens:', projectTokens?.spacing?.size || 0);
   console.log('Debug: Extracted Spacing:', Object.entries(screenIR.stylesBundle.tokens.spacing || {}).slice(0, 10));
   console.log('Debug: Spacing mappings:', Object.entries(tokenMappings.spacing || {}).slice(0, 10));
   
   // Load config for import generation
-  const config = await getOrCreateFigmaConfig(projectRoot);
+  const config = await getOrCreateFigmaConfig(validationProjectRoot);
+  const themeTarget = await resolveThemeImportTarget(validationProjectRoot, config);
   
   const generated = generateComponent(screenIR, tokenMappings, { 
     detectionResult,
@@ -103,6 +107,11 @@ async function main() {
     useThemeHookPath: config.hooks?.useTheme,
     importPrefix: config.importPrefix,
   });
+
+  const fidelity = analyzeInputOutputFidelity(screenIR, detectionResult, generated.code);
+  const validation = analyzeGeneratedCode(generated.code, [], themeTarget);
+  console.log('📊 Input → output fidelity:', JSON.stringify(fidelity, null, 2));
+  console.log('🩺 Generated code validation:', JSON.stringify(validation, null, 2));
 
   const safeNodeId = nodeId.replace(/:/g, '-');
   const fileName = `baseline_${safeNodeId}.tsx`;
@@ -129,7 +138,7 @@ async function main() {
       }
     } else {
       console.log('\nℹ️ No baseline found for this node. Run with "baseline" mode to create one:');
-      console.log(`FIGMA_TOKEN=... npx tsx scripts/regression-test.mts "${figmaUrl}" baseline`);
+      console.log(`FIGMA_TOKEN=... bunx tsx scripts/regression-test.mts "${figmaUrl}" baseline`);
     }
   }
 }

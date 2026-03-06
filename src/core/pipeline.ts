@@ -53,12 +53,8 @@ interface NodeVisualProps {
  */
 function buildVisualPropsMap(node: LayoutNode): Map<string, NodeVisualProps> {
   const map = new Map<string, NodeVisualProps>();
-  const path = new Set<string>();
 
   function walk(n: LayoutNode, parentBounds?: BoundingBox, parentLayout?: LayoutType): void {
-    if (path.has(n.id)) return;
-    path.add(n.id);
-
     let absoluteProps = {};
     
     // Apply constraints only if:
@@ -95,8 +91,6 @@ function buildVisualPropsMap(node: LayoutNode): Map<string, NodeVisualProps> {
     for (const child of n.children) {
       walk(child, n.boundingBox, n.layout.type);
     }
-
-    path.delete(n.id);
   }
 
   walk(node);
@@ -112,7 +106,6 @@ function collectStyles(
   propsMap: Map<string, NodeVisualProps>
 ): Record<string, ReturnType<typeof extractStyleFromProps>> {
   const styles: Record<string, ReturnType<typeof extractStyleFromProps>> = {};
-  const path = new Set<string>();
   
   // Track hashes of styles to deduplicate identical content
   // Hash -> styleRef
@@ -164,9 +157,6 @@ function collectStyles(
   }
 
   function walk(n: IRNode): void {
-    if (path.has(n.id)) return;
-    path.add(n.id);
-
     const props = propsMap.get(n.id);
     if (props) {
       registerStyle(n, props);
@@ -198,8 +188,6 @@ function collectStyles(
         walk(child);
       }
     }
-
-    path.delete(n.id);
   }
 
   walk(node);
@@ -293,14 +281,7 @@ export function extractStyles(
  * Collect gap and padding values from IR tree layout metadata
  * These are separate from ExtractedStyle and need explicit collection
  */
-function collectLayoutSpacing(
-  node: IRNode,
-  spacing: Record<string, number>,
-  path: Set<string> = new Set()
-): void {
-  if (path.has(node.id)) return;
-  path.add(node.id);
-
+function collectLayoutSpacing(node: IRNode, spacing: Record<string, number>): void {
   // Collect from current node's layout
   if ('layout' in node && node.layout) {
     const layout = node.layout as any;
@@ -326,11 +307,9 @@ function collectLayoutSpacing(
   // Recurse into children
   if ('children' in node && node.children) {
     for (const child of node.children) {
-      collectLayoutSpacing(child, spacing, path);
+      collectLayoutSpacing(child, spacing);
     }
   }
-
-  path.delete(node.id);
 }
 
 /**
@@ -360,7 +339,7 @@ export function transformToScreenIR(
     if (modalContent) {
       effectiveInput = modalContent;
       effectiveName = modalResult.contentName || modalContent.name;
-      console.error(`📱 Detected ${modalResult.modalType}: extracting "${effectiveName}" for generation`);
+      console.log(`📱 Detected ${modalResult.modalType}: extracting "${effectiveName}" for generation`);
     }
   }
 

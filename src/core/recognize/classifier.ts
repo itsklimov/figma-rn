@@ -16,8 +16,8 @@ import type {
   RepeaterIR,
 } from '../types.js';
 
-import { extractProps } from '../generation/prop-extractor.js';
-import { toValidIdentifier, toPascalCase } from '../generation/utils.js';
+import { extractProps } from '../extraction/prop-extractor.js';
+import { toValidIdentifier, toPascalCase } from '../shared/naming.js';
 
 /**
  * Default icon size range
@@ -371,6 +371,21 @@ function isVectorIllustration(node: LayoutNode): boolean {
   // Heuristic: Icons typically have few vectors (≤7), vectorized text has many (one per glyph)
   const vectorCount = countVectorChildrenDeep(node);
   return vectorCount <= 7;
+}
+
+function resolveImageRef(node: LayoutNode): string | undefined {
+  const imageFill = node.fills?.find(f => f.type === 'image');
+  if (imageFill?.type === 'image') {
+    return imageFill.imageRef;
+  }
+
+  // Vector-only images do not have an image hash from Figma, but they can still be
+  // exported deterministically by node id through the asset pipeline.
+  if (VECTOR_TYPES.has(node.type) || isVectorIllustration(node)) {
+    return node.id;
+  }
+
+  return undefined;
 }
 
 /**
@@ -747,7 +762,7 @@ export function toIRNode(node: LayoutNode): IRNode {
     }
 
     case 'Image': {
-      const imageRef = node.fills?.find(f => f.type === 'image');
+      const imageRef = resolveImageRef(node);
       const children = node.children?.length
         ? processChildrenWithRepeaters(node.children)
         : undefined;
@@ -755,7 +770,7 @@ export function toIRNode(node: LayoutNode): IRNode {
       return {
         ...baseProps,
         semanticType: 'Image',
-        imageRef: imageRef?.type === 'image' ? imageRef.imageRef : undefined,
+        imageRef,
         children,
         layout: node.layout,
       } as ImageIR;

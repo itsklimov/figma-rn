@@ -14,6 +14,7 @@ import type {
   FigmaStyle,
 } from './types.js';
 import { FigmaApiError, createApiError } from './errors.js';
+import { parseFigmaUrl } from './url.js';
 
 export class FigmaClient {
   private api: Figma.Api;
@@ -30,28 +31,11 @@ export class FigmaClient {
    * Extracts node-id query param and converts dashes to colons
    */
   parseUrl(url: string): ParsedFigmaUrl {
-    try {
-      const urlObj = new URL(url);
-
-      // Extract file key from pathname
-      // Supports: /file/KEY, /design/KEY
-      const pathMatch = urlObj.pathname.match(/\/(file|design)\/([a-zA-Z0-9]+)/);
-      if (!pathMatch) {
-        throw new FigmaApiError('Invalid Figma URL: could not extract file key', 'INVALID_URL');
-      }
-
-      const fileKey = pathMatch[2];
-
-      // Extract and transform node-id from query params
-      // Figma URLs use dashes (node-id=1-2) but API requires colons (1:2)
-      const nodeIdParam = urlObj.searchParams.get('node-id');
-      const nodeId = nodeIdParam ? nodeIdParam.replace(/-/g, ':') : undefined;
-
-      return { fileKey, nodeId };
-    } catch (error) {
-      if (error instanceof FigmaApiError) throw error;
-      throw createApiError(error);
+    const parsed = parseFigmaUrl(url);
+    if (!parsed) {
+      throw new FigmaApiError('Invalid Figma URL: could not extract file key', 'INVALID_URL');
     }
+    return parsed;
   }
 
   /**

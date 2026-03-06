@@ -1,32 +1,25 @@
 import { describe, it, expect } from 'vitest';
 import { existsSync } from 'fs';
-import { loadAllProjectTokens, refreshFigmaConfig } from '../../src/figma-workspace';
+import { loadAllProjectTokens, refreshFigmaConfig } from '../../src/workspace/index';
 
-describe('Project Integration', () => {
-  const INTEGRATION_PROJECT_ROOT = process.env.FIGMA_INTEGRATION_PROJECT_ROOT;
+const RUN_LIVE = process.env.FIGMA_LIVE_TESTS === '1';
+const describeLive = RUN_LIVE ? describe : describe.skip;
 
-  it('should correctly load and merge tokens from the target project', async () => {
-    // Optional integration test: only runs when a project root is provided.
-    if (!INTEGRATION_PROJECT_ROOT) {
-      console.log(
-        'Skipping: set FIGMA_INTEGRATION_PROJECT_ROOT to run project integration test'
-      );
-      return;
-    }
+describeLive('Marafet Integration', () => {
+  const MARAFET_ROOT = '/Users/its/Documents/Dev/code/marafet/marafet-frontend';
 
-    if (!existsSync(INTEGRATION_PROJECT_ROOT)) {
-      console.log(
-        'Skipping: integration project not found at',
-        INTEGRATION_PROJECT_ROOT
-      );
+  it('should correctly load and merge tokens from the real Marafet project', async () => {
+    // Skip if Marafet project doesn't exist on this machine
+    if (!existsSync(MARAFET_ROOT)) {
+      console.log('Skipping: Marafet project not found at', MARAFET_ROOT);
       return;
     }
 
     // 1. Refresh config to ensure we have the latest paths
-    await refreshFigmaConfig(INTEGRATION_PROJECT_ROOT);
+    await refreshFigmaConfig(MARAFET_ROOT);
 
     // 2. Load the tokens
-    const tokens = await loadAllProjectTokens(INTEGRATION_PROJECT_ROOT);
+    const tokens = await loadAllProjectTokens(MARAFET_ROOT);
 
     expect(tokens).toBeDefined();
 
@@ -47,8 +40,6 @@ describe('Project Integration', () => {
     expect(colorsCount).toBeGreaterThan(0);
     expect(spacingCount).toBeGreaterThan(0);
 
-    console.log(
-      `Successfully merged ${colorsCount} colors, ${typographyCount} typography, ${spacingCount} spacing, ${shadowsCount} shadows, and ${radiiCount} radii tokens from integration project.`
-    );
+    console.log(`Successfully merged ${colorsCount} colors, ${typographyCount} typography, ${spacingCount} spacing, ${shadowsCount} shadows, and ${radiiCount} radii tokens from Marafet.`);
   });
 });

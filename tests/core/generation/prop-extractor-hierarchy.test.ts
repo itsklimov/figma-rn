@@ -2,7 +2,10 @@ import { describe, it, expect } from 'vitest';
 import {
   isGenericName,
   deriveNameFromAncestry,
+  extractProps,
 } from '../../../src/core/generation/prop-extractor.js';
+import { detectContentPattern } from '../../../src/core/extraction/content-pattern.js';
+import type { ContainerIR, TextIR, ImageIR } from '../../../src/core/types.js';
 
 describe('prop-extractor hierarchy', () => {
   describe('isGenericName', () => {
@@ -144,6 +147,116 @@ describe('prop-extractor hierarchy', () => {
 
       // Name is generic and content is placeholder - should be filtered
       expect(isGenericName(propName)).toBe(true);
+    });
+
+    it('should not extract generic vector-exported image assets as props', () => {
+      const root: ContainerIR = {
+        id: '1:1',
+        name: 'Launch screen',
+        semanticType: 'Container',
+        boundingBox: { x: 0, y: 0, width: 100, height: 100 },
+        styleRef: 'launchScreen',
+        layout: {
+          type: 'column',
+          gap: 0,
+          padding: { top: 0, right: 0, bottom: 0, left: 0 },
+          mainAlign: 'start',
+          crossAlign: 'start',
+          sizing: { horizontal: 'fixed', vertical: 'fixed' },
+        },
+        children: [
+          {
+            id: '8136:48502',
+            name: 'Union',
+            semanticType: 'Image',
+            boundingBox: { x: 0, y: 0, width: 160, height: 24 },
+            styleRef: 'element48502',
+            imageRef: '8136:48502',
+          } as ImageIR,
+        ],
+      };
+
+      const result = extractProps(root);
+
+      expect(result.props).toEqual({});
+    });
+  });
+
+  describe('content pattern naming', () => {
+    it('should detect semantic names for common UI content patterns', () => {
+      expect(detectContentPattern('18:00')).toBe('time');
+      expect(detectContentPattern('90 мин')).toBe('duration');
+      expect(detectContentPattern('4.6')).toBe('rating');
+      expect(detectContentPattern('(254)')).toBe('reviewCount');
+      expect(detectContentPattern('Никитский бул., 45')).toBe('address');
+    });
+
+    it('should apply semantic names during prop extraction', () => {
+      const root: ContainerIR = {
+        id: '1:1',
+        name: 'CardMaster',
+        semanticType: 'Container',
+        boundingBox: { x: 0, y: 0, width: 100, height: 100 },
+        styleRef: 'cardMaster',
+        layout: {
+          type: 'column',
+          gap: 0,
+          padding: { top: 0, right: 0, bottom: 0, left: 0 },
+          mainAlign: 'start',
+          crossAlign: 'start',
+          sizing: { horizontal: 'fixed', vertical: 'fixed' },
+        },
+        children: [
+          {
+            id: '1:2',
+            name: 'Text 1',
+            semanticType: 'Text',
+            boundingBox: { x: 0, y: 0, width: 50, height: 10 },
+            styleRef: 'time',
+            text: '18:00',
+          } as TextIR,
+          {
+            id: '1:3',
+            name: 'Text 2',
+            semanticType: 'Text',
+            boundingBox: { x: 0, y: 0, width: 50, height: 10 },
+            styleRef: 'duration',
+            text: '90 мин',
+          } as TextIR,
+          {
+            id: '1:4',
+            name: 'Text 3',
+            semanticType: 'Text',
+            boundingBox: { x: 0, y: 0, width: 50, height: 10 },
+            styleRef: 'rating',
+            text: '4.6',
+          } as TextIR,
+          {
+            id: '1:5',
+            name: 'Text 4',
+            semanticType: 'Text',
+            boundingBox: { x: 0, y: 0, width: 50, height: 10 },
+            styleRef: 'reviewCount',
+            text: '(254)',
+          } as TextIR,
+          {
+            id: '1:6',
+            name: 'Text 5',
+            semanticType: 'Text',
+            boundingBox: { x: 0, y: 0, width: 50, height: 10 },
+            styleRef: 'address',
+            text: 'Никитский бул., 45',
+          } as TextIR,
+        ],
+      };
+
+      const result = extractProps(root);
+
+      expect(result.props.time?.defaultValue).toBe('18:00');
+      expect(result.props.duration?.defaultValue).toBe('90 мин');
+      expect(result.props.rating?.defaultValue).toBe('4.6');
+      expect(result.props.reviewCount?.defaultValue).toBe('(254)');
+      expect(result.props.address?.defaultValue).toBe('Никитский бул., 45');
     });
   });
 });

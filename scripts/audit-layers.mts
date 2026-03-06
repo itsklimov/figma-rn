@@ -83,7 +83,7 @@ async function main() {
   const figmaUrl = process.argv[2];
 
   if (!figmaUrl) {
-    console.error('Usage: FIGMA_TOKEN=... npx tsx scripts/audit-layers.mts [url]');
+    console.error('Usage: FIGMA_TOKEN=... bunx tsx scripts/audit-layers.mts [url]');
     process.exit(1);
   }
 

@@ -165,10 +165,49 @@ describe('buildStyles', () => {
       },
     };
 
-    const result = buildStyles(root, stylesBundle, emptyMappings);
+    const result = buildStyles(root, stylesBundle, emptyMappings, { hasProjectTheme: true });
     expect(result.code).toContain("backgroundColor: '#FF5733'");
     expect(result.code).toContain('// TODO: map to theme');
     expect(result.unmapped.colors).toContain('#FF5733');
+  });
+
+  it('should not add theme TODO comments when no project theme exists', () => {
+    const root: ContainerIR = {
+      id: '1:1',
+      name: 'box',
+      semanticType: 'Container',
+      boundingBox: baseBoundingBox,
+      styleRef: 'box',
+      layout: baseLayout,
+      children: [],
+    };
+
+    const stylesBundle: StylesBundle = {
+      styles: {
+        box: {
+          id: 'box',
+          backgroundColor: '#FF5733',
+          borderRadius: 12,
+          borderColor: '#111111',
+        },
+      },
+      tokens: {
+        colors: {},
+        spacing: {},
+        radii: {},
+        typography: {},
+        shadows: {},
+      },
+    };
+
+    const result = buildStyles(root, stylesBundle, emptyMappings, { hasProjectTheme: false });
+    expect(result.code).toContain("backgroundColor: '#FF5733'");
+    expect(result.code).toContain("borderRadius: 12");
+    expect(result.code).toContain("borderColor: '#111111'");
+    expect(result.code).not.toContain('// TODO: map to theme');
+    expect(result.unmapped.colors).toContain('#FF5733');
+    expect(result.unmapped.colors).toContain('#111111');
+    expect(result.unmapped.radii).toContain(12);
   });
 
   it('should generate border radius properties', () => {

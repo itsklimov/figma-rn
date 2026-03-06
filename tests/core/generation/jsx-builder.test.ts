@@ -104,8 +104,45 @@ describe('buildJSX', () => {
     };
 
     const result = buildJSX(node, 0);
-    expect(result).toContain('MissingAssetFallback');
-    expect(result).not.toContain("uri: ''");
+    expect(result).toContain('source={{ uri: \'\' } /* TODO: Image ref: abc123unmapped */');
+  });
+
+  it('should render unresolved zero-width border images as View dividers', () => {
+    const node: ImageIR = {
+      id: '1:1',
+      name: 'Line 1',
+      semanticType: 'Image',
+      boundingBox: { x: 0, y: 0, width: 0, height: 24 },
+      styleRef: 'divider',
+      imageRef: 'line-ref',
+    };
+
+    const result = buildJSX(
+      node,
+      0,
+      undefined,
+      undefined,
+      {
+        styles: {
+          divider: {
+            id: 'divider',
+            borderWidth: 1,
+            borderColor: '#DDDDDD',
+          },
+        },
+        tokens: {
+          colors: {},
+          spacing: {},
+          radii: {},
+          typography: {},
+          shadows: {},
+        },
+      }
+    );
+
+    expect(result).toContain('<View style={styles.divider} />');
+    expect(result).not.toContain('TODO: Image ref: line-ref');
+    expect(result).not.toContain('<Image');
   });
 
   it('should generate placeholder for Image with no ref', () => {
@@ -118,8 +155,8 @@ describe('buildJSX', () => {
     };
 
     const result = buildJSX(node, 0);
-    expect(result).toContain('MissingAssetFallback');
-    expect(result).not.toContain("uri: ''");
+    expect(result).toContain('<Image');
+    expect(result).toContain('style={styles.placeholder}');
   });
 
   it('should generate Button', () => {
@@ -193,148 +230,6 @@ describe('buildJSX', () => {
     expect(result).toContain('<View style={styles.wrapper}>');
     expect(result).toContain('<View style={styles.inner}>');
     expect(result).toContain('<Text style={styles.deepText}>');
-  });
-
-  it('should use explicit linear gradient start/end from styles bundle', () => {
-    const node: ContainerIR = {
-      id: '1:1',
-      name: 'progress',
-      semanticType: 'Container',
-      boundingBox: baseBoundingBox,
-      styleRef: 'progress',
-      layout: baseLayout,
-      children: [],
-    };
-
-    const stylesBundle: any = {
-      styles: {
-        progress: {
-          id: 'progress',
-          backgroundGradient: {
-            type: 'linear',
-            colors: ['#A287FF', '#7A54FF'],
-            positions: [0, 1],
-            start: { x: 0, y: 0.5 },
-            end: { x: 1, y: 0.5 },
-          },
-        },
-      },
-    };
-
-    const result = buildJSX(node, 0, undefined, undefined, stylesBundle);
-    expect(result).toContain('<LinearGradient');
-    expect(result).toContain('start={{ x: 0.00, y: 0.50 }}');
-    expect(result).toContain('end={{ x: 1.00, y: 0.50 }}');
-  });
-
-  it('should render radial gradient backgrounds with SVG', () => {
-    const node: ContainerIR = {
-      id: '1:1',
-      name: 'radialCard',
-      semanticType: 'Container',
-      boundingBox: baseBoundingBox,
-      styleRef: 'radialCard',
-      layout: baseLayout,
-      children: [],
-    };
-
-    const stylesBundle: any = {
-      styles: {
-        radialCard: {
-          id: 'radialCard',
-          backgroundGradient: {
-            type: 'radial',
-            colors: ['#FFFFFF', '#000000'],
-            positions: [0, 1],
-            center: { x: 0.5, y: 0.5 },
-            radius: { x: 0.5, y: 0.5 },
-          },
-        },
-      },
-    };
-
-    const result = buildJSX(node, 0, undefined, undefined, stylesBundle);
-    expect(result).toContain('<Svg');
-    expect(result).toContain('<SvgRadialGradient');
-    expect(result).toContain('fill="url(#grad_1_1)"');
-  });
-
-  it('should render gradient-only Image nodes as gradient views instead of placeholders', () => {
-    const node: ImageIR = {
-      id: '2:1',
-      name: 'radialBlob',
-      semanticType: 'Image',
-      boundingBox: baseBoundingBox,
-      styleRef: 'radialBlob',
-    };
-
-    const stylesBundle: any = {
-      styles: {
-        radialBlob: {
-          id: 'radialBlob',
-          backgroundGradient: {
-            type: 'radial',
-            colors: ['#FFFFFF', '#000000'],
-            positions: [0, 1],
-            center: { x: 0.5, y: 0.5 },
-            radius: { x: 0.5, y: 0.5 },
-          },
-        },
-      },
-    };
-
-    const result = buildJSX(node, 0, undefined, undefined, stylesBundle);
-    expect(result).toContain('<SvgRadialGradient');
-    expect(result).not.toContain('TODO: Add image source');
-    expect(result).not.toContain('MissingAssetFallback');
-  });
-
-  it('should prefer parent image asset mapping before rendering image children', () => {
-    const node: ImageIR = {
-      id: '2:99',
-      name: 'vectorParent',
-      semanticType: 'Image',
-      boundingBox: baseBoundingBox,
-      styleRef: 'vectorParent',
-      children: [
-        {
-          id: '2:100',
-          name: 'Vector',
-          semanticType: 'Icon',
-          boundingBox: { x: 0, y: 0, width: 12, height: 12 },
-          styleRef: 'icon100',
-          iconRef: 'icon100',
-          size: 12,
-        } as IconIR,
-      ],
-    };
-
-    const imagePathMap = new Map<string, string>([
-      ['node:2:99', './assets/icons/vector-parent.png'],
-    ]);
-    const result = buildJSX(node, 0, imagePathMap);
-
-    expect(result).toContain("<Image");
-    expect(result).toContain("source={require('./assets/icons/vector-parent.png')}");
-    expect(result).not.toContain('icon100');
-    expect(result).not.toContain('MissingAssetFallback');
-  });
-
-  it('should guard against cyclic node references', () => {
-    const cyclic: any = {
-      id: '1:1',
-      name: 'cyclic',
-      semanticType: 'Container',
-      boundingBox: baseBoundingBox,
-      styleRef: 'cyclic',
-      layout: baseLayout,
-      children: [],
-    };
-    cyclic.children = [cyclic];
-
-    expect(() => buildJSX(cyclic, 0)).not.toThrow();
-    const result = buildJSX(cyclic, 0);
-    expect(result).toContain('Cyclic node reference');
   });
 });
 
@@ -491,22 +386,5 @@ describe('collectStyleNames', () => {
     const names = collectStyleNames(node);
     expect(names).toContain('submitBtn');
     expect(names).toContain('submitBtnText');
-  });
-
-  it('should guard against cycles while collecting style names', () => {
-    const cyclic: any = {
-      id: '1:1',
-      name: 'cyclic',
-      semanticType: 'Container',
-      boundingBox: { x: 0, y: 0, width: 100, height: 100 },
-      styleRef: 'cyclic',
-      layout: baseLayout,
-      children: [],
-    };
-    cyclic.children = [cyclic];
-
-    const names = collectStyleNames(cyclic);
-    expect(names).toContain('cyclic');
-    expect(names.filter((n) => n === 'cyclic').length).toBe(1);
   });
 });

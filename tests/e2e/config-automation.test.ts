@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createTempWorkspace } from '../helpers/temp-workspace';
-import { getOrCreateManifest } from '../../src/figma-workspace';
+import { getOrCreateManifest } from '../../src/workspace/index';
 import { join } from 'path';
 
 describe('Project Configuration Automation', () => {
@@ -79,8 +79,8 @@ describe('Project Configuration Automation', () => {
     await workspace.writeFile('src/styles/theme/typography.ts', 'export const fonts = { body: "Inter" };');
     await workspace.writeFile('src/styles/theme/spacing.ts', 'export const spacing = { m: 16 };');
 
-    // Trigger config generation (this is what generate_screen uses)
-    const { getOrCreateFigmaConfig } = await import('../../src/figma-workspace');
+    // Trigger config generation (this is what get_screen uses)
+    const { getOrCreateFigmaConfig } = await import('../../src/workspace/index');
     const config = await getOrCreateFigmaConfig(workspace.root);
 
     // Verify token files are discovered
@@ -111,7 +111,7 @@ describe('Project Configuration Automation', () => {
     `);
 
     // 2. Mock config generation
-    const { getOrCreateFigmaConfig, loadAllProjectTokens } = await import('../../src/figma-workspace');
+    const { getOrCreateFigmaConfig, loadAllProjectTokens } = await import('../../src/workspace/index');
     const config = await getOrCreateFigmaConfig(workspace.root);
     
     // Manually set paths if auto-discovery fails in test env (though it should find them)
@@ -121,7 +121,7 @@ describe('Project Configuration Automation', () => {
       config.tokenFiles.push('src/styles/colors.ts');
       config.tokenFiles.push('src/styles/typography.ts');
     }
-    const { saveFigmaConfig } = await import('../../src/figma-workspace');
+    const { saveFigmaConfig } = await import('../../src/workspace/index');
     await saveFigmaConfig(workspace.root, config);
 
     // 3. Load merged tokens

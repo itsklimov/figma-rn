@@ -280,6 +280,18 @@ describe('toIRNode', () => {
     expect((result as any).size).toBe(24);
   });
 
+  it('should use node id as imageRef for vector images without image fills', () => {
+    const node = createNode({
+      id: '1:9',
+      type: 'ELLIPSE',
+      boundingBox: { x: 0, y: 0, width: 200, height: 120 },
+    });
+    const result = toIRNode(node);
+
+    expect(result.semanticType).toBe('Image');
+    expect((result as any).imageRef).toBe('1:9');
+  });
+
   it('should convert button node to ButtonIR', () => {
     const node = createNode({
       boundingBox: { x: 0, y: 0, width: 120, height: 44 },

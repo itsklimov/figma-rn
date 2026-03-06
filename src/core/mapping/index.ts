@@ -17,3 +17,4 @@ export { matchTokens, createEmptyMappings } from './token-matcher.js';
 
 // Color utilities (for advanced use cases)
 export { colorToLab, labDistance, findClosestColor } from './color-matcher.js';
+export { mapColor } from './color-map.js';

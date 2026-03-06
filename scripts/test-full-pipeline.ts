@@ -11,7 +11,7 @@ import { matchTokens } from '../src/core/mapping/token-matcher.js';
 const FIGMA_TOKEN = process.env.FIGMA_TOKEN as string;
 if (!FIGMA_TOKEN) {
   console.error('Error: FIGMA_TOKEN environment variable is required');
-  console.error('Usage: FIGMA_TOKEN=your_token npx tsx scripts/test-full-pipeline.ts [figma-url] [theme-path]');
+  console.error('Usage: FIGMA_TOKEN=your_token bunx tsx scripts/test-full-pipeline.ts [figma-url] [theme-path]');
   process.exit(1);
 }
 

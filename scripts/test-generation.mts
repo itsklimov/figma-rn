@@ -5,7 +5,7 @@
  * Automatically loads FIGMA_TOKEN from .env file.
  *
  * Usage:
- *   npx tsx scripts/test-generation.mts [figma-url]
+ *   bunx tsx scripts/test-generation.mts [figma-url]
  */
 
 import fs from 'fs';
@@ -34,20 +34,14 @@ function loadEnv(): void {
 
 loadEnv();
 
+const DEFAULT_URL = 'https://www.figma.com/design/UP4RaLYLk41imjPis2j6an/MARAFET-dev?node-id=2726-74525&m=dev';
+
 async function main() {
-  const figmaUrl = process.argv[2] || process.env.FIGMA_TEST_URL;
+  const figmaUrl = process.argv[2] || DEFAULT_URL;
   const token = process.env.FIGMA_TOKEN;
 
   if (!token) {
     console.error('Error: FIGMA_TOKEN required (set in .env or environment)');
-    process.exit(1);
-  }
-  if (!figmaUrl) {
-    console.error(
-      'Error: missing Figma URL\n' +
-        'Usage: FIGMA_TOKEN=... npx tsx scripts/test-generation.mts "<figma-url-with-node-id>"\n' +
-        'Or set FIGMA_TEST_URL in environment'
-    );
     process.exit(1);
   }
 

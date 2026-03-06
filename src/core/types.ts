@@ -154,6 +154,7 @@ interface IRNodeBase {
   boundingBox: BoundingBox;
   styleRef: string; // Reference to style in StylesBundle
   propName?: string; // If set, this node's content is bound to a prop
+  conditionalProp?: string; // If set, JSX should render this node only when the prop is truthy
   styleProps?: Record<string, string>; // Mapping of style property -> prop name
 }
 
@@ -229,7 +230,7 @@ export interface ComponentIR extends IRNodeBase {
   semanticType: 'Component';
   componentId: string;
   componentName: string;
-  props?: Record<string, { type: 'string' | 'image'; value: string; defaultValue: string }>;
+  props?: Record<string, { type: 'string' | 'image' | 'style'; value: string; defaultValue: string; property?: string }>;
   layout: LayoutMeta;
   children: IRNode[]; // Components can have children (overrides)
   /** Figma component properties (variant props like Name, Size) */
@@ -280,10 +281,6 @@ export interface ExtractedStyle {
     colors: string[];
     positions: number[];
     angle?: number;
-    start?: { x: number; y: number };
-    end?: { x: number; y: number };
-    center?: { x: number; y: number };
-    radius?: { x: number; y: number };
   };
 
   // Border

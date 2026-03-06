@@ -6,9 +6,10 @@
 
 import { writeFile, mkdir } from 'fs/promises';
 import { join, dirname } from 'path';
+import { createHash } from 'crypto';
 import type { IRNode, ComponentIR } from '../core/types.js';
 import type { FigmaClient } from '../api/client.js';
-import { sanitizeFilename } from '../core/generation/utils.js';
+import { sanitizeFilename } from '../core/shared/naming.js';
 
 export interface DownloadedAsset {
   nodeId: string;
@@ -21,43 +22,14 @@ export interface DownloadedAsset {
 
 export interface AssetDownloadResult {
   assets: DownloadedAsset[];
-  pathMap: Map<string, string>; // multi-key map: ref/node/style keys → relativePath
+  pathMap: Map<string, string>; // imageRef → relativePath
 }
 
 interface AssetNode {
   nodeId: string;
   name: string;
   ref: string; // imageRef or iconRef
-  styleRef?: string;
   category: 'icon' | 'image';
-}
-
-function registerAssetPathMappings(pathMap: Map<string, string>, node: AssetNode, relativePath: string): void {
-  const keys = [
-    node.ref,
-    `ref:${node.ref}`,
-    node.nodeId,
-    `node:${node.nodeId}`,
-    node.styleRef,
-    node.styleRef ? `style:${node.styleRef}` : undefined,
-  ].filter((value): value is string => !!value);
-
-  for (const key of keys) {
-    pathMap.set(key, relativePath);
-  }
-}
-
-function makeUniqueFilename(baseName: string, ext: 'svg' | 'png', used: Set<string>): string {
-  let counter = 1;
-  let filename = `${baseName}.${ext}`;
-
-  while (used.has(filename)) {
-    counter += 1;
-    filename = `${baseName}-${counter}.${ext}`;
-  }
-
-  used.add(filename);
-  return filename;
 }
 
 /**
@@ -126,14 +98,17 @@ function extractAssetNodes(node: IRNode, assets: AssetNode[]): void {
   if (node.semanticType === 'Image') {
     const imageRef = (node as any).imageRef;
     if (imageRef) {
+      const isVectorExport = imageRef === node.id;
       // Standard image with IMAGE fill
       assets.push({
         nodeId: node.id,
         name: node.name,
         ref: imageRef,
-        styleRef: node.styleRef,
-        category: 'image',
+        category: isVectorExport ? 'icon' : 'image',
       });
+      if (isVectorExport) {
+        return;
+      }
     } else if (node.children && node.children.length > 0) {
       // Vector illustration (FRAME/GROUP with vector children, no imageRef)
       // Export the whole node as SVG
@@ -141,7 +116,6 @@ function extractAssetNodes(node: IRNode, assets: AssetNode[]): void {
         nodeId: node.id,
         name: node.name,
         ref: node.id,
-        styleRef: node.styleRef,
         category: 'icon', // Export as SVG
       });
       // Don't recurse - export as single unit
@@ -154,7 +128,6 @@ function extractAssetNodes(node: IRNode, assets: AssetNode[]): void {
         nodeId: node.id,
         name: node.name,
         ref: iconRef,
-        styleRef: node.styleRef,
         category: 'icon',
       });
     }
@@ -165,7 +138,6 @@ function extractAssetNodes(node: IRNode, assets: AssetNode[]): void {
         nodeId: node.id,
         name: node.name,
         ref: iconRef,
-        styleRef: node.styleRef,
         category: 'icon',
       });
     }
@@ -178,7 +150,6 @@ function extractAssetNodes(node: IRNode, assets: AssetNode[]): void {
         nodeId: node.id,  // Export parent component to include ALL vector children
         name: assetName,
         ref: node.id,
-        styleRef: node.styleRef,
         category: 'icon',
       });
       // Don't recurse into exportable components - export as single unit
@@ -206,6 +177,46 @@ function deduplicateAssetNodes(nodes: AssetNode[]): AssetNode[] {
     }
   }
   return Array.from(seen.values());
+}
+
+/**
+ * Build a deterministic unique filename for an exported asset.
+ * The first asset keeps the clean base name; later collisions get a short stable hash suffix.
+ */
+export function buildUniqueAssetFilename(
+  preferredBaseName: string,
+  extension: string,
+  uniqueKey: string,
+  usedFilenames: Set<string>
+): string {
+  const baseName = sanitizeFilename(preferredBaseName) || 'asset';
+  const normalizedExtension = extension.replace(/^\./, '');
+  const defaultFilename = `${baseName}.${normalizedExtension}`;
+
+  if (!usedFilenames.has(defaultFilename)) {
+    usedFilenames.add(defaultFilename);
+    return defaultFilename;
+  }
+
+  const hash = createHash('sha1').update(uniqueKey).digest('hex');
+
+  for (let length = 6; length <= hash.length; length += 2) {
+    const candidate = `${baseName}-${hash.slice(0, length)}.${normalizedExtension}`;
+    if (!usedFilenames.has(candidate)) {
+      usedFilenames.add(candidate);
+      return candidate;
+    }
+  }
+
+  let counter = 2;
+  while (true) {
+    const candidate = `${baseName}-${hash.slice(0, 6)}-${counter}.${normalizedExtension}`;
+    if (!usedFilenames.has(candidate)) {
+      usedFilenames.add(candidate);
+      return candidate;
+    }
+    counter += 1;
+  }
 }
 
 /**
@@ -256,14 +267,8 @@ export async function downloadAssets(
 
   // 2. Deduplicate by ref - multiple component instances may share the same imageRef/iconRef
   const uniqueAssets = deduplicateAssetNodes(assetNodes);
-  const aliasesByRef = new Map<string, AssetNode[]>();
-  for (const node of assetNodes) {
-    const aliases = aliasesByRef.get(node.ref) || [];
-    aliases.push(node);
-    aliasesByRef.set(node.ref, aliases);
-  }
 
-  console.error(`Extracted ${assetNodes.length} asset nodes, deduplicated to ${uniqueAssets.length} unique assets`);
+  console.log(`Extracted ${assetNodes.length} asset nodes, deduplicated to ${uniqueAssets.length} unique assets`);
 
   // 3. Group nodes by category to optimize API calls
   const iconNodes = uniqueAssets.filter((n) => n.category === 'icon');
@@ -296,17 +301,13 @@ export async function downloadAssets(
         }
 
         try {
-          const filename = makeUniqueFilename(
-            sanitizeFilename(node.name),
-            'svg',
-            usedIconFilenames
-          );
+          const filename = buildUniqueAssetFilename(node.name, 'svg', node.nodeId, usedIconFilenames);
           const localPath = join(iconDir, filename);
           const relativePath = `./assets/icons/${filename}`;
 
           await downloadAsset(exportResult.url, localPath);
 
-          console.error(`✓ Downloaded icon: ${filename}`);
+          console.log(`✓ Downloaded icon: ${filename}`);
 
           const asset: DownloadedAsset = {
             nodeId: node.nodeId,
@@ -318,10 +319,7 @@ export async function downloadAssets(
           };
 
           downloadedAssets.push(asset);
-          const aliases = aliasesByRef.get(node.ref) || [node];
-          for (const alias of aliases) {
-            registerAssetPathMappings(pathMap, alias, relativePath);
-          }
+          pathMap.set(node.ref, relativePath);
         } catch (error) {
           console.error(`Failed to download icon ${node.name}:`, error);
         }
@@ -353,17 +351,13 @@ export async function downloadAssets(
         }
 
         try {
-          const filename = makeUniqueFilename(
-            sanitizeFilename(node.name),
-            'png',
-            usedImageFilenames
-          );
+          const filename = buildUniqueAssetFilename(node.name, 'png', node.nodeId, usedImageFilenames);
           const localPath = join(imageDir, filename);
           const relativePath = `./assets/images/${filename}`;
 
           await downloadAsset(exportResult.url, localPath);
 
-          console.error(`✓ Downloaded image: ${filename}`);
+          console.log(`✓ Downloaded image: ${filename}`);
 
           const asset: DownloadedAsset = {
             nodeId: node.nodeId,
@@ -375,10 +369,7 @@ export async function downloadAssets(
           };
 
           downloadedAssets.push(asset);
-          const aliases = aliasesByRef.get(node.ref) || [node];
-          for (const alias of aliases) {
-            registerAssetPathMappings(pathMap, alias, relativePath);
-          }
+          pathMap.set(node.ref, relativePath);
         } catch (error) {
           console.error(`Failed to download image ${node.name}:`, error);
         }
@@ -388,7 +379,7 @@ export async function downloadAssets(
     }
   }
 
-  console.error(`Asset download complete: ${downloadedAssets.length} files downloaded`);
+  console.log(`Asset download complete: ${downloadedAssets.length} files downloaded`);
 
   return {
     assets: downloadedAssets,

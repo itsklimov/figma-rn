@@ -5,7 +5,7 @@
  */
 
 import { FigmaNode, BoundingBox } from '../../api/types.js';
-import { formatPercent } from '../generation/utils.js';
+import { formatPercent } from '../shared/number-format.js';
 
 type ConstraintStyle = {
   position: 'absolute';
